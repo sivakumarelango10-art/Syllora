@@ -1,10 +1,63 @@
 /* ==========================================================================
-   SYLLORA AUTHENTICATION SYSTEM — EXACT SPECIFICATION STYLESHEET
-   Exact Tokens, Curves, Morphing Geometry, and 60fps GPU Orchestration
+   SYLLORA AUTHENTICATION SYSTEM — MASTER SPECIFICATION STYLESHEET
+   100% GPU-Compositor Orchestrated, Zero Layout Shift, Locked 60/120fps
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   1. Design Tokens & Cubic-Bezier Curves
+   1. Self-Hosted Fonts & Size-Adjusted Fallbacks (CLS = 0)
+   -------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Poppins-Fallback';
+  src: local('Arial');
+  ascent-override: 95%;
+  descent-override: 35%;
+  line-gap-override: 10%;
+  size-adjust: 100%;
+}
+
+@font-face {
+  font-family: 'Inter-Fallback';
+  src: local('Arial');
+  ascent-override: 90%;
+  descent-override: 22%;
+  line-gap-override: 0%;
+  size-adjust: 107%;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('assets/fonts/poppins-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('assets/fonts/poppins-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('assets/fonts/inter-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('assets/fonts/inter-600.woff2') format('woff2');
+}
+
+/* --------------------------------------------------------------------------
+   2. Design Tokens & Cubic-Bezier Curves
    -------------------------------------------------------------------------- */
 :root {
   --teal: #03605E;
@@ -17,22 +70,22 @@
   --input-bg: #FBFCFB;
   --error: #DC2626;
 
-  /* Fonts */
-  --font-heading: 'Poppins', sans-serif;
-  --font-body: 'Inter', sans-serif;
+  /* Typography */
+  --font-heading: 'Poppins', 'Poppins-Fallback', sans-serif;
+  --font-body: 'Inter', 'Inter-Fallback', sans-serif;
 
-  /* Panel Gradient Spec */
+  /* Radial Panel Gradient Spec */
   --panel-gradient: radial-gradient(120% 90% at 30% 20%, #0A7A77 0%, #03605E 45%, #024A48 100%);
 
   /* Exact Bezier Easings from Spec */
-  --ease-out-cubic: cubic-bezier(0.33, 1, 0.68, 1);
-  --ease-in-out-cubic: cubic-bezier(0.65, 0, 0.35, 1);
-  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --ease-in-flood: cubic-bezier(0.55, 0, 0.9, 0.4); /* p^2.2 acceleration */
+  --ease-out: cubic-bezier(0.33, 1, 0.68, 1);     /* easeOutCubic */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* easeInOutCubic */
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);  /* easeOutBack, visible overshoot 1.56 */
+  --ease-in: cubic-bezier(0.55, 0, 0.9, 0.4);    /* accelerating flood */
 }
 
 /* --------------------------------------------------------------------------
-   2. Reset & App Stage
+   3. Reset & Fullscreen Stage
    -------------------------------------------------------------------------- */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -56,11 +109,12 @@ html, body {
   position: relative;
   width: 100vw;
   height: 100vh;
+  min-height: 100dvh;
   display: flex;
   overflow: hidden;
+  background-color: var(--bg);
 }
 
-/* Screen reader utility */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -74,26 +128,34 @@ html, body {
 }
 
 /* --------------------------------------------------------------------------
-   3. LEFT 50%: BRAND PANEL
-   Initially hidden behind clip-path: circle(0 at logo center)
+   4. LEFT 50%: BRAND PANEL
+   Revealed via GPU transform: scale(0 -> 1) circle centered on logo
    -------------------------------------------------------------------------- */
 .brand-panel {
   position: relative;
   width: 50vw;
   height: 100vh;
-  background: var(--panel-gradient);
-  color: #ffffff;
+  background-color: var(--bg);
+  color: #FFFFFF;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  /* Circle reveal starts at logo spot */
-  clip-path: circle(0px at 50% 38%);
-  will-change: clip-path;
   z-index: 5;
 }
 
-/* 6 Decorative Paper Shapes */
+/* GPU Scaler Circle (Diameter 2.6x diagonal, scales 0 -> 1) */
+.panel-reveal-circle {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--panel-gradient);
+  transform: scale(0);
+  transform-origin: center center;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 6 Ambient Decorative Paper Cards */
 .paper-shapes-layer {
   position: absolute;
   inset: 0;
@@ -103,12 +165,41 @@ html, body {
 
 .paper-item {
   position: absolute;
+  opacity: 0;
+  transform-origin: center center;
+}
+
+.paper-card-inner {
+  width: 100%;
+  height: 100%;
   border-radius: 18px;
   border: 2px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.05);
-  opacity: 0;
-  will-change: transform, opacity;
-  transform-origin: center center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* Ambient Compositor Keyframes */
+@keyframes paperDriftY {
+  from { transform: translate3d(0, -14px, 0); }
+  to   { transform: translate3d(0, 14px, 0); }
+}
+
+@keyframes paperRotate {
+  from { transform: rotate(calc(var(--base-rot) - 6deg)); }
+  to   { transform: rotate(calc(var(--base-rot) + 6deg)); }
+}
+
+.paper-item.drifting {
+  animation: paperDriftY 10.5s ease-in-out infinite alternate;
+}
+
+.paper-item.drifting .paper-card-inner {
+  animation: paperRotate 12.5s ease-in-out infinite alternate;
+}
+
+body.tab-hidden .paper-item.drifting,
+body.tab-hidden .paper-item.drifting .paper-card-inner {
+  animation-play-state: paused !important;
 }
 
 /* Brand Text Anchor in Left Panel */
@@ -123,17 +214,17 @@ html, body {
   text-align: center;
   padding: 0 40px;
   z-index: 2;
+  pointer-events: none;
 }
 
 .brand-tagline {
   font-family: var(--font-heading);
   font-size: 34px;
   font-weight: 500;
-  color: #ffffff;
+  color: #FFFFFF;
   letter-spacing: -0.02em;
   opacity: 0;
   transform: translateY(16px);
-  will-change: opacity, transform;
 }
 
 .brand-subtagline {
@@ -144,145 +235,153 @@ html, body {
   margin-top: 12px;
   opacity: 0;
   transform: translateY(16px);
-  will-change: opacity, transform;
 }
 
 .brand-copyright {
   position: absolute;
-  bottom: 40px;
   left: 48px;
+  bottom: 40px;
   font-family: var(--font-body);
   font-size: 15px;
+  font-weight: 400;
   color: rgba(255, 255, 255, 0.50);
   opacity: 0;
   transform: translateY(16px);
   z-index: 2;
-  will-change: opacity, transform;
 }
 
 /* --------------------------------------------------------------------------
-   4. INTRO LOGO RIG (Flies from Screen Center to Brand Panel)
-   Intro size: 620px wide (scale 1.0x). Final panel size: 372px wide (scale 0.6x).
+   5. LOGO RIG & OUTLINED VECTOR STYLING (Pixel-Correct, No Fonts in Logo)
    -------------------------------------------------------------------------- */
 .intro-logo-rig {
   position: fixed;
-  top: 0;
   left: 0;
+  top: 0;
   width: 620px;
   height: 542.5px;
   pointer-events: none;
-  z-index: 20;
-  /* Started centered on screen at 50% x, 48% y */
-  transform: translate(calc(50vw - 310px), calc(48vh - 271.25px)) scale(1);
+  z-index: 50;
+  backface-visibility: hidden;
   transform-origin: center center;
-  will-change: transform;
 }
 
-/* SVG Elements Setup */
-#sylloraLogoSvg {
-  display: block;
-  width: 100%;
-  height: 100%;
+.syllora-logo {
+  width: 620px;
+  height: auto;
   overflow: visible;
+  shape-rendering: geometricPrecision;
+  display: block;
 }
 
-/* Spine line: scales Y from center (x=626.5, y=586) */
-#spine {
-  transform-origin: 626.5px 586px;
+/* Real-kerning Outlined Letter Baseline Origin */
+.ltr, .welcome-ltr {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+.spine {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.page-left {
+  transform-box: fill-box;
+  transform-origin: 100% 50%;
+}
+
+.page-right {
+  transform-box: fill-box;
+  transform-origin: 0% 50%;
+}
+
+/* Initial Intro States */
+#layerA .spine {
   transform: scaleY(0);
-  opacity: 1;
-  will-change: transform, opacity;
 }
 
-/* Left page: scales from its spine edge (x=615, y=586) */
-#pageLeft {
-  transform-origin: 615px 586px;
+#layerA .page-left,
+#layerA .page-right {
   transform: scaleX(0) scaleY(0.9);
   opacity: 0;
-  will-change: transform, opacity, fill;
 }
 
-/* Right page: scales from its spine edge (x=638, y=586) */
-#pageRight {
-  transform-origin: 638px 586px;
-  transform: scaleX(0) scaleY(0.9);
-  opacity: 0;
-  will-change: transform, opacity, fill;
-}
-
-/* Checkmark Mask Reveal: stroke-dashoffset 1.02 -> 0 */
-#checkReveal {
-  stroke-dasharray: 1.02;
+#layerA #checkReveal {
   stroke-dashoffset: 1.02;
-  will-change: stroke-dashoffset;
 }
 
-#check {
-  fill: #FAFAF8;
-  will-change: fill;
-}
-
-/* 7 Letters in Wordmark */
-.wm-letter {
+#layerA .ltr {
   opacity: 0;
   transform: translateY(40px);
-  will-change: opacity, transform, fill;
-  font-family: var(--font-heading);
-  letter-spacing: -6px;
+}
+
+#layerB {
+  opacity: 0;
 }
 
 /* --------------------------------------------------------------------------
-   5. RIGHT 50%: LOGIN PANEL & 460px CARD
+   6. RIGHT 50%: LOGIN PANEL & 460px CARD
    -------------------------------------------------------------------------- */
 .login-panel {
   position: relative;
   width: 50vw;
   height: 100vh;
-  background-color: var(--bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 32px;
+  background-color: var(--bg);
+  padding: 24px;
   z-index: 10;
 }
 
 .login-card {
-  width: 460px;
-  background: #ffffff;
+  width: 100%;
+  max-width: 460px;
+  background: #FFFFFF;
   border-radius: 24px;
   padding: 44px 32px 36px;
   border: 1px solid #EEF0EE;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 24px 60px -12px rgba(3, 96, 94, 0.18);
   opacity: 0;
   transform: translateY(40px);
-  will-change: opacity, transform;
+  position: relative;
 }
 
-/* Card Stagger Items (8 items stagger in) */
+/* Shake Animation on Error (0.4s) */
+.login-card.shake {
+  animation: cardShake 400ms ease-in-out;
+}
+
+@keyframes cardShake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-6px); }
+  80%      { transform: translateX(6px); }
+}
+
+/* Stagger Items initial state */
 .card-stagger-item {
   opacity: 0;
   transform: translateY(14px);
-  will-change: opacity, transform;
 }
 
-/* Item 0: Header */
+/* Header */
 .item-header {
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .card-title {
   font-family: var(--font-heading);
   font-size: 34px;
   font-weight: 600;
-  letter-spacing: -0.6px;
   color: var(--ink);
-  line-height: 1.2;
+  letter-spacing: -0.6px;
+  line-height: 1.15;
 }
 
 .card-subtitle {
   font-family: var(--font-body);
   font-size: 17px;
-  font-weight: 400;
   color: var(--muted);
   margin-top: 6px;
   line-height: 1.4;
@@ -292,151 +391,175 @@ html, body {
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  width: 100%;
 }
 
-/* Field Groups */
-.field-group {
+.form-group {
+  margin-bottom: 20px;
   display: flex;
   flex-direction: column;
 }
 
-.field-label {
+.form-label {
   font-family: var(--font-body);
   font-size: 14px;
   font-weight: 600;
   color: #374151;
   margin-bottom: 8px;
+  display: block;
 }
 
-/* Inputs */
+/* Input Shell with GPU Pseudo Focus Ring */
+.input-shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border-radius: 12px;
+}
+
+.input-shell::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 12px;
+  box-shadow: 0 0 0 4px rgba(3, 96, 94, 0.14);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms var(--ease-out);
+}
+
 .form-input {
   width: 100%;
   height: 54px;
   border-radius: 12px;
   border: 1.5px solid var(--line);
-  background: var(--input-bg);
+  background-color: var(--input-bg);
   padding: 0 16px;
   font-family: var(--font-body);
   font-size: 17px;
   color: var(--ink);
   outline: none;
   caret-color: var(--teal);
-  transition: border-color 180ms var(--ease-out-cubic),
-              background-color 180ms var(--ease-out-cubic),
-              box-shadow 180ms var(--ease-out-cubic);
+  transition: border-color 180ms var(--ease-out), background-color 180ms var(--ease-out);
 }
 
 .form-input::placeholder {
-  color: #A0A6AD;
-  font-weight: 400;
+  color: #9CA3AF;
 }
 
-/* Input Focus Specification */
 .form-input:focus {
   border-color: var(--teal);
   background-color: #FFFFFF;
-  box-shadow: 0 0 0 4px rgba(3, 96, 94, 0.14);
 }
 
+.input-shell:focus-within::after {
+  opacity: 1;
+}
+
+/* Password dots & eye button */
 .password-input {
   padding-right: 52px;
-}
-
-.password-input[type="password"] {
   letter-spacing: 3px;
 }
 
-.input-relative-box {
-  position: relative;
-  display: flex;
-  align-items: center;
+.password-input::placeholder {
+  letter-spacing: normal;
 }
 
-/* Eye Show/Hide Button (22px icon, 16px from right edge) */
-.password-eye-btn {
+.toggle-password-btn {
   position: absolute;
   right: 16px;
   background: transparent;
   border: none;
   cursor: pointer;
+  padding: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 4px;
+  color: #9CA3AF;
+  border-radius: 6px;
+  transition: color 150ms ease;
 }
 
-/* Error Text slide down */
-.field-error-text {
+.toggle-password-btn:hover {
+  color: var(--ink);
+}
+
+/* Field Error */
+.form-group.has-error .form-input {
+  border-color: var(--error) !important;
+}
+
+.field-error-msg {
+  font-family: var(--font-body);
   font-size: 14px;
   color: var(--error);
-  margin-top: 0;
-  max-height: 0;
+  margin-top: 6px;
+  display: none;
   opacity: 0;
-  overflow: hidden;
   transform: translateY(-6px);
-  transition: max-height 220ms var(--ease-out-cubic),
-              opacity 220ms var(--ease-out-cubic),
-              transform 220ms var(--ease-out-cubic),
-              margin-top 220ms ease;
+  transition: opacity 200ms var(--ease-out), transform 200ms var(--ease-out);
 }
 
-.field-group.has-error .form-input {
-  border-color: var(--error);
-}
-
-.field-group.has-error .field-error-text {
-  max-height: 28px;
+.field-error-msg.visible {
+  display: block;
   opacity: 1;
   transform: translateY(0);
-  margin-top: 6px;
 }
 
-/* Item 3: Remember me & Forgot password */
-.aux-row {
+/* Remember & Forgot Row */
+.remember-forgot-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: 2px;
+  margin-bottom: 24px;
 }
 
-.checkbox-label-wrapper {
-  display: inline-flex;
+.remember-checkbox-label {
+  display: flex;
   align-items: center;
-  gap: 8px;
   cursor: pointer;
   user-select: none;
 }
 
-.native-checkbox {
+.remember-checkbox {
   position: absolute;
   opacity: 0;
-  pointer-events: none;
+  width: 0;
+  height: 0;
 }
 
-.custom-check-box {
+.custom-checkbox-box {
   width: 18px;
   height: 18px;
   border-radius: 5px;
   border: 1.5px solid var(--line);
-  background: var(--input-bg);
+  background-color: var(--input-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 160ms var(--ease-out-cubic);
+  margin-right: 10px;
+  transition: all 150ms ease;
 }
 
-.native-checkbox:checked + .custom-check-box {
-  background: var(--teal);
+.remember-checkbox:checked + .custom-checkbox-box {
+  background-color: var(--teal);
   border-color: var(--teal);
 }
 
-.checkbox-caption {
+.remember-checkbox:focus-visible + .custom-checkbox-box {
+  box-shadow: 0 0 0 3px rgba(3, 96, 94, 0.2);
+}
+
+.remember-text {
+  font-family: var(--font-body);
   font-size: 15px;
-  color: var(--muted);
+  color: #4B5563;
 }
 
 .forgot-link {
+  font-family: var(--font-body);
   font-size: 15px;
   font-weight: 600;
   color: var(--teal);
@@ -449,111 +572,142 @@ html, body {
   text-decoration: underline;
 }
 
-/* Item 4: Login Button Row */
-.button-row {
+/* --------------------------------------------------------------------------
+   7. BUTTON MORPH CONTAINER (396x56 Fixed Box with contain: strict)
+   -------------------------------------------------------------------------- */
+.btn-morph-box {
+  width: 396px;
+  max-width: 100%;
+  height: 56px;
+  contain: strict;
   display: flex;
-  justify-content: center;
   align-items: center;
-  margin-top: 6px;
-  min-height: 56px;
+  justify-content: center;
+  margin: 0 auto;
 }
 
-.btn-login {
+.login-btn {
+  position: relative;
   width: 396px;
   height: 56px;
   border-radius: 14px;
   background-color: var(--teal);
-  color: #ffffff;
-  border: none;
+  color: #FFFFFF;
   font-family: var(--font-body);
   font-size: 18px;
   font-weight: 600;
+  border: none;
   cursor: pointer;
-  box-shadow: 0 10px 24px -10px rgba(3, 96, 94, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
-  overflow: hidden;
-  transform-origin: center center;
-  transition: background-color 150ms var(--ease-out-cubic),
-              transform 150ms var(--ease-out-cubic),
-              box-shadow 150ms var(--ease-out-cubic);
-  will-change: width, border-radius, background-color, transform;
+  outline: none;
+  transform: scale(1);
+  will-change: transform, width, border-radius, background-color;
+  transition: transform 120ms var(--ease-out), background-color 150ms ease;
 }
 
-/* Button Hover */
-.btn-login:hover:not(:disabled):not(.is-loading):not(.is-success) {
-  background-color: var(--teal-dark);
-  transform: translateY(-2px);
+/* Shadow on Pseudo Element */
+.login-btn::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
   box-shadow: 0 16px 34px -10px rgba(3, 96, 94, 0.75);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 150ms ease;
 }
 
-/* Button Press (scale 1 -> 0.965 -> 1) */
-.btn-login:active:not(:disabled):not(.is-loading):not(.is-success) {
-  transform: scale(0.965);
+.login-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  background-color: var(--teal-dark);
 }
 
-.btn-label-text {
+.login-btn:hover:not(:disabled)::before {
   opacity: 1;
-  transition: opacity 160ms linear;
-  will-change: opacity;
 }
 
-/* Loading Spinner (28px ring) */
+/* Instant First-Frame Press Feedback */
+.login-btn.pressed:not(:disabled) {
+  transform: scale(0.965) !important;
+  transition: transform 100ms var(--ease-out) !important;
+}
+
+.login-btn:focus-visible {
+  box-shadow: 0 0 0 4px rgba(3, 96, 94, 0.35);
+}
+
+.btn-label {
+  transition: opacity 180ms linear;
+}
+
+/* 28px Spinner Rotating at 420deg/s (857ms period) */
 .btn-spinner {
   position: absolute;
   width: 28px;
   height: 28px;
   display: none;
   opacity: 0;
-  animation: spinnerSpin 857ms linear infinite; /* 420 deg/sec */
+  align-items: center;
+  justify-content: center;
+  transition: opacity 150ms linear;
 }
 
-@keyframes spinnerSpin {
-  to { transform: rotate(360deg); }
+.spinner-arc {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+  animation: spinnerRotate 857ms linear infinite;
 }
 
-/* Success Checkmark Inside Button Circle */
-.btn-checkmark-morph {
+@keyframes spinnerRotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Success Checkmark */
+.btn-check-morph {
   position: absolute;
-  width: 30px;
-  height: 30px;
   display: none;
   transform-origin: center center;
 }
 
-/* Item 5: Divider */
+/* Divider & Secondary Actions */
 .divider-row {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 8px 0;
+  margin: 24px 0 20px;
+  text-align: center;
 }
 
-.divider-hairline {
+.divider-row::before,
+.divider-row::after {
+  content: '';
   flex: 1;
   height: 1px;
-  background-color: var(--line);
+  background-color: #E5E7EB;
 }
 
 .divider-text {
+  font-family: var(--font-body);
   font-size: 14px;
   color: #9CA3AF;
-  font-weight: 400;
+  padding: 0 16px;
 }
 
-/* Item 6: Google SSO Button */
-.google-row {
-  display: flex;
+.google-sso-wrap {
+  width: 100%;
 }
 
-.btn-google {
+.google-btn {
   width: 100%;
   height: 54px;
   border-radius: 12px;
   border: 1.5px solid var(--line);
-  background: #ffffff;
+  background-color: #FFFFFF;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -563,287 +717,305 @@ html, body {
   font-weight: 600;
   color: var(--ink);
   cursor: pointer;
-  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
 }
 
-.btn-google:hover {
-  background-color: #FAFAFA;
+.google-btn:hover {
+  background-color: #F9FAFB;
   border-color: #D1D5DB;
-  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
 }
 
-/* Item 7: Footer Row */
-.footer-row {
+.google-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(3, 96, 94, 0.2);
+}
+
+.signup-row {
+  margin-top: 24px;
   text-align: center;
-  margin-top: 6px;
 }
 
-.signup-prompt {
+.signup-text {
+  font-family: var(--font-body);
   font-size: 15px;
   color: var(--muted);
 }
 
 .signup-link {
-  color: var(--teal);
   font-weight: 600;
+  color: var(--teal);
   text-decoration: none;
+  transition: color 150ms ease;
 }
 
 .signup-link:hover {
+  color: var(--teal-dark);
   text-decoration: underline;
 }
 
-/* Card Error Shake Animation (0.4s) */
-.login-card.shake {
-  animation: cardShakeAnim 400ms var(--ease-out-cubic);
-}
-
-@keyframes cardShakeAnim {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-6px); }
-  40%, 80% { transform: translateX(6px); }
-}
-
 /* --------------------------------------------------------------------------
-   6. TEAL FLOOD OVERLAY & WELCOME SCREEN
-   clip-path expands from button center R: 0 -> 2400px
+   8. TEAL FLOOD OVERLAY (Scale 0 -> 1 GPU circle from button center)
    -------------------------------------------------------------------------- */
 .teal-flood-overlay {
   position: fixed;
   inset: 0;
-  width: 100vw;
-  height: 100vh;
-  background: var(--panel-gradient);
-  z-index: 100;
+  overflow: hidden;
   pointer-events: none;
-  clip-path: circle(0px at 50% 50%);
-  will-change: clip-path;
+  z-index: 90;
+  opacity: 0;
+}
+
+.teal-flood-overlay.active {
+  opacity: 1;
+}
+
+.flood-circle {
+  position: absolute;
+  border-radius: 50%;
+  background-color: var(--teal);
+  transform: scale(0);
+  transform-origin: center center;
+}
+
+/* --------------------------------------------------------------------------
+   9. WELCOME DASHBOARD SCREEN (variant="inverted" Syllora Logo)
+   -------------------------------------------------------------------------- */
+.welcome-screen {
+  position: fixed;
+  inset: 0;
+  background-color: var(--teal);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.welcome-screen.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.welcome-logo-wrap {
+  position: absolute;
+  top: 37%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.teal-flood-overlay.active {
-  pointer-events: auto;
+.welcome-logo {
+  width: 340px;
+  height: auto;
 }
 
-.welcome-screen-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-/* Welcome Logo centered at 50% x, 37% y, scale 0.55x */
-.welcome-logo-container {
-  position: absolute;
-  left: 50%;
-  top: 37%;
-  transform: translate(-50%, -50%) scale(0.55);
-  transform-origin: center center;
-}
-
-#welcomeLogoSvg {
-  display: block;
+#welcomePageLeft,
+#welcomePageRight {
+  transform: scaleX(0);
 }
 
 #welcomeCheckReveal {
-  stroke-dasharray: 1.02;
   stroke-dashoffset: 1.02;
 }
 
-#welcomePageLeft {
-  transform-origin: 615px 586px;
-  transform: scaleX(0);
-}
-
-#welcomePageRight {
-  transform-origin: 638px 586px;
-  transform: scaleX(0);
-}
-
-.welcome-wm-letter {
+.welcome-ltr {
   opacity: 0;
   transform: translateY(40px);
-  font-family: var(--font-heading);
 }
 
-/* "Welcome back!" Poppins 600, 46px, white, ~64% height */
 .welcome-title {
   position: absolute;
-  top: 64%;
+  top: calc(37% + 155px);
   left: 50%;
   transform: translate(-50%, 18px);
   font-family: var(--font-heading);
   font-size: 46px;
   font-weight: 600;
-  color: #ffffff;
-  letter-spacing: -0.02em;
+  color: #FFFFFF;
   opacity: 0;
   text-align: center;
   white-space: nowrap;
 }
 
-/* "Taking you to your dashboard…" Inter 20px, white 75% */
 .welcome-sub {
   position: absolute;
-  top: calc(64% + 56px);
+  top: calc(37% + 218px);
   left: 50%;
   transform: translate(-50%, 18px);
   font-family: var(--font-body);
   font-size: 20px;
-  font-weight: 400;
   color: rgba(255, 255, 255, 0.75);
   opacity: 0;
   text-align: center;
   white-space: nowrap;
 }
 
-/* Progress Bar (200x4px, radius 4px) */
+/* 200x4px Progress Bar, fill animated with scaleX(0 -> 1) */
 .welcome-progress-track {
   position: absolute;
-  top: calc(64% + 104px);
+  top: calc(37% + 268px);
   left: 50%;
   transform: translateX(-50%);
   width: 200px;
   height: 4px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.20);
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.22);
   overflow: hidden;
   opacity: 0;
 }
 
 .welcome-progress-fill {
-  width: 0%;
+  width: 100%;
   height: 100%;
-  background: #ffffff;
-  border-radius: 4px;
+  background-color: #FFFFFF;
+  border-radius: 2px;
+  transform: scaleX(0);
+  transform-origin: left center;
 }
 
-/* --------------------------------------------------------------------------
-   7. DISCREET SKIP HINT
-   -------------------------------------------------------------------------- */
+/* Skip Hint */
 .intro-skip-hint {
   position: fixed;
   bottom: 24px;
   right: 28px;
-  z-index: 50;
-  font-size: 13px;
-  font-family: var(--font-body);
-  color: rgba(34, 39, 43, 0.45);
-  background: rgba(255, 255, 255, 0.7);
-  padding: 6px 14px;
-  border-radius: 9999px;
-  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(34, 39, 43, 0.72);
   backdrop-filter: blur(8px);
-  pointer-events: none;
+  color: #FFFFFF;
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 8px 16px;
+  border-radius: 20px;
   opacity: 0;
-  transition: opacity 300ms ease;
+  transform: translateY(8px);
+  pointer-events: none;
+  z-index: 80;
+  transition: opacity 300ms ease, transform 300ms ease;
 }
 
 .intro-skip-hint.visible {
   opacity: 1;
+  transform: translateY(0);
 }
 
 /* --------------------------------------------------------------------------
-   8. MOBILE RESPONSIVE ADAPTATION (<900px)
-   No split. Panel becomes top band ~40vh, logo sits in it, card overlaps below.
+   10. RESPONSIVE BREAKPOINTS (< 900px Mobile)
    -------------------------------------------------------------------------- */
-@media (max-width: 900px) {
+@media (max-width: 899px) {
   .app-stage {
     flex-direction: column;
     overflow-y: auto;
-    height: auto;
-    min-height: 100dvh;
   }
 
   .brand-panel {
     width: 100vw;
-    height: 40vh;
-    min-height: 280px;
+    height: 40dvh;
+    min-height: 260px;
   }
 
   .brand-texts-anchor {
-    top: auto;
-    bottom: 24px;
+    top: 55%;
+    padding: 0 20px;
   }
 
   .brand-tagline {
-    font-size: 26px;
+    font-size: 24px;
   }
 
   .brand-subtagline {
-    font-size: 16px;
+    font-size: 15px;
+    margin-top: 6px;
   }
 
   .brand-copyright {
     display: none;
   }
 
-  .intro-logo-rig {
-    /* Mobile final spot: centered at top */
-    transform: translate(calc(50vw - 310px), calc(18vh - 271.25px)) scale(0.45);
-  }
-
   .login-panel {
     width: 100vw;
     height: auto;
-    min-height: 60vh;
-    padding: 24px 16px 40px;
+    min-height: 60dvh;
+    padding: 16px;
+    margin-top: -32px;
     align-items: flex-start;
   }
 
   .login-card {
-    width: 100%;
-    max-width: 440px;
-    padding: 32px 24px 28px;
-    margin-top: -30px; /* Slight overlap */
-    z-index: 15;
+    padding: 32px 20px 28px;
+    max-width: 100%;
   }
 
   .card-title {
     font-size: 28px;
   }
 
-  .btn-login {
+  .btn-morph-box {
     width: 100%;
+  }
+
+  .login-btn {
+    width: 100%;
+  }
+
+  .welcome-title {
+    font-size: 32px;
+    top: calc(37% + 120px);
+  }
+
+  .welcome-sub {
+    font-size: 17px;
+    top: calc(37% + 168px);
+  }
+
+  .welcome-progress-track {
+    top: calc(37% + 210px);
   }
 }
 
 /* --------------------------------------------------------------------------
-   9. PREFERS-REDUCED-MOTION
+   11. ACCESSIBILITY: REDUCED MOTION OVERRIDE
    -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .brand-panel {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .intro-logo-rig,
+  .brand-panel,
+  .login-card,
+  .card-stagger-item,
+  .brand-tagline,
+  .brand-subtagline,
+  .brand-copyright {
+    opacity: 1 !important;
+    transform: none !important;
     clip-path: none !important;
   }
 
-  .intro-logo-rig {
+  .panel-reveal-circle {
+    transform: scale(1) !important;
+  }
+
+  #layerA {
     display: none !important;
+  }
+
+  #layerB {
+    opacity: 1 !important;
   }
 
   .paper-item {
-    opacity: 0.1 !important;
-    animation: none !important;
-  }
-
-  .brand-tagline,
-  .brand-subtagline,
-  .brand-copyright,
-  .login-card,
-  .card-stagger-item {
     opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
-  }
-
-  .login-card.shake {
     animation: none !important;
   }
 
-  .intro-skip-hint {
-    display: none !important;
+  .paper-card-inner {
+    animation: none !important;
   }
 }

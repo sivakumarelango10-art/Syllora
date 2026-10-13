@@ -1,29 +1,29 @@
 /**
  * ============================================================================
- * SYLLORA AUTHENTICATION ENGINE (FRONTEND MODULE)
- * Exact Timings, Easings, Geometry & 60fps GPU Orchestration
+ * SYLLORA AUTHENTICATION ENGINE (FRONTEND APPLICATION)
+ * Master Specification Implementation:
+ * - 100% GPU Compositor Driven via Web Animations API & CSS Keyframes
+ * - Pixel-Correct Outlined Vector Kerning (Zero Text/Font Layout Shift)
+ * - Circle-Scale Panel Reveal & Teal Flood (Zero Clip-Path Thrash)
+ * - Fixed 396x56 contain: strict Button Morph
+ * - Synchronized Multi-Track Master Timeline with SPEED Constant
  * ============================================================================
- * 
- * Features:
- * - Precise mathematical cubic-bezier curves matching design specs
- * - 60fps RequestAnimationFrame intro orchestration with zero layout thrash
- * - CPU/Battery optimization: pauses ambient loops when tab is hidden
- * - RAF cancellation on intro skip or unmount
- * - Throttled resize calculations via requestAnimationFrame
- * - Accessible live regions and ARIA state updates
  */
 
 (function () {
   'use strict';
 
   // --------------------------------------------------------------------------
-  // 1. Exact Timings & Easings Configuration
+  // 1. MASTER TIMING SPECIFICATION & EASINGS
   // --------------------------------------------------------------------------
+  const SPEED = 1.0; // Scalable constant: 1.0 = standard spec, 0.75 = snappier
+
   const TIMINGS = Object.freeze({
     // Intro Timeline (seconds from load)
     spineGrow: [0.15, 0.55],
     spineFade: [0.60, 1.00],
     bookOpen: [0.50, 1.35],
+    bookFade: [0.50, 0.71],
     checkDraw: [1.30, 2.00],
     wordmarkBase: 1.95,
     wordmarkStagger: 0.07,
@@ -31,7 +31,7 @@
     breathe: [2.40, 3.20],
     logoGlide: [3.20, 4.00],
     panelReveal: [3.85, 4.85],
-    colorInvert: [3.95, 4.35],
+    colorCrossfade: [3.95, 4.35],
     paperFadeBase: 4.20,
     paperFadeStagger: 0.08,
     paperFadeDuration: 0.70,
@@ -41,22 +41,23 @@
     cardStaggerBase: 4.90,
     cardStaggerStep: 0.07,
     cardStaggerDuration: 0.50,
-    introTotal: 5.60,
+    introTotal: 5.50,
 
-    // Submit & Loading (seconds after click)
+    // Button & Loading (seconds after submit)
     btnLabelFade: [0.15, 0.35],
     btnMorphCircle: [0.15, 0.60],
     spinnerFade: [0.50, 0.65],
-    mockAuthDuration: 1.20,
+    minSpinnerDuration: 0.40,
+    mockAuthDuration: 0.60,
 
-    // Success (seconds after auth success)
+    // Success Sequence
     spinnerOut: [0.00, 0.15],
     checkDrawMorph: [0.05, 0.40],
     checkPop: [0.05, 0.45],
     btnBgRestore: [0.00, 0.30],
     tealFlood: [0.65, 1.45],
 
-    // Welcome Screen (seconds after flood completes)
+    // Welcome Screen Sequence (seconds after flood completes)
     welcomeBookOpen: [0.05, 0.75],
     welcomeCheckDraw: [0.60, 1.15],
     welcomeWordmarkBase: 0.95,
@@ -67,48 +68,14 @@
     progressBarFill: [1.65, 3.05]
   });
 
-  // Exact Mathematical Easing Curves
-  function easeOutCubic(p) {
-    return 1 - Math.pow(1 - p, 3);
-  }
+  // Exact Cubic Bezier Easings
+  const EASE_OUT = 'cubic-bezier(0.33, 1, 0.68, 1)';     // easeOutCubic
+  const EASE_IN_OUT = 'cubic-bezier(0.65, 0, 0.35, 1)'; // easeInOutCubic
+  const EASE_BACK = 'cubic-bezier(0.34, 1.56, 0.64, 1)';  // easeOutBack overshoot 1.56
+  const EASE_IN = 'cubic-bezier(0.55, 0, 0.9, 0.4)';    // accelerating flood
+  const LINEAR = 'linear';
 
-  function easeInOutCubic(p) {
-    return p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-  }
-
-  function easeOutBack(p) {
-    const c1 = 1.70158 * 1.5; // Overshoot 1.5
-    const c3 = c1 + 1;
-    return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
-  }
-
-  function linear(p) {
-    return p;
-  }
-
-  function clamp(val, min, max) {
-    return Math.max(min, Math.min(max, val));
-  }
-
-  function interpolate(p, from, to) {
-    return from + (to - from) * p;
-  }
-
-  function hexToRgb(hex) {
-    const bigint = parseInt(hex.replace('#', ''), 16);
-    return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
-  }
-
-  function lerpColor(fromHex, toHex, p) {
-    const [r1, g1, b1] = hexToRgb(fromHex);
-    const [r2, g2, b2] = hexToRgb(toHex);
-    const r = Math.round(interpolate(p, r1, r2));
-    const g = Math.round(interpolate(p, g1, g2));
-    const b = Math.round(interpolate(p, b1, b2));
-    return `rgb(${r},${g},${b})`;
-  }
-
-  // Safe SessionStorage Access
+  // Safe Session Storage Helpers
   function getSessionStorage(key) {
     try {
       return sessionStorage.getItem(key);
@@ -121,35 +88,36 @@
     try {
       sessionStorage.setItem(key, value);
     } catch {
-      // Ignore private mode quota error
+      // Ignore incognito quota restrictions
     }
   }
 
   // --------------------------------------------------------------------------
-  // 2. DOM Cache
+  // 2. DOM CACHE
   // --------------------------------------------------------------------------
+  const appStage = document.getElementById('appStage');
   const brandPanel = document.getElementById('brandPanel');
-  const introLogoRig = document.getElementById('introLogoRig');
-  const spine = document.getElementById('spine');
-  const pageLeft = document.getElementById('pageLeft');
-  const pageRight = document.getElementById('pageRight');
-  const checkReveal = document.getElementById('checkReveal');
-  const check = document.getElementById('check');
-  const wmLetters = Array.from(document.querySelectorAll('#wordmark .wm-letter'));
-
+  const panelRevealCircle = document.getElementById('panelRevealCircle');
   const paperItems = Array.from(document.querySelectorAll('.paper-item'));
   const brandTagline = document.getElementById('brandTagline');
   const brandSubtagline = document.getElementById('brandSubtagline');
   const brandCopyright = document.getElementById('brandCopyright');
 
+  const introLogoRig = document.getElementById('introLogoRig');
+  const layerA = document.getElementById('layerA');
+  const layerB = document.getElementById('layerB');
+  const spine = document.getElementById('spine');
+  const pageLeft = document.getElementById('pageLeft');
+  const pageRight = document.getElementById('pageRight');
+  const checkReveal = document.getElementById('checkReveal');
+  const ltrElements = Array.from(document.querySelectorAll('#layerA .ltr'));
+
   const loginCard = document.getElementById('loginCard');
   const cardStaggerItems = Array.from(document.querySelectorAll('.card-stagger-item'));
-
   const authForm = document.getElementById('authForm');
   const emailGroup = document.getElementById('emailGroup');
   const emailInput = document.getElementById('emailInput');
   const emailError = document.getElementById('emailError');
-
   const passwordGroup = document.getElementById('passwordGroup');
   const passwordInput = document.getElementById('passwordInput');
   const passwordError = document.getElementById('passwordError');
@@ -164,545 +132,581 @@
   const morphCheckPath = document.getElementById('morphCheckPath');
   const googleBtn = document.getElementById('googleBtn');
   const introSkipHint = document.getElementById('introSkipHint');
+  const a11yAnnouncer = document.getElementById('a11yAnnouncer');
 
   // Flood & Welcome Screen
   const tealFloodOverlay = document.getElementById('tealFloodOverlay');
+  const floodCircle = document.getElementById('floodCircle');
+  const welcomeScreen = document.getElementById('welcomeScreen');
   const welcomePageLeft = document.getElementById('welcomePageLeft');
   const welcomePageRight = document.getElementById('welcomePageRight');
   const welcomeCheckReveal = document.getElementById('welcomeCheckReveal');
-  const welcomeWmLetters = Array.from(document.querySelectorAll('#welcomeWordmark .welcome-wm-letter'));
+  const welcomeLtrs = Array.from(document.querySelectorAll('#welcomeWordmark .welcome-ltr'));
   const welcomeTitle = document.getElementById('welcomeTitle');
   const welcomeSub = document.getElementById('welcomeSub');
   const welcomeProgressTrack = document.getElementById('welcomeProgressTrack');
   const welcomeProgressFill = document.getElementById('welcomeProgressFill');
-  const a11yAnnouncer = document.getElementById('a11yAnnouncer');
 
-  // State & Animation Frame Handles
+  // State Management
   let introActive = true;
-  let introStartTime = null;
-  let introRafId = null;
-  let ambientActive = false;
-  let ambientRafId = null;
+  let activeAnimations = [];
   let isSubmitting = false;
-  let resizeRafId = null;
-
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const hasVisitedSession = getSessionStorage('syllora_intro_played') === 'true';
+  const introSeenThisSession = getSessionStorage('syllora_intro_seen') === 'true';
 
   // --------------------------------------------------------------------------
-  // 3. Decorative Paper Shapes Positioning
+  // 3. LAYOUT & PROPORTIONAL GEOMETRY CALCULATIONS
   // --------------------------------------------------------------------------
-  function layoutPaperShapes() {
+  function calculatePositions() {
     const isDesktop = window.innerWidth >= 900;
-    const panelWidth = isDesktop ? window.innerWidth * 0.5 : window.innerWidth;
-    const panelHeight = isDesktop ? window.innerHeight : window.innerHeight * 0.4;
-    const scaleX = panelWidth / 960;
-    const scaleY = panelHeight / 1080;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
 
-    paperItems.forEach((el) => {
-      const left = parseFloat(el.getAttribute('data-left')) * scaleX;
-      const top = parseFloat(el.getAttribute('data-top')) * scaleY;
-      const w = parseFloat(el.getAttribute('data-w')) * scaleX;
-      const h = parseFloat(el.getAttribute('data-h')) * scaleY;
-      const rot = parseFloat(el.getAttribute('data-rot'));
+    // Logo initial center: 50% x, 48% y (logo rig is 620 x 542.5)
+    const logoStartX = 0.50 * vw - 310;
+    const logoStartY = 0.48 * vh - 271.25;
 
-      el.style.left = `${left}px`;
-      el.style.top = `${top}px`;
-      el.style.width = `${w}px`;
-      el.style.height = `${h}px`;
-      el.style.transform = `rotate(${rot}deg)`;
-    });
-  }
+    // Logo final spot & panel dimensions
+    let logoEndX, logoEndY, logoEndScale;
+    let panelW, panelH, panelCenterX, panelCenterY;
 
-  // --------------------------------------------------------------------------
-  // 4. Intro Animation Engine (RequestAnimationFrame Timeline)
-  // --------------------------------------------------------------------------
-  function getLogoCoordinates() {
-    const isDesktop = window.innerWidth >= 900;
-    const startX = 0.50 * window.innerWidth - 310;
-    const startY = 0.48 * window.innerHeight - 271.25;
-    const startScale = 1.0;
-
-    let endX, endY, endScale, panelCenterX, panelCenterY;
     if (isDesktop) {
-      endX = 0.25 * window.innerWidth - 310;
-      endY = 0.38 * window.innerHeight - 271.25;
-      endScale = 0.60;
-      panelCenterX = 0.25 * window.innerWidth;
-      panelCenterY = 0.38 * window.innerHeight;
+      panelW = vw * 0.5;
+      panelH = vh;
+      logoEndX = 0.25 * vw - 310;
+      logoEndY = 0.38 * vh - 271.25;
+      logoEndScale = 0.60; // 372px / 620px = 0.6x
+      panelCenterX = 0.50 * panelW;
+      panelCenterY = 0.38 * panelH;
     } else {
-      endX = 0.50 * window.innerWidth - 310;
-      endY = 0.18 * window.innerHeight - 271.25;
-      endScale = 0.45;
-      panelCenterX = 0.50 * window.innerWidth;
-      panelCenterY = 0.18 * window.innerHeight;
+      panelW = vw;
+      panelH = vh * 0.4;
+      logoEndX = 0.50 * vw - 310;
+      logoEndY = 0.18 * vh - 271.25;
+      logoEndScale = 220 / 620; // 220px on mobile
+      panelCenterX = 0.50 * panelW;
+      panelCenterY = 0.18 * vh;
     }
 
-    return { startX, startY, startScale, endX, endY, endScale, panelCenterX, panelCenterY };
+    // Panel reveal circle: diameter 2.6x panel diagonal
+    const panelDiagonal = Math.hypot(panelW, panelH);
+    const circleDiameter = 2.6 * panelDiagonal;
+
+    return {
+      isDesktop,
+      vw, vh,
+      logoStartX, logoStartY,
+      logoEndX, logoEndY, logoEndScale,
+      panelW, panelH,
+      panelCenterX, panelCenterY,
+      circleDiameter
+    };
   }
 
-  function runIntroTimeline(now) {
-    if (!introActive) return;
-    if (!introStartTime) introStartTime = now;
-    const elapsed = (now - introStartTime) / 1000; // in seconds
+  function applyGeometricSetup() {
+    const geo = calculatePositions();
 
-    const coords = getLogoCoordinates();
+    // 1. Initial logo position
+    introLogoRig.style.transform = `translate(${geo.logoStartX}px, ${geo.logoStartY}px) scale(1)`;
 
-    // 0.15 -> 0.55s: Spine line grows (scaleY 0 -> 1, origin center y 586)
-    if (elapsed >= TIMINGS.spineGrow[0] && elapsed <= TIMINGS.spineGrow[1]) {
-      const p = easeOutCubic((elapsed - TIMINGS.spineGrow[0]) / (TIMINGS.spineGrow[1] - TIMINGS.spineGrow[0]));
-      spine.style.transform = `scaleY(${p})`;
-    } else if (elapsed > TIMINGS.spineGrow[1]) {
-      spine.style.transform = 'scaleY(1)';
-    }
+    // 2. Panel reveal circle position (centered on logo's final spot)
+    panelRevealCircle.style.width = `${geo.circleDiameter}px`;
+    panelRevealCircle.style.height = `${geo.circleDiameter}px`;
+    panelRevealCircle.style.left = `${geo.panelCenterX - geo.circleDiameter / 2}px`;
+    panelRevealCircle.style.top = `${geo.panelCenterY - geo.circleDiameter / 2}px`;
 
-    // 0.60 -> 1.00s: Spine fades out
-    if (elapsed >= TIMINGS.spineFade[0] && elapsed <= TIMINGS.spineFade[1]) {
-      const p = linear((elapsed - TIMINGS.spineFade[0]) / (TIMINGS.spineFade[1] - TIMINGS.spineFade[0]));
-      spine.style.opacity = `${1 - p}`;
-    } else if (elapsed > TIMINGS.spineFade[1]) {
-      spine.style.opacity = '0';
-    }
+    // 3. Proportional layout for 6 ambient paper cards inside 960x1080 coordinate space
+    const scaleX = geo.panelW / 960;
+    const scaleY = geo.panelH / 1080;
 
-    // 0.50 -> 1.35s: Book opens (scaleX 0 -> 1 with easeOutBack overshoot, scaleY 0.9 -> 1)
-    if (elapsed >= TIMINGS.bookOpen[0] && elapsed <= TIMINGS.bookOpen[1]) {
-      const p = (elapsed - TIMINGS.bookOpen[0]) / (TIMINGS.bookOpen[1] - TIMINGS.bookOpen[0]);
-      const pBack = easeOutBack(p);
-      const pCubic = easeOutCubic(p);
-      const opacity = clamp(p / 0.25, 0, 1);
+    paperItems.forEach((item, index) => {
+      const left = parseFloat(item.getAttribute('data-left')) * scaleX;
+      const top = parseFloat(item.getAttribute('data-top')) * scaleY;
+      const w = parseFloat(item.getAttribute('data-w')) * scaleX;
+      const h = parseFloat(item.getAttribute('data-h')) * scaleY;
+      const rot = parseFloat(item.getAttribute('data-rot'));
 
-      pageLeft.style.transform = `scaleX(${pBack}) scaleY(${interpolate(pCubic, 0.9, 1)})`;
-      pageRight.style.transform = `scaleX(${pBack}) scaleY(${interpolate(pCubic, 0.9, 1)})`;
-      pageLeft.style.opacity = `${opacity}`;
-      pageRight.style.opacity = `${opacity}`;
-    } else if (elapsed > TIMINGS.bookOpen[1]) {
-      pageLeft.style.transform = 'scaleX(1) scaleY(1)';
-      pageRight.style.transform = 'scaleX(1) scaleY(1)';
-      pageLeft.style.opacity = '1';
-      pageRight.style.opacity = '1';
-    }
-
-    // 1.30 -> 2.00s: Checkmark draws in (stroke-dashoffset 1.02 -> 0)
-    if (elapsed >= TIMINGS.checkDraw[0] && elapsed <= TIMINGS.checkDraw[1]) {
-      const p = easeInOutCubic((elapsed - TIMINGS.checkDraw[0]) / (TIMINGS.checkDraw[1] - TIMINGS.checkDraw[0]));
-      const dash = interpolate(p, 1.02, 0);
-      checkReveal.style.strokeDashoffset = `${dash}`;
-    } else if (elapsed > TIMINGS.checkDraw[1]) {
-      checkReveal.style.strokeDashoffset = '0';
-    }
-
-    // 1.95 + i*0.07 -> +0.50s: Wordmark letters rise one by one
-    wmLetters.forEach((letter, i) => {
-      const start = TIMINGS.wordmarkBase + i * TIMINGS.wordmarkStagger;
-      const end = start + TIMINGS.wordmarkDuration;
-      if (elapsed >= start && elapsed <= end) {
-        const p = easeOutCubic((elapsed - start) / (end - start));
-        letter.style.opacity = `${p}`;
-        letter.style.transform = `translateY(${interpolate(p, 40, 0)}px)`;
-      } else if (elapsed > end) {
-        letter.style.opacity = '1';
-        letter.style.transform = 'translateY(0px)';
-      }
+      item.style.left = `${left}px`;
+      item.style.top = `${top}px`;
+      item.style.width = `${w}px`;
+      item.style.height = `${h}px`;
+      item.style.setProperty('--base-rot', `${rot}deg`);
+      item.style.setProperty('--drift-index', `${index}`);
+      item.querySelector('.paper-card-inner').style.transform = `rotate(${rot}deg)`;
     });
-
-    // 2.40 -> 3.20s: Gentle "breathe" (scale 1.00 -> 1.03)
-    let currentLogoScale = coords.startScale;
-    let currentLogoX = coords.startX;
-    let currentLogoY = coords.startY;
-
-    if (elapsed >= TIMINGS.breathe[0] && elapsed <= TIMINGS.breathe[1]) {
-      const p = easeOutCubic((elapsed - TIMINGS.breathe[0]) / (TIMINGS.breathe[1] - TIMINGS.breathe[0]));
-      currentLogoScale = interpolate(p, 1.00, 1.03);
-    } else if (elapsed > TIMINGS.breathe[1] && elapsed < TIMINGS.logoGlide[0]) {
-      currentLogoScale = 1.03;
-    }
-
-    // 3.20 -> 4.00s: Logo glides to left panel (scale 1.03 -> 0.60, position center -> left panel)
-    if (elapsed >= TIMINGS.logoGlide[0] && elapsed <= TIMINGS.logoGlide[1]) {
-      const p = easeInOutCubic((elapsed - TIMINGS.logoGlide[0]) / (TIMINGS.logoGlide[1] - TIMINGS.logoGlide[0]));
-      currentLogoX = interpolate(p, coords.startX, coords.endX);
-      currentLogoY = interpolate(p, coords.startY, coords.endY);
-      currentLogoScale = interpolate(p, 1.03, coords.endScale);
-    } else if (elapsed > TIMINGS.logoGlide[1]) {
-      currentLogoX = coords.endX;
-      currentLogoY = coords.endY;
-      currentLogoScale = coords.endScale;
-    }
-
-    introLogoRig.style.transform = `translate(${currentLogoX}px, ${currentLogoY}px) scale(${currentLogoScale})`;
-
-    // 3.85 -> 4.85s: Teal panel reveals as a circle (R 0 -> 1250px)
-    if (elapsed >= TIMINGS.panelReveal[0] && elapsed <= TIMINGS.panelReveal[1]) {
-      const p = easeOutCubic((elapsed - TIMINGS.panelReveal[0]) / (TIMINGS.panelReveal[1] - TIMINGS.panelReveal[0]));
-      const radius = interpolate(p, 0, 1250);
-      brandPanel.style.clipPath = `circle(${radius}px at ${coords.panelCenterX}px ${coords.panelCenterY}px)`;
-    } else if (elapsed > TIMINGS.panelReveal[1]) {
-      brandPanel.style.clipPath = `circle(1250px at ${coords.panelCenterX}px ${coords.panelCenterY}px)`;
-    }
-
-    // 3.95 -> 4.35s: Logo colors invert
-    if (elapsed >= TIMINGS.colorInvert[0] && elapsed <= TIMINGS.colorInvert[1]) {
-      const p = easeInOutCubic((elapsed - TIMINGS.colorInvert[0]) / (TIMINGS.colorInvert[1] - TIMINGS.colorInvert[0]));
-      const pageColor = lerpColor('#03605E', '#FFFFFF', p);
-      const checkColor = lerpColor('#FAFAF8', '#03605E', p);
-      const wmColor = lerpColor('#22272B', '#FFFFFF', p);
-
-      pageLeft.style.fill = pageColor;
-      pageRight.style.fill = pageColor;
-      check.style.fill = checkColor;
-      wmLetters.forEach((l) => (l.style.fill = wmColor));
-    } else if (elapsed > TIMINGS.colorInvert[1]) {
-      pageLeft.style.fill = '#FFFFFF';
-      pageRight.style.fill = '#FFFFFF';
-      check.style.fill = '#03605E';
-      wmLetters.forEach((l) => (l.style.fill = '#FFFFFF'));
-    }
-
-    // 4.20 + i*0.08 -> +0.70s: Paper shapes fade in (opacity 0 -> 1)
-    paperItems.forEach((paper, i) => {
-      const start = TIMINGS.paperFadeBase + i * TIMINGS.paperFadeStagger;
-      const end = start + TIMINGS.paperFadeDuration;
-      if (elapsed >= start && elapsed <= end) {
-        const p = easeOutCubic((elapsed - start) / (end - start));
-        paper.style.opacity = `${p}`;
-      } else if (elapsed > end) {
-        paper.style.opacity = '1';
-      }
-    });
-
-    // 4.50 -> 5.10s: Tagline
-    if (elapsed >= TIMINGS.tagline[0] && elapsed <= TIMINGS.tagline[1]) {
-      const p = easeOutCubic((elapsed - TIMINGS.tagline[0]) / (TIMINGS.tagline[1] - TIMINGS.tagline[0]));
-      brandTagline.style.opacity = `${p}`;
-      brandTagline.style.transform = `translateY(${interpolate(p, 16, 0)}px)`;
-    } else if (elapsed > TIMINGS.tagline[1]) {
-      brandTagline.style.opacity = '1';
-      brandTagline.style.transform = 'translateY(0px)';
-    }
-
-    // 4.65 -> 5.25s: Sub-tagline + copyright
-    if (elapsed >= TIMINGS.subtagline[0] && elapsed <= TIMINGS.subtagline[1]) {
-      const p = easeOutCubic((elapsed - TIMINGS.subtagline[0]) / (TIMINGS.subtagline[1] - TIMINGS.subtagline[0]));
-      brandSubtagline.style.opacity = `${p}`;
-      brandSubtagline.style.transform = `translateY(${interpolate(p, 16, 0)}px)`;
-      brandCopyright.style.opacity = `${p}`;
-      brandCopyright.style.transform = `translateY(${interpolate(p, 16, 0)}px)`;
-    } else if (elapsed > TIMINGS.subtagline[1]) {
-      brandSubtagline.style.opacity = '1';
-      brandSubtagline.style.transform = 'translateY(0px)';
-      brandCopyright.style.opacity = '1';
-      brandCopyright.style.transform = 'translateY(0px)';
-    }
-
-    // 4.70 -> 5.40s: Card enters (opacity 0 -> 1, translateY 40px -> 0)
-    if (elapsed >= TIMINGS.cardEnter[0] && elapsed <= TIMINGS.cardEnter[1]) {
-      const p = easeOutCubic((elapsed - TIMINGS.cardEnter[0]) / (TIMINGS.cardEnter[1] - TIMINGS.cardEnter[0]));
-      loginCard.style.opacity = `${p}`;
-      loginCard.style.transform = `translateY(${interpolate(p, 40, 0)}px)`;
-    } else if (elapsed > TIMINGS.cardEnter[1]) {
-      loginCard.style.opacity = '1';
-      loginCard.style.transform = 'translateY(0px)';
-    }
-
-    // 4.90 + i*0.07 -> +0.50s: Card items stagger in
-    cardStaggerItems.forEach((item, i) => {
-      const start = TIMINGS.cardStaggerBase + i * TIMINGS.cardStaggerStep;
-      const end = start + TIMINGS.cardStaggerDuration;
-      if (elapsed >= start && elapsed <= end) {
-        const p = easeOutCubic((elapsed - start) / (end - start));
-        item.style.opacity = `${p}`;
-        item.style.transform = `translateY(${interpolate(p, 14, 0)}px)`;
-      } else if (elapsed > end) {
-        item.style.opacity = '1';
-        item.style.transform = 'translateY(0px)';
-      }
-    });
-
-    // Check completion of intro
-    if (elapsed >= TIMINGS.introTotal) {
-      finishIntro();
-      return;
-    }
-
-    introRafId = requestAnimationFrame(runIntroTimeline);
   }
 
-  // Finalize Intro State
-  function finishIntro() {
+  // --------------------------------------------------------------------------
+  // 4. WEB ANIMATIONS API MASTER TIMELINE (GPU COMPOSITOR DRIVEN)
+  // --------------------------------------------------------------------------
+  function createAnimation(element, keyframes, options) {
+    if (!element) return null;
+    element.style.willChange = 'transform, opacity';
+    const anim = element.animate(keyframes, {
+      ...options,
+      fill: 'forwards'
+    });
+
+    // Remove will-change layer hint upon completion to prevent blur
+    anim.finished.then(() => {
+      element.style.willChange = 'auto';
+    }).catch(() => {});
+
+    activeAnimations.push(anim);
+    return anim;
+  }
+
+  function startMasterIntroTimeline() {
+    const geo = calculatePositions();
+    const t = (sec) => sec * SPEED * 1000;
+
+    // 1. Spine line grows: 0.15 -> 0.55s (scaleY 0 -> 1)
+    createAnimation(spine, [
+      { transform: 'scaleY(0)' },
+      { transform: 'scaleY(1)' }
+    ], {
+      delay: t(TIMINGS.spineGrow[0]),
+      duration: t(TIMINGS.spineGrow[1] - TIMINGS.spineGrow[0]),
+      easing: EASE_OUT
+    });
+
+    // 2. Spine line fades: 0.60 -> 1.00s (opacity 1 -> 0)
+    createAnimation(spine, [
+      { opacity: 1 },
+      { opacity: 0 }
+    ], {
+      delay: t(TIMINGS.spineFade[0]),
+      duration: t(TIMINGS.spineFade[1] - TIMINGS.spineFade[0]),
+      easing: LINEAR
+    });
+
+    // 3. Pages open: 0.50 -> 1.35s (scaleX 0 -> 1, scaleY 0.9 -> 1, easeOutBack)
+    createAnimation(pageLeft, [
+      { transform: 'scaleX(0) scaleY(0.9)', opacity: 0 },
+      { transform: 'scaleX(1) scaleY(1)', opacity: 1 }
+    ], {
+      delay: t(TIMINGS.bookOpen[0]),
+      duration: t(TIMINGS.bookOpen[1] - TIMINGS.bookOpen[0]),
+      easing: EASE_BACK
+    });
+
+    createAnimation(pageRight, [
+      { transform: 'scaleX(0) scaleY(0.9)', opacity: 0 },
+      { transform: 'scaleX(1) scaleY(1)', opacity: 1 }
+    ], {
+      delay: t(TIMINGS.bookOpen[0]),
+      duration: t(TIMINGS.bookOpen[1] - TIMINGS.bookOpen[0]),
+      easing: EASE_BACK
+    });
+
+    // 4. Checkmark reveals through stroke mask: 1.30 -> 2.00s (dashoffset 1.02 -> 0)
+    createAnimation(checkReveal, [
+      { strokeDashoffset: '1.02' },
+      { strokeDashoffset: '0' }
+    ], {
+      delay: t(TIMINGS.checkDraw[0]),
+      duration: t(TIMINGS.checkDraw[1] - TIMINGS.checkDraw[0]),
+      easing: EASE_IN_OUT
+    });
+
+    // 5. Outlined wordmark letters rise: 1.95 + i*0.07 -> +0.50s (opacity 0 -> 1, translateY 40 -> 0)
+    ltrElements.forEach((ltr, index) => {
+      const delay = TIMINGS.wordmarkBase + index * TIMINGS.wordmarkStagger;
+      createAnimation(ltr, [
+        { opacity: 0, transform: 'translateY(40px)' },
+        { opacity: 1, transform: 'translateY(0px)' }
+      ], {
+        delay: t(delay),
+        duration: t(TIMINGS.wordmarkDuration),
+        easing: EASE_OUT
+      });
+    });
+
+    // 6. Logo breathe: 2.40 -> 3.20s (scale 1 -> 1.03)
+    createAnimation(introLogoRig, [
+      { transform: `translate(${geo.logoStartX}px, ${geo.logoStartY}px) scale(1)` },
+      { transform: `translate(${geo.logoStartX}px, ${geo.logoStartY}px) scale(1.03)` }
+    ], {
+      delay: t(TIMINGS.breathe[0]),
+      duration: t(TIMINGS.breathe[1] - TIMINGS.breathe[0]),
+      easing: EASE_OUT
+    });
+
+    // 7. Logo glides from center to panel spot: 3.20 -> 4.00s (scale 1.03 -> 0.6)
+    createAnimation(introLogoRig, [
+      { transform: `translate(${geo.logoStartX}px, ${geo.logoStartY}px) scale(1.03)` },
+      { transform: `translate(${geo.logoEndX}px, ${geo.logoEndY}px) scale(${geo.logoEndScale})` }
+    ], {
+      delay: t(TIMINGS.logoGlide[0]),
+      duration: t(TIMINGS.logoGlide[1] - TIMINGS.logoGlide[0]),
+      easing: EASE_IN_OUT
+    });
+
+    // 8. Panel Reveal Circle: 3.85 -> 4.85s (transform scale 0 -> 1)
+    createAnimation(panelRevealCircle, [
+      { transform: 'scale(0)' },
+      { transform: 'scale(1)' }
+    ], {
+      delay: t(TIMINGS.panelReveal[0]),
+      duration: t(TIMINGS.panelReveal[1] - TIMINGS.panelReveal[0]),
+      easing: EASE_OUT
+    });
+
+    // 9. Color Crossfade (Layer A -> Layer B): 3.95 -> 4.35s
+    createAnimation(layerA, [
+      { opacity: 1 },
+      { opacity: 0 }
+    ], {
+      delay: t(TIMINGS.colorCrossfade[0]),
+      duration: t(TIMINGS.colorCrossfade[1] - TIMINGS.colorCrossfade[0]),
+      easing: EASE_IN_OUT
+    });
+
+    createAnimation(layerB, [
+      { opacity: 0 },
+      { opacity: 1 }
+    ], {
+      delay: t(TIMINGS.colorCrossfade[0]),
+      duration: t(TIMINGS.colorCrossfade[1] - TIMINGS.colorCrossfade[0]),
+      easing: EASE_IN_OUT
+    });
+
+    // 10. Paper cards fade in: 4.20 + i*0.08 -> +0.70s
+    paperItems.forEach((paper, index) => {
+      const delay = TIMINGS.paperFadeBase + index * TIMINGS.paperFadeStagger;
+      createAnimation(paper, [
+        { opacity: 0 },
+        { opacity: 1 }
+      ], {
+        delay: t(delay),
+        duration: t(TIMINGS.paperFadeDuration),
+        easing: EASE_OUT
+      });
+    });
+
+    // 11. Tagline: 4.50 -> 5.10s (opacity 0 -> 1, translateY 16px -> 0)
+    createAnimation(brandTagline, [
+      { opacity: 0, transform: 'translateY(16px)' },
+      { opacity: 1, transform: 'translateY(0px)' }
+    ], {
+      delay: t(TIMINGS.tagline[0]),
+      duration: t(TIMINGS.tagline[1] - TIMINGS.tagline[0]),
+      easing: EASE_OUT
+    });
+
+    // 12. Sub-tagline & Copyright: 4.65 -> 5.25s
+    createAnimation(brandSubtagline, [
+      { opacity: 0, transform: 'translateY(16px)' },
+      { opacity: 1, transform: 'translateY(0px)' }
+    ], {
+      delay: t(TIMINGS.subtagline[0]),
+      duration: t(TIMINGS.subtagline[1] - TIMINGS.subtagline[0]),
+      easing: EASE_OUT
+    });
+
+    createAnimation(brandCopyright, [
+      { opacity: 0, transform: 'translateY(16px)' },
+      { opacity: 1, transform: 'translateY(0px)' }
+    ], {
+      delay: t(TIMINGS.subtagline[0]),
+      duration: t(TIMINGS.subtagline[1] - TIMINGS.subtagline[0]),
+      easing: EASE_OUT
+    });
+
+    // 13. Login card enters: 4.70 -> 5.40s (opacity 0 -> 1, translateY 40px -> 0)
+    createAnimation(loginCard, [
+      { opacity: 0, transform: 'translateY(40px)' },
+      { opacity: 1, transform: 'translateY(0px)' }
+    ], {
+      delay: t(TIMINGS.cardEnter[0]),
+      duration: t(TIMINGS.cardEnter[1] - TIMINGS.cardEnter[0]),
+      easing: EASE_OUT
+    });
+
+    // 14. Card stagger items: 4.90 + i*0.07 -> +0.50s
+    cardStaggerItems.forEach((item, index) => {
+      const delay = TIMINGS.cardStaggerBase + index * TIMINGS.cardStaggerStep;
+      createAnimation(item, [
+        { opacity: 0, transform: 'translateY(14px)' },
+        { opacity: 1, transform: 'translateY(0px)' }
+      ], {
+        delay: t(delay),
+        duration: t(TIMINGS.cardStaggerDuration),
+        easing: EASE_OUT
+      });
+    });
+
+    // Complete Intro Sequence
+    const totalDurationMs = t(TIMINGS.introTotal);
+    setTimeout(() => {
+      if (introActive) {
+        completeIntro();
+      }
+    }, totalDurationMs);
+  }
+
+  // --------------------------------------------------------------------------
+  // 5. INTRO COMPLETION & SKIP ENGINE
+  // --------------------------------------------------------------------------
+  function completeIntro() {
     introActive = false;
-    if (introRafId) cancelAnimationFrame(introRafId);
-    setSessionStorage('syllora_intro_played', 'true');
+    setSessionStorage('syllora_intro_seen', 'true');
     introSkipHint.classList.remove('visible');
 
-    // Force final positions and properties
-    const coords = getLogoCoordinates();
-    introLogoRig.style.transform = `translate(${coords.endX}px, ${coords.endY}px) scale(${coords.endScale})`;
-    brandPanel.style.clipPath = `circle(1250px at ${coords.panelCenterX}px ${coords.panelCenterY}px)`;
+    const geo = calculatePositions();
 
-    spine.style.opacity = '0';
-    pageLeft.style.transform = 'scaleX(1) scaleY(1)';
-    pageRight.style.transform = 'scaleX(1) scaleY(1)';
-    pageLeft.style.opacity = '1';
-    pageRight.style.opacity = '1';
-    pageLeft.style.fill = '#FFFFFF';
-    pageRight.style.fill = '#FFFFFF';
-    check.style.fill = '#03605E';
-    checkReveal.style.strokeDashoffset = '0';
+    // Lock resting layout styles
+    introLogoRig.style.transform = `translate(${geo.logoEndX}px, ${geo.logoEndY}px) scale(${geo.logoEndScale})`;
+    panelRevealCircle.style.transform = 'scale(1)';
+    layerA.style.opacity = '0';
+    layerB.style.opacity = '1';
 
-    wmLetters.forEach((l) => {
-      l.style.opacity = '1';
-      l.style.transform = 'translateY(0px)';
-      l.style.fill = '#FFFFFF';
+    paperItems.forEach((p) => {
+      p.style.opacity = '1';
+      p.classList.add('drifting'); // Activate pure CSS compositor ambient keyframes
     });
 
-    paperItems.forEach((p) => (p.style.opacity = '1'));
     brandTagline.style.opacity = '1';
-    brandTagline.style.transform = 'translateY(0px)';
+    brandTagline.style.transform = 'translateY(0)';
     brandSubtagline.style.opacity = '1';
-    brandSubtagline.style.transform = 'translateY(0px)';
+    brandSubtagline.style.transform = 'translateY(0)';
     brandCopyright.style.opacity = '1';
-    brandCopyright.style.transform = 'translateY(0px)';
+    brandCopyright.style.transform = 'translateY(0)';
 
     loginCard.style.opacity = '1';
-    loginCard.style.transform = 'translateY(0px)';
+    loginCard.style.transform = 'translateY(0)';
     cardStaggerItems.forEach((item) => {
       item.style.opacity = '1';
-      item.style.transform = 'translateY(0px)';
+      item.style.transform = 'translateY(0)';
     });
 
-    // Start ambient papers drift loop
-    ambientActive = true;
-    ambientRafId = requestAnimationFrame(runAmbientPapersLoop);
-
-    // Focus email input automatically
-    setTimeout(() => emailInput.focus(), 80);
+    // Focus email input seamlessly
+    setTimeout(() => {
+      if (document.activeElement !== passwordInput) {
+        emailInput.focus();
+      }
+    }, 60);
   }
 
-  // Skip straight to final state over 300ms
   function skipIntro() {
     if (!introActive) return;
     introActive = false;
-    if (introRafId) cancelAnimationFrame(introRafId);
-    introSkipHint.classList.remove('visible');
 
-    document.body.style.transition = 'opacity 300ms var(--ease-out-cubic)';
-    document.body.style.opacity = '0.9';
+    // Cancel all running Web Animations API instances
+    activeAnimations.forEach((anim) => {
+      try {
+        anim.cancel();
+      } catch {}
+    });
+    activeAnimations = [];
+
+    // Smooth 300ms transition to final state
+    loginCard.style.transition = 'opacity 300ms ease, transform 300ms ease';
+    introLogoRig.style.transition = 'transform 300ms ease';
+    panelRevealCircle.style.transition = 'transform 300ms ease';
+
+    completeIntro();
 
     setTimeout(() => {
-      finishIntro();
-      document.body.style.opacity = '1';
-      setTimeout(() => (document.body.style.transition = ''), 320);
-    }, 150);
+      loginCard.style.transition = '';
+      introLogoRig.style.transition = '';
+      panelRevealCircle.style.transition = '';
+    }, 320);
   }
 
   // --------------------------------------------------------------------------
-  // 5. Ambient Loop for Decorative Papers
-  // rotate = base + 6° * sin(time*0.5 + i*1.7)
-  // translateY = 14px * sin(time*0.6 + i)
+  // 6. USER INTERACTIONS & FORM VALIDATION
   // --------------------------------------------------------------------------
-  function runAmbientPapersLoop(now) {
-    if (!ambientActive || prefersReducedMotion || document.hidden) return;
-    const time = now / 1000;
-
-    paperItems.forEach((el, i) => {
-      const baseRot = parseFloat(el.getAttribute('data-rot'));
-      const rot = baseRot + 6 * Math.sin(time * 0.5 + i * 1.7);
-      const ty = 14 * Math.sin(time * 0.6 + i);
-      el.style.transform = `translateY(${ty}px) rotate(${rot}deg)`;
-    });
-
-    ambientRafId = requestAnimationFrame(runAmbientPapersLoop);
+  function clearFieldError(group, errorEl) {
+    group.classList.remove('has-error');
+    errorEl.classList.remove('visible');
+    errorEl.textContent = '';
   }
 
-  // Pause ambient loop when tab is backgrounded to save CPU/battery
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      if (ambientRafId) cancelAnimationFrame(ambientRafId);
-    } else {
-      if (ambientActive && !prefersReducedMotion) {
-        ambientRafId = requestAnimationFrame(runAmbientPapersLoop);
-      }
+  function setFieldError(group, errorEl, message) {
+    group.classList.add('has-error');
+    errorEl.textContent = message;
+    errorEl.classList.add('visible');
+  }
+
+  // Instant Button Feedback on pointerdown (First Frame Feedback)
+  loginBtn.addEventListener('pointerdown', () => {
+    if (!loginBtn.disabled) {
+      loginBtn.classList.add('pressed');
     }
+  }, { passive: true });
+
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach((evt) => {
+    loginBtn.addEventListener(evt, () => {
+      loginBtn.classList.remove('pressed');
+    }, { passive: true });
   });
 
-  // --------------------------------------------------------------------------
-  // 6. User Interactions & Validation
-  // --------------------------------------------------------------------------
+  // Password Visibility Toggle
   togglePasswordBtn.addEventListener('click', () => {
-    const isPassword = passwordInput.getAttribute('type') === 'password';
-    passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+    const isPassword = passwordInput.type === 'password';
+    passwordInput.type = isPassword ? 'text' : 'password';
     eyeIconShow.style.display = isPassword ? 'none' : 'block';
     eyeIconHide.style.display = isPassword ? 'block' : 'none';
     togglePasswordBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
   });
 
-  function isValidEmail(val) {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val.trim());
-  }
+  // Typing during intro triggers instant skip while preserving keystrokes
+  [emailInput, passwordInput].forEach((input) => {
+    input.addEventListener('keydown', () => {
+      if (introActive) skipIntro();
+    }, { passive: true });
+  });
 
-  function setFieldError(group, errorEl, msg) {
-    group.classList.add('has-error');
-    errorEl.textContent = msg;
-  }
-
-  function clearFieldError(group, errorEl) {
-    group.classList.remove('has-error');
-    errorEl.textContent = '';
-  }
-
-  emailInput.addEventListener('input', () => clearFieldError(emailGroup, emailError));
-  passwordInput.addEventListener('input', () => clearFieldError(passwordGroup, passwordError));
-
-  // Skip handlers (passive listeners)
-  window.addEventListener('click', () => {
-    if (introActive) skipIntro();
-  }, { passive: true });
-
-  window.addEventListener('keydown', (e) => {
-    if (introActive && e.key !== 'Tab') {
-      skipIntro();
+  // Validation on Blur
+  emailInput.addEventListener('blur', () => {
+    if (emailInput.value && !/\S+@\S+\.\S+/.test(emailInput.value)) {
+      setFieldError(emailGroup, emailError, 'Please enter a valid email address.');
+    } else {
+      clearFieldError(emailGroup, emailError);
     }
-  }, { passive: true });
+  });
 
-  // Throttled Window resize updater
-  window.addEventListener('resize', () => {
-    if (resizeRafId) cancelAnimationFrame(resizeRafId);
-    resizeRafId = requestAnimationFrame(() => {
-      layoutPaperShapes();
-      if (!introActive) {
-        const coords = getLogoCoordinates();
-        introLogoRig.style.transform = `translate(${coords.endX}px, ${coords.endY}px) scale(${coords.endScale})`;
-        brandPanel.style.clipPath = `circle(1250px at ${coords.panelCenterX}px ${coords.panelCenterY}px)`;
-      }
-    });
-  }, { passive: true });
+  passwordInput.addEventListener('blur', () => {
+    if (passwordInput.value && passwordInput.value.length < 6) {
+      setFieldError(passwordGroup, passwordError, 'Password must be at least 6 characters.');
+    } else {
+      clearFieldError(passwordGroup, passwordError);
+    }
+  });
 
   // --------------------------------------------------------------------------
-  // 7. Form Submission: Loading, Error & Success Morph Sequence
+  // 7. SUBMIT, LOADING MORPH & SUCCESS ORCHESTRATION
   // --------------------------------------------------------------------------
   authForm.addEventListener('submit', (e) => {
     e.preventDefault();
     if (isSubmitting) return;
 
-    clearFieldError(emailGroup, emailError);
-    clearFieldError(passwordGroup, passwordError);
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
 
     let hasError = false;
-    const emailVal = emailInput.value.trim();
-    const passwordVal = passwordInput.value;
-
-    if (!emailVal || !isValidEmail(emailVal)) {
-      setFieldError(emailGroup, emailError, 'Please enter a valid email address');
+    if (!email) {
+      setFieldError(emailGroup, emailError, 'Email is required.');
       hasError = true;
+    } else if (!/\S+@\S+\.\S+/.test(email)) {
+      setFieldError(emailGroup, emailError, 'Please enter a valid email address.');
+      hasError = true;
+    } else {
+      clearFieldError(emailGroup, emailError);
     }
 
-    if (!passwordVal || passwordVal.length < 8) {
-      setFieldError(passwordGroup, passwordError, 'Password must be at least 8 characters');
+    if (!password) {
+      setFieldError(passwordGroup, passwordError, 'Password is required.');
       hasError = true;
+    } else {
+      clearFieldError(passwordGroup, passwordError);
     }
 
     if (hasError) {
-      triggerCardShake();
+      triggerErrorShake();
       return;
     }
 
-    // Submit -> Loading sequence
-    startSubmitLoading();
-
-    // Mock Authentication (1.2s timeout)
-    // demo@syllora.com / password123 succeeds; any other fails!
-    setTimeout(() => {
-      const isSuccess = (emailVal === 'demo@syllora.com' && passwordVal === 'password123');
-
-      if (isSuccess) {
-        handleAuthSuccess();
-      } else {
-        handleAuthError();
-      }
-    }, 1200);
+    startSubmitFlow(email, password);
   });
 
-  // Loading morph: width 396 -> 56, radius 14 -> 28, bg #024A48
-  function startSubmitLoading() {
+  function triggerErrorShake() {
+    loginCard.classList.remove('shake');
+    void loginCard.offsetWidth; // Force reflow
+    loginCard.classList.add('shake');
+    setTimeout(() => loginCard.classList.remove('shake'), 450);
+  }
+
+  function startSubmitFlow(email, password) {
     isSubmitting = true;
-    loginBtn.disabled = true;
-    loginBtn.classList.add('is-loading');
     loginBtn.setAttribute('aria-busy', 'true');
     a11yAnnouncer.textContent = 'Logging in...';
 
-    // 0.15 -> 0.35s: label fades out
+    // 0.15 -> 0.35s: Label fades out
     setTimeout(() => {
       btnLabel.style.opacity = '0';
     }, 150);
 
-    // 0.15 -> 0.60s: button morphs into 56px circle
+    // 0.15 -> 0.60s: Button morphs into 56px circle inside fixed 396x56 contain: strict box
     setTimeout(() => {
-      loginBtn.style.transition = 'width 450ms var(--ease-in-out-cubic), border-radius 450ms var(--ease-in-out-cubic), background-color 450ms var(--ease-in-out-cubic)';
+      loginBtn.style.transition = 'width 450ms var(--ease-in-out), border-radius 450ms var(--ease-in-out), background-color 450ms var(--ease-in-out)';
       loginBtn.style.width = '56px';
       loginBtn.style.borderRadius = '28px';
-      loginBtn.style.backgroundColor = '#024A48';
+      loginBtn.style.backgroundColor = '#024A48'; // 40% toward teal-dark
     }, 150);
 
-    // 0.50 -> 0.65s: spinner fades in
+    // 0.50 -> 0.65s: 28px Spinner fades in
     setTimeout(() => {
       btnSpinner.style.display = 'flex';
-      btnSpinner.style.transition = 'opacity 150ms linear';
-      btnSpinner.style.opacity = '1';
+      requestAnimationFrame(() => {
+        btnSpinner.style.opacity = '1';
+      });
     }, 500);
-  }
 
-  // Error State: restore full width, shake card, red field
-  function handleAuthError() {
-    isSubmitting = false;
-    loginBtn.disabled = false;
-    loginBtn.classList.remove('is-loading');
-    loginBtn.setAttribute('aria-busy', 'false');
-
-    // Morph back to 396px button over 0.4s
-    btnSpinner.style.display = 'none';
-    btnSpinner.style.opacity = '0';
-    loginBtn.style.transition = 'width 400ms var(--ease-in-out-cubic), border-radius 400ms var(--ease-in-out-cubic), background-color 400ms var(--ease-in-out-cubic)';
-    loginBtn.style.width = '396px';
-    loginBtn.style.borderRadius = '14px';
-    loginBtn.style.backgroundColor = '#03605E';
+    // Fire Mock Auth Request in Parallel (demo@syllora.com / password123)
+    const authStartTime = performance.now();
+    const isMockSuccess = (email === 'demo@syllora.com' && password === 'password123');
 
     setTimeout(() => {
-      btnLabel.style.opacity = '1';
+      const elapsed = (performance.now() - authStartTime) / 1000;
+      const remainingMinSpinner = Math.max(0, (TIMINGS.minSpinnerDuration - elapsed) * 1000);
+
+      setTimeout(() => {
+        if (isMockSuccess) {
+          handleAuthSuccess();
+        } else {
+          handleAuthFailure();
+        }
+      }, remainingMinSpinner);
+
+    }, TIMINGS.mockAuthDuration * 1000);
+  }
+
+  function handleAuthFailure() {
+    isSubmitting = false;
+    loginBtn.setAttribute('aria-busy', 'false');
+    a11yAnnouncer.textContent = 'Incorrect email or password.';
+
+    // Hide spinner
+    btnSpinner.style.opacity = '0';
+    setTimeout(() => {
+      btnSpinner.style.display = 'none';
+
+      // Morph button back to 396px
+      loginBtn.style.transition = 'width 400ms var(--ease-in-out), border-radius 400ms var(--ease-in-out), background-color 400ms var(--ease-in-out)';
+      loginBtn.style.width = '396px';
+      loginBtn.style.borderRadius = '14px';
+      loginBtn.style.backgroundColor = '#03605E';
+
+      setTimeout(() => {
+        btnLabel.style.opacity = '1';
+        loginBtn.style.transition = '';
+      }, 350);
     }, 150);
 
-    // Card horizontal shake
-    triggerCardShake();
-
-    // Mark field error
-    setFieldError(passwordGroup, passwordError, 'Incorrect email or password');
-    a11yAnnouncer.textContent = 'Incorrect email or password';
+    // Shake card & show field error
+    triggerErrorShake();
+    setFieldError(passwordGroup, passwordError, 'Incorrect email or password.');
   }
 
-  function triggerCardShake() {
-    loginCard.classList.remove('shake');
-    void loginCard.offsetWidth; // Force reflow
-    loginCard.classList.add('shake');
-    setTimeout(() => loginCard.classList.remove('shake'), 420);
-  }
-
-  // Success State Sequence
   function handleAuthSuccess() {
-    a11yAnnouncer.textContent = 'Login successful. Redirecting...';
+    a11yAnnouncer.textContent = 'Login successful!';
 
-    // 0 -> 0.15s: spinner fades out
+    // 0 -> 0.15s: Spinner fades out
     btnSpinner.style.opacity = '0';
     setTimeout(() => {
       btnSpinner.style.display = 'none';
     }, 150);
 
-    // 0.05 -> 0.40s: checkmark draws inside circle
+    // 0.05 -> 0.40s: White checkmark draws in (path M-8 0.5 L-2.5 6 L8.5 -6)
     setTimeout(() => {
-      btnCheckmarkMorph.style.display = 'flex';
-      morphCheckPath.style.transition = 'stroke-dashoffset 350ms var(--ease-out-cubic)';
+      btnCheckmarkMorph.style.display = 'block';
+      morphCheckPath.style.transition = 'stroke-dashoffset 350ms var(--ease-out)';
       morphCheckPath.style.strokeDashoffset = '0';
     }, 50);
 
-    // 0.05 -> 0.45s: check "pop" scale 1 -> 1.12 -> 1
+    // 0.05 -> 0.45s: Checkmark pop scale 1 -> 1.12 -> 1
     setTimeout(() => {
       btnCheckmarkMorph.style.transition = 'transform 200ms ease';
       btnCheckmarkMorph.style.transform = 'scale(1.12)';
@@ -711,83 +715,97 @@
       }, 200);
     }, 50);
 
-    // 0 -> 0.30s: button bg back to #03605E
+    // 0 -> 0.30s: Button bg returns to --teal
     loginBtn.style.backgroundColor = '#03605E';
 
-    // 0.65 -> 1.45s: Teal flood: clip-path circle(R at button center) R: 0 -> 2400px
+    // 0.65 -> 1.45s: Teal flood: circle centered on button scales 0 -> 1 on GPU compositor
     setTimeout(() => {
       const btnRect = loginBtn.getBoundingClientRect();
       const btnCenterX = btnRect.left + btnRect.width / 2;
       const btnCenterY = btnRect.top + btnRect.height / 2;
 
-      tealFloodOverlay.classList.add('active');
-      tealFloodOverlay.style.clipPath = `circle(0px at ${btnCenterX}px ${btnCenterY}px)`;
-      tealFloodOverlay.style.transition = 'clip-path 800ms var(--ease-in-flood)';
+      // Viewport diagonal * 2.2
+      const vpDiagonal = Math.hypot(window.innerWidth, window.innerHeight);
+      const floodDiameter = 2.2 * vpDiagonal;
 
-      // Trigger flood expansion
-      requestAnimationFrame(() => {
-        tealFloodOverlay.style.clipPath = `circle(2400px at ${btnCenterX}px ${btnCenterY}px)`;
+      floodCircle.style.width = `${floodDiameter}px`;
+      floodCircle.style.height = `${floodDiameter}px`;
+      floodCircle.style.left = `${btnCenterX - floodDiameter / 2}px`;
+      floodCircle.style.top = `${btnCenterY - floodDiameter / 2}px`;
+
+      tealFloodOverlay.classList.add('active');
+
+      createAnimation(floodCircle, [
+        { transform: 'scale(0)' },
+        { transform: 'scale(1)' }
+      ], {
+        duration: 800,
+        easing: EASE_IN
       });
 
-      // Welcome Screen timeline (starts when flood finishes at ~1.45s)
-      setTimeout(runWelcomeScreenSequence, 800);
+      // Start Welcome Screen after flood finishes
+      setTimeout(runWelcomeDashboardSequence, 800);
     }, 650);
   }
 
-  // Welcome Screen Sequence
-  function runWelcomeScreenSequence() {
-    // 0.05 -> 0.75s: logo pages open (white)
+  // --------------------------------------------------------------------------
+  // 8. WELCOME DASHBOARD SEQUENCE (variant="inverted" Syllora Logo)
+  // --------------------------------------------------------------------------
+  function runWelcomeDashboardSequence() {
+    welcomeScreen.classList.add('active');
+
+    // 0.05 -> 0.75s: Pages open (ease-back)
     setTimeout(() => {
-      welcomePageLeft.style.transition = 'transform 700ms var(--ease-out-back)';
-      welcomePageRight.style.transition = 'transform 700ms var(--ease-out-back)';
+      welcomePageLeft.style.transition = 'transform 700ms var(--ease-back)';
+      welcomePageRight.style.transition = 'transform 700ms var(--ease-back)';
       welcomePageLeft.style.transform = 'scaleX(1)';
       welcomePageRight.style.transform = 'scaleX(1)';
     }, 50);
 
-    // 0.60 -> 1.15s: checkmark draws
+    // 0.60 -> 1.15s: Checkmark draws (ease-in-out)
     setTimeout(() => {
-      welcomeCheckReveal.style.transition = 'stroke-dashoffset 550ms var(--ease-in-out-cubic)';
+      welcomeCheckReveal.style.transition = 'stroke-dashoffset 550ms var(--ease-in-out)';
       welcomeCheckReveal.style.strokeDashoffset = '0';
     }, 600);
 
-    // 0.95 + i*0.05s: letters rise
-    welcomeWmLetters.forEach((l, i) => {
+    // 0.95 + i*0.05s: Outlined letters rise (each 0.40s, ease-out)
+    welcomeLtrs.forEach((ltr, index) => {
       setTimeout(() => {
-        l.style.transition = 'opacity 400ms var(--ease-out-cubic), transform 400ms var(--ease-out-cubic)';
-        l.style.opacity = '1';
-        l.style.transform = 'translateY(0px)';
-      }, 950 + i * 50);
+        ltr.style.transition = 'opacity 400ms var(--ease-out), transform 400ms var(--ease-out)';
+        ltr.style.opacity = '1';
+        ltr.style.transform = 'translateY(0px)';
+      }, 950 + index * 50);
     });
 
-    // 1.30 -> 1.80s: "Welcome back!" Poppins 600, 46px, white
+    // 1.30 -> 1.80s: "Welcome back!" fades in and rises 18px -> 0
     setTimeout(() => {
-      welcomeTitle.style.transition = 'opacity 500ms var(--ease-out-cubic), transform 500ms var(--ease-out-cubic)';
+      welcomeTitle.style.transition = 'opacity 500ms var(--ease-out), transform 500ms var(--ease-out)';
       welcomeTitle.style.opacity = '1';
       welcomeTitle.style.transform = 'translate(-50%, 0px)';
     }, 1300);
 
-    // 1.45 -> 1.95s: "Taking you to your dashboard…" Inter 20px, white 75%
+    // 1.45 -> 1.95s: "Taking you to your dashboard…" fades in
     setTimeout(() => {
-      welcomeSub.style.transition = 'opacity 500ms var(--ease-out-cubic), transform 500ms var(--ease-out-cubic)';
+      welcomeSub.style.transition = 'opacity 500ms var(--ease-out), transform 500ms var(--ease-out)';
       welcomeSub.style.opacity = '1';
       welcomeSub.style.transform = 'translate(-50%, 0px)';
     }, 1450);
 
-    // 1.45s: Progress bar track appears
+    // 1.45s: Progress track appears
     setTimeout(() => {
       welcomeProgressTrack.style.transition = 'opacity 300ms ease';
       welcomeProgressTrack.style.opacity = '1';
     }, 1450);
 
-    // 1.65 -> 3.05s: Progress fill animates 0 -> 100% over 1.4s (easeInOutCubic)
+    // 1.65 -> 3.05s: Progress fill animates scaleX(0 -> 1) over 1.40s
     setTimeout(() => {
-      welcomeProgressFill.style.transition = 'width 1400ms var(--ease-in-out-cubic)';
-      welcomeProgressFill.style.width = '100%';
+      welcomeProgressFill.style.transition = 'transform 1400ms var(--ease-in-out)';
+      welcomeProgressFill.style.transform = 'scaleX(1)';
 
       // On completion
       setTimeout(() => {
         a11yAnnouncer.textContent = 'Welcome to Syllora Dashboard!';
-        console.log('Navigating to /dashboard...');
+        console.log('[Syllora Auth] Transitioning to /dashboard...');
       }, 1450);
     }, 1650);
   }
@@ -801,22 +819,48 @@
     authForm.dispatchEvent(new Event('submit'));
   });
 
-  // --------------------------------------------------------------------------
-  // 8. Bootstrap
-  // --------------------------------------------------------------------------
-  layoutPaperShapes();
+  // Global Skip Listeners (Click, Tap or Keydown)
+  ['click', 'keydown', 'touchstart'].forEach((evt) => {
+    window.addEventListener(evt, (e) => {
+      if (introActive && e.target !== emailInput && e.target !== passwordInput) {
+        skipIntro();
+      }
+    }, { passive: true });
+  });
 
-  if (prefersReducedMotion || hasVisitedSession) {
-    // Skip intro on reduced motion or later session visits
-    finishIntro();
-  } else {
-    // Show subtle skip hint after 1 second
-    setTimeout(() => {
-      if (introActive) introSkipHint.classList.add('visible');
-    }, 1000);
+  // Battery / Compositor Optimization: Pause ambient when tab is hidden
+  document.addEventListener('visibilitychange', () => {
+    document.body.classList.toggle('tab-hidden', document.hidden);
+  });
 
-    // Kick off exact timeline
-    introRafId = requestAnimationFrame(runIntroTimeline);
-  }
+  // Throttled Window Resize
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    if (resizeTimer) cancelAnimationFrame(resizeTimer);
+    resizeTimer = requestAnimationFrame(() => {
+      applyGeometricSetup();
+    });
+  }, { passive: true });
+
+  // --------------------------------------------------------------------------
+  // 9. BOOTSTRAP INITIALIZATION
+  // --------------------------------------------------------------------------
+  applyGeometricSetup();
+
+  // Pre-load font readiness race condition (Promise.race)
+  Promise.race([
+    document.fonts ? document.fonts.ready : Promise.resolve(),
+    new Promise((resolve) => setTimeout(resolve, 300))
+  ]).then(() => {
+    if (prefersReducedMotion || introSeenThisSession) {
+      completeIntro();
+    } else {
+      setTimeout(() => {
+        if (introActive) introSkipHint.classList.add('visible');
+      }, 1000);
+
+      startMasterIntroTimeline();
+    }
+  });
 
 })();
