@@ -38,8 +38,21 @@ router.register('/app/revision', renderRevision);
 router.register('/app/settings', renderSettings);
 router.register('/app/404', renderNotFound);
 
+// Track active view cleanup hook for cancelling timers, observers, and async work
+let currentViewCleanup = null;
+
 // Route Change Listener
 router.subscribe((path, params, viewHandler) => {
+  // Always clean up previous view work (timers, pending requests) before rendering new view
+  if (currentViewCleanup && typeof currentViewCleanup === 'function') {
+    try {
+      currentViewCleanup();
+    } catch (err) {
+      console.warn('[Syllora Router] View cleanup error:', err);
+    }
+    currentViewCleanup = null;
+  }
+
   if (path.startsWith('/app')) {
     // Switch document scroll state and mode classes
     document.body.classList.remove('login-mode');
@@ -62,7 +75,10 @@ router.subscribe((path, params, viewHandler) => {
     if (mountPoint && viewHandler) {
       // Clear mount point and render view
       mountPoint.innerHTML = '';
-      viewHandler(mountPoint, params);
+      const cleanup = viewHandler(mountPoint, params);
+      if (typeof cleanup === 'function') {
+        currentViewCleanup = cleanup;
+      }
 
       // Manage focus and scrolling intentionally:
       // Use preventScroll to prevent browser from auto-scrolling content under the sticky header

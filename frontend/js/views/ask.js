@@ -89,16 +89,26 @@ Breaking any single Coffman condition—such as requiring processes to request a
 export function renderAsk(container, queryParams = {}) {
   let activeTab = 'ask'; // 'ask' | 'search' | 'summarise'
   let searchMode = 'keyword'; // 'keyword' | 'semantic' | 'combined'
-  let currentQuery = queryParams.q || '';
+  let currentQuery = queryParams.q || workspaceStore.getDraft('ask_query') || '';
   let pendingRequestTimer = null;
   let activeAnswerData = null;
   let showEvidenceInspector = false;
 
   const state = workspaceStore.getState();
+  const availableDocs = state.documents.filter(d => !d.isComparisonOnly);
+  let selectedDocIds = new Set(availableDocs.map(d => d.id));
 
   function renderView() {
     container.innerHTML = `
       <div class="view-ask-page">
+
+        <!-- Page Header -->
+        <header class="page-header-row">
+          <div class="header-text">
+            <h1 class="page-title">Ask Syllora</h1>
+            <p class="page-desc">Ask academic questions grounded in verified course materials, inspect claims, and view source citations.</p>
+          </div>
+        </header>
         
         <!-- Sub-Nav Tab Header -->
         <div class="ask-subnav-bar">
@@ -123,7 +133,7 @@ export function renderAsk(container, queryParams = {}) {
 
         <div class="ask-workspace-grid ${showEvidenceInspector ? 'with-inspector' : ''}">
           
-          <!-- Left: Source Selection Filter (250px) -->
+          <!-- Left: Source Selection Filter (260px) -->
           <aside class="ask-sources-sidebar card">
             <div class="sources-header">
               <h4>Filter Scope</h4>
@@ -132,13 +142,13 @@ export function renderAsk(container, queryParams = {}) {
 
             <div class="source-list">
               <label class="source-checkbox-item">
-                <input type="checkbox" checked id="selectAllSourcesCheckbox">
-                <span class="source-label"><strong>All CS301 Sources (${state.documents.filter(d => !d.isComparisonOnly).length})</strong></span>
+                <input type="checkbox" ${selectedDocIds.size === availableDocs.length ? 'checked' : ''} id="selectAllSourcesCheckbox">
+                <span class="source-label"><strong>All CS301 Sources (${availableDocs.length})</strong></span>
               </label>
               <hr class="divider-sm">
-              ${state.documents.filter(d => !d.isComparisonOnly).map(doc => `
+              ${availableDocs.map(doc => `
                 <label class="source-checkbox-item">
-                  <input type="checkbox" checked class="source-doc-checkbox" value="${doc.id}">
+                  <input type="checkbox" ${selectedDocIds.has(doc.id) ? 'checked' : ''} class="source-doc-checkbox" value="${doc.id}">
                   <span class="source-label" title="${doc.title}">
                     <span class="doc-icon-mini">📄</span>
                     ${doc.title.length > 28 ? doc.title.slice(0, 26) + '...' : doc.title}
@@ -390,6 +400,8 @@ export function renderAsk(container, queryParams = {}) {
 
     pendingRequestTimer = setTimeout(() => {
       pendingRequestTimer = null;
+      if (!container.isConnected) return;
+
       if (pendingCard) pendingCard.style.display = 'none';
       if (resultWrap) resultWrap.style.display = 'block';
 
@@ -400,12 +412,16 @@ export function renderAsk(container, queryParams = {}) {
       let match = null;
       for (const [k, v] of Object.entries(QUESTION_FIXTURES)) {
         if (key.includes(k) || k.includes(key) || (key.includes('deadlock') && key.includes('starvation') && k.includes('starvation'))) {
-          match = v;
+          match = JSON.parse(JSON.stringify(v));
           break;
         }
       }
 
       if (match) {
+        // Filter citations to only selected documents
+        if (match.citations) {
+          match.citations = match.citations.filter(c => selectedDocIds.has(c.docId));
+        }
         activeAnswerData = match;
       } else {
         // Deliberately unsupported state
@@ -436,6 +452,32 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
     if (tabSummariseBtn) tabSummariseBtn.addEventListener('click', () => { activeTab = 'summarise'; renderView(); });
     if (toggleInspectorBtn) toggleInspectorBtn.addEventListener('click', () => { showEvidenceInspector = !showEvidenceInspector; renderView(); });
 
+    // Source selection checkboxes
+    const selectAllCheckbox = container.querySelector('#selectAllSourcesCheckbox');
+    if (selectAllCheckbox) {
+      selectAllCheckbox.addEventListener('change', (e) => {
+        const isChecked = e.target.checked;
+        if (isChecked) {
+          selectedDocIds = new Set(availableDocs.map(d => d.id));
+        } else {
+          selectedDocIds.clear();
+        }
+        renderView();
+      });
+    }
+
+    container.querySelectorAll('.source-doc-checkbox').forEach(cb => {
+      cb.addEventListener('change', (e) => {
+        const docId = e.target.value;
+        if (e.target.checked) {
+          selectedDocIds.add(docId);
+        } else {
+          selectedDocIds.delete(docId);
+        }
+        renderView();
+      });
+    });
+
     // Radio search mode
     container.querySelectorAll('input[name="searchMode"]').forEach(radio => {
       radio.addEventListener('change', (e) => {
@@ -444,19 +486,28 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
       });
     });
 
+    // Draft persistence on textarea typing
+    const askInput = container.querySelector('#askQuestionInput');
+    if (askInput) {
+      askInput.addEventListener('input', (e) => {
+        currentQuery = e.target.value;
+        workspaceStore.saveDraft('ask_query', e.target.value);
+      });
+    }
+
     // Sample question chips
     container.querySelectorAll('.sample-chip').forEach(chip => {
       chip.addEventListener('click', () => {
         const q = chip.getAttribute('data-q');
         const input = container.querySelector('#askQuestionInput');
         if (input) input.value = q;
+        workspaceStore.saveDraft('ask_query', q);
         handleQueryExecution(q);
       });
     });
 
     // Submit button
     const askSubmitBtn = container.querySelector('#askSubmitBtn');
-    const askInput = container.querySelector('#askQuestionInput');
     if (askSubmitBtn && askInput) {
       askSubmitBtn.addEventListener('click', () => handleQueryExecution(askInput.value));
       askInput.addEventListener('keydown', (e) => {
@@ -489,6 +540,7 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
       clearBtn.addEventListener('click', () => {
         currentQuery = '';
         activeAnswerData = null;
+        workspaceStore.clearDraft('ask_query');
         renderView();
         Toast.show('Workspace query cleared.', 'info');
       });
@@ -504,10 +556,16 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
       });
     }
 
-    // Bookmark answer button
+    // Real bookmark answer action
     const bookmarkAnswerBtn = container.querySelector('#bookmarkAnswerBtn');
-    if (bookmarkAnswerBtn) {
+    if (bookmarkAnswerBtn && activeAnswerData) {
       bookmarkAnswerBtn.addEventListener('click', () => {
+        workspaceStore.addBookmark({
+          targetType: 'answer',
+          targetId: `ans-${Date.now()}`,
+          title: currentQuery ? `Answer: ${currentQuery.slice(0, 40)}...` : 'Ask Syllora Verified Answer',
+          snippet: activeAnswerData.answer.slice(0, 160)
+        });
         Toast.show('Answer bookmarked to revision notes.', 'success');
       });
     }
@@ -534,9 +592,17 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
   }
 
   // Initial execution if query passed via URL
-  if (currentQuery) {
+  if (currentQuery && queryParams.q) {
     handleQueryExecution(currentQuery);
   } else {
     renderView();
   }
+
+  // Return unmount cleanup function to cancel active timers
+  return function cleanup() {
+    if (pendingRequestTimer) {
+      clearTimeout(pendingRequestTimer);
+      pendingRequestTimer = null;
+    }
+  };
 }

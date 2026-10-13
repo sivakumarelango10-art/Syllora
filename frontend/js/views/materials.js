@@ -22,14 +22,16 @@ export function renderMaterials(container, queryParams = {}) {
   let statusFilter = 'all'; // 'all' | 'indexed' | 'local_preview'
   let sortKey = 'newest'; // 'newest' | 'name' | 'pages'
 
-  function renderView() {
+  function getFilteredDocs() {
     const state = workspaceStore.getState();
     let docs = state.documents.filter(d => !d.isComparisonOnly);
 
     // Apply filters
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      docs = docs.filter(d => d.title.toLowerCase().includes(q) || d.filename.toLowerCase().includes(q) || d.author.toLowerCase().includes(q));
+      const q = searchQuery.toLowerCase().trim();
+      if (q) {
+        docs = docs.filter(d => d.title.toLowerCase().includes(q) || d.filename.toLowerCase().includes(q) || d.author.toLowerCase().includes(q));
+      }
     }
 
     if (statusFilter !== 'all') {
@@ -40,11 +42,172 @@ export function renderMaterials(container, queryParams = {}) {
     if (sortKey === 'name') {
       docs.sort((a, b) => a.title.localeCompare(b.title));
     } else if (sortKey === 'pages') {
-      docs.sort((a, b) => b.pageCount - a.pageCount);
+      docs.sort((a, b) => (b.pageCount || 0) - (a.pageCount || 0));
     } else {
       docs.sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
     }
 
+    return docs;
+  }
+
+  function renderDocsHTML(docs) {
+    if (docs.length === 0) {
+      return `
+        <div class="card empty-state-box">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#64748B" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <h3>No study materials match your search</h3>
+          <p>Try clearing filters or uploading a course PDF to review.</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="clearFiltersBtn">Reset Filters</button>
+        </div>
+      `;
+    }
+
+    if (viewMode === 'list') {
+      return `
+        <div class="card materials-table-card">
+          <div class="table-responsive">
+            <table class="materials-table">
+              <thead>
+                <tr>
+                  <th width="40"><input type="checkbox" id="selectAllDocsCheckbox" aria-label="Select all documents"></th>
+                  <th>DOCUMENT TITLE & FILENAME</th>
+                  <th>AUTHOR / SOURCE</th>
+                  <th>PAGES</th>
+                  <th>FILE SIZE</th>
+                  <th>STATUS</th>
+                  <th class="text-right">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${docs.map(doc => `
+                  <tr data-doc-id="${doc.id}">
+                    <td><input type="checkbox" class="doc-row-checkbox" value="${doc.id}"></td>
+                    <td>
+                      <div class="doc-title-cell">
+                        <div class="doc-icon-wrap">
+                          <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
+                            <path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.414A2 2 0 0017.414 6L13.586 2.172A2 2 0 0012.172 2H4z"/>
+                          </svg>
+                        </div>
+                        <div>
+                          <button type="button" class="doc-title-btn open-reader-link" data-doc-id="${doc.id}">${doc.title}</button>
+                          <span class="doc-filename-sub">${doc.filename}</span>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="text-muted">${doc.author}</td>
+                    <td>${typeof doc.pageCount === 'number' && doc.pageCount > 0 ? `${doc.pageCount} pp` : '<span class="text-muted" title="Page count unavailable">Unavailable</span>'}</td>
+                    <td class="text-muted">${doc.fileSize}</td>
+                    <td>
+                      ${doc.status === 'indexed' ? `
+                        <span class="pill-badge pill-green">Indexed Sample</span>
+                      ` : `
+                        <span class="pill-badge pill-amber" title="Newly selected local preview (not semantically indexed)">LOCAL PREVIEW</span>
+                      `}
+                    </td>
+                    <td class="text-right actions-cell">
+                      <button type="button" class="btn btn-secondary btn-xs open-reader-btn" data-doc-id="${doc.id}">
+                        Read
+                      </button>
+                      <button type="button" class="btn-action-icon bookmark-doc-btn ${doc.isBookmarked ? 'bookmarked' : ''}" data-doc-id="${doc.id}" title="${doc.isBookmarked ? 'Remove bookmark' : 'Bookmark document'}" aria-label="Bookmark">
+                        <svg viewBox="0 0 20 20" width="14" height="14" fill="${doc.isBookmarked ? '#0F766E' : 'none'}" stroke="currentColor" stroke-width="2">
+                          <path d="M5 3a2 2 0 0 0-2 2v14l7-4 7 4V5a2 2 0 0 0-2-2H5z"/>
+                        </svg>
+                      </button>
+                      <button type="button" class="btn-action-icon rename-doc-btn" data-doc-id="${doc.id}" title="Rename title" aria-label="Rename">
+                        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
+                        </svg>
+                      </button>
+                      <button type="button" class="btn-action-icon text-danger delete-doc-btn" data-doc-id="${doc.id}" title="Delete document" aria-label="Delete">
+                        <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="M6 7v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V7M4 7h12M8 4h4"/>
+                        </svg>
+                      </button>
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="materials-grid-layout">
+        ${docs.map(doc => `
+          <div class="card material-grid-card" data-doc-id="${doc.id}">
+            <div class="grid-card-top">
+              <div class="doc-icon-wrap lg">
+                <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </div>
+              <div class="grid-card-badges">
+                ${doc.status === 'indexed' ? `
+                  <span class="pill-badge pill-green">Indexed</span>
+                ` : `
+                  <span class="pill-badge pill-amber">Local Preview</span>
+                `}
+                ${doc.isBookmarked ? `<span class="bookmark-star-badge">★</span>` : ''}
+              </div>
+            </div>
+
+            <button type="button" class="doc-title-btn grid-doc-title open-reader-link" data-doc-id="${doc.id}">${doc.title}</button>
+            <p class="grid-doc-filename">${doc.filename}</p>
+
+            <div class="grid-doc-meta-row">
+              <span>${doc.author}</span>
+              <span>•</span>
+              <span>${typeof doc.pageCount === 'number' && doc.pageCount > 0 ? `${doc.pageCount} pages` : 'Page count unavailable'} • ${doc.fileSize}</span>
+            </div>
+
+            <div class="grid-card-footer">
+              <button type="button" class="btn btn-secondary btn-xs open-reader-btn" data-doc-id="${doc.id}">
+                Open Reader
+              </button>
+              <div class="grid-footer-icons">
+                <button type="button" class="btn-action-icon bookmark-doc-btn ${doc.isBookmarked ? 'bookmarked' : ''}" data-doc-id="${doc.id}" title="Bookmark" aria-label="Bookmark">
+                  ${doc.isBookmarked ? '★' : '☆'}
+                </button>
+                <button type="button" class="btn-action-icon rename-doc-btn" data-doc-id="${doc.id}" title="Rename" aria-label="Rename">✎</button>
+                <button type="button" class="btn-action-icon delete-doc-btn text-danger" data-doc-id="${doc.id}" title="Delete" aria-label="Delete">🗑</button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }
+
+  function updateResultsMount() {
+    const mount = container.querySelector('#materialsResultsMount');
+    if (!mount) return;
+    const docs = getFilteredDocs();
+    mount.innerHTML = renderDocsHTML(docs);
+    bindDocumentActionEvents();
+
+    const clearBtn = mount.querySelector('#clearFiltersBtn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        searchQuery = '';
+        statusFilter = 'all';
+        sortKey = 'newest';
+        const searchInput = container.querySelector('#materialsSearchInput');
+        const statusSelect = container.querySelector('#statusFilterSelect');
+        const sortSelect = container.querySelector('#sortSelect');
+        if (searchInput) searchInput.value = '';
+        if (statusSelect) statusSelect.value = 'all';
+        if (sortSelect) sortSelect.value = 'newest';
+        updateResultsMount();
+      });
+    }
+  }
+
+  function renderView() {
     container.innerHTML = `
       <div class="view-materials-page">
         
@@ -77,12 +240,12 @@ export function renderMaterials(container, queryParams = {}) {
             <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="18" y2="18"/>
             </svg>
-            <input type="text" id="materialsSearchInput" value="${searchQuery}" placeholder="Search materials by title or filename..." class="filter-input">
+            <input type="text" id="materialsSearchInput" value="${searchQuery}" placeholder="Search materials by title or filename..." class="filter-input" autocomplete="off">
           </div>
 
           <div class="toolbar-controls">
             <div class="control-group">
-              <label class="control-label">Status:</label>
+              <label class="control-label" for="statusFilterSelect">Status:</label>
               <select id="statusFilterSelect" class="filter-select">
                 <option value="all" ${statusFilter === 'all' ? 'selected' : ''}>All Sources</option>
                 <option value="indexed" ${statusFilter === 'indexed' ? 'selected' : ''}>Indexed Samples</option>
@@ -91,7 +254,7 @@ export function renderMaterials(container, queryParams = {}) {
             </div>
 
             <div class="control-group">
-              <label class="control-label">Sort:</label>
+              <label class="control-label" for="sortSelect">Sort:</label>
               <select id="sortSelect" class="filter-select">
                 <option value="newest" ${sortKey === 'newest' ? 'selected' : ''}>Newest First</option>
                 <option value="name" ${sortKey === 'name' ? 'selected' : ''}>Title (A-Z)</option>
@@ -100,12 +263,12 @@ export function renderMaterials(container, queryParams = {}) {
             </div>
 
             <div class="view-switch-btns">
-              <button type="button" class="btn-icon-toggle ${viewMode === 'list' ? 'active' : ''}" id="switchListBtn" aria-label="List view">
+              <button type="button" class="btn-icon-toggle ${viewMode === 'list' ? 'active' : ''}" id="switchListBtn" aria-label="List view" title="List view">
                 <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <line x1="3" y1="6" x2="17" y2="6"/><line x1="3" y1="10" x2="17" y2="10"/><line x1="3" y1="14" x2="17" y2="14"/>
                 </svg>
               </button>
-              <button type="button" class="btn-icon-toggle ${viewMode === 'grid' ? 'active' : ''}" id="switchGridBtn" aria-label="Grid view">
+              <button type="button" class="btn-icon-toggle ${viewMode === 'grid' ? 'active' : ''}" id="switchGridBtn" aria-label="Grid view" title="Grid view">
                 <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <rect x="3" y="3" width="5" height="5"/><rect x="12" y="3" width="5" height="5"/><rect x="3" y="12" width="5" height="5"/><rect x="12" y="12" width="5" height="5"/>
                 </svg>
@@ -114,125 +277,10 @@ export function renderMaterials(container, queryParams = {}) {
           </div>
         </div>
 
-        <!-- Documents View Container -->
-        ${docs.length === 0 ? `
-          <div class="card empty-state-box">
-            <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#64748B" stroke-width="1.5">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            </svg>
-            <h3>No study materials match your search</h3>
-            <p>Try clearing filters or uploading a course PDF to review.</p>
-            <button type="button" class="btn btn-secondary btn-sm" id="clearFiltersBtn">Reset Filters</button>
-          </div>
-        ` : viewMode === 'list' ? `
-          <div class="card materials-table-card">
-            <div class="table-responsive">
-              <table class="materials-table">
-                <thead>
-                  <tr>
-                    <th width="40"><input type="checkbox" id="selectAllDocsCheckbox" aria-label="Select all documents"></th>
-                    <th>DOCUMENT TITLE & FILENAME</th>
-                    <th>AUTHOR / SOURCE</th>
-                    <th>PAGES</th>
-                    <th>FILE SIZE</th>
-                    <th>STATUS</th>
-                    <th class="text-right">ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${docs.map(doc => `
-                    <tr data-doc-id="${doc.id}">
-                      <td><input type="checkbox" class="doc-row-checkbox" value="${doc.id}"></td>
-                      <td>
-                        <div class="doc-title-cell">
-                          <div class="doc-icon-wrap">
-                            <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
-                              <path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.414A2 2 0 0017.414 6L13.586 2.172A2 2 0 0012.172 2H4z"/>
-                            </svg>
-                          </div>
-                          <div>
-                            <button type="button" class="doc-title-btn open-reader-link" data-doc-id="${doc.id}">${doc.title}</button>
-                            <span class="doc-filename-sub">${doc.filename}</span>
-                          </div>
-                        </div>
-                      </td>
-                      <td class="text-muted">${doc.author}</td>
-                      <td>${typeof doc.pageCount === 'number' && doc.pageCount > 0 ? `${doc.pageCount} pp` : '<span class="text-muted" title="Page count unavailable">Unavailable</span>'}</td>
-                      <td class="text-muted">${doc.fileSize}</td>
-                      <td>
-                        ${doc.status === 'indexed' ? `
-                          <span class="pill-badge pill-green">Indexed Sample</span>
-                        ` : `
-                          <span class="pill-badge pill-amber" title="Newly selected local preview (not semantically indexed)">LOCAL PREVIEW</span>
-                        `}
-                      </td>
-                      <td class="text-right actions-cell">
-                        <button type="button" class="btn btn-secondary btn-xs open-reader-btn" data-doc-id="${doc.id}">
-                          Read
-                        </button>
-                        <button type="button" class="btn-action-icon bookmark-doc-btn ${doc.isBookmarked ? 'bookmarked' : ''}" data-doc-id="${doc.id}" title="${doc.isBookmarked ? 'Remove bookmark' : 'Bookmark document'}">
-                          <svg viewBox="0 0 20 20" width="14" height="14" fill="${doc.isBookmarked ? '#0F766E' : 'none'}" stroke="currentColor" stroke-width="2">
-                            <path d="M5 3a2 2 0 0 0-2 2v14l7-4 7 4V5a2 2 0 0 0-2-2H5z"/>
-                          </svg>
-                        </button>
-                        <button type="button" class="btn-action-icon rename-doc-btn" data-doc-id="${doc.id}" title="Rename title">
-                          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"/>
-                          </svg>
-                        </button>
-                        <button type="button" class="btn-action-icon text-danger delete-doc-btn" data-doc-id="${doc.id}" title="Delete document">
-                          <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M6 7v10a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2V7M4 7h12M8 4h4"/>
-                          </svg>
-                        </button>
-                      </td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        ` : `
-          <div class="materials-grid-layout">
-            ${docs.map(doc => `
-              <div class="card material-grid-card" data-doc-id="${doc.id}">
-                <div class="grid-card-top">
-                  <div class="doc-icon-wrap lg">
-                    <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-                    </svg>
-                  </div>
-                  <div class="grid-card-badges">
-                    ${doc.status === 'indexed' ? `
-                      <span class="pill-badge pill-green">Indexed</span>
-                    ` : `
-                      <span class="pill-badge pill-amber">Local Preview</span>
-                    `}
-                    ${doc.isBookmarked ? `<span class="bookmark-star-badge">★</span>` : ''}
-                  </div>
-                </div>
-
-                <h3 class="grid-doc-title">${doc.title}</h3>
-                <p class="grid-doc-filename">${doc.filename}</p>
-
-                <div class="grid-doc-meta-row">
-                  <span>${doc.author}</span>
-                  <span>${typeof doc.pageCount === 'number' && doc.pageCount > 0 ? `${doc.pageCount} pages` : 'Page count unavailable'} • ${doc.fileSize}</span>
-                </div>
-
-                <div class="grid-card-footer">
-                  <button type="button" class="btn btn-primary btn-sm open-reader-btn" data-doc-id="${doc.id}">
-                    Open Reader
-                  </button>
-                  <div class="grid-footer-icons">
-                    <button type="button" class="btn-action-icon rename-doc-btn" data-doc-id="${doc.id}" title="Rename">✎</button>
-                    <button type="button" class="btn-action-icon delete-doc-btn text-danger" data-doc-id="${doc.id}" title="Delete">🗑</button>
-                  </div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `}
+        <!-- Stable Mount for Document Results -->
+        <div id="materialsResultsMount">
+          ${renderDocsHTML(getFilteredDocs())}
+        </div>
 
       </div>
     `;
@@ -247,40 +295,42 @@ export function renderMaterials(container, queryParams = {}) {
     const sortSelect = container.querySelector('#sortSelect');
     const switchListBtn = container.querySelector('#switchListBtn');
     const switchGridBtn = container.querySelector('#switchGridBtn');
-    const clearFiltersBtn = container.querySelector('#clearFiltersBtn');
     const openUploadModalBtn = container.querySelector('#openUploadModalBtn');
     const compareVersionsBtn = container.querySelector('#compareVersionsBtn');
 
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
-        searchQuery = e.target.value.trim();
-        renderView();
+        searchQuery = e.target.value; // Preserve raw value and spaces!
+        updateResultsMount();
       });
     }
 
     if (statusSelect) {
       statusSelect.addEventListener('change', (e) => {
         statusFilter = e.target.value;
-        renderView();
+        updateResultsMount();
       });
     }
 
     if (sortSelect) {
       sortSelect.addEventListener('change', (e) => {
         sortKey = e.target.value;
-        renderView();
+        updateResultsMount();
       });
     }
 
-    if (switchListBtn) switchListBtn.addEventListener('click', () => { viewMode = 'list'; renderView(); });
-    if (switchGridBtn) switchGridBtn.addEventListener('click', () => { viewMode = 'grid'; renderView(); });
-
-    if (clearFiltersBtn) {
-      clearFiltersBtn.addEventListener('click', () => {
-        searchQuery = '';
-        statusFilter = 'all';
-        sortKey = 'newest';
-        renderView();
+    if (switchListBtn && switchGridBtn) {
+      switchListBtn.addEventListener('click', () => {
+        viewMode = 'list';
+        switchListBtn.classList.add('active');
+        switchGridBtn.classList.remove('active');
+        updateResultsMount();
+      });
+      switchGridBtn.addEventListener('click', () => {
+        viewMode = 'grid';
+        switchGridBtn.classList.add('active');
+        switchListBtn.classList.remove('active');
+        updateResultsMount();
       });
     }
 
@@ -306,7 +356,7 @@ export function renderMaterials(container, queryParams = {}) {
         const docId = btn.getAttribute('data-doc-id');
         workspaceStore.toggleBookmarkDocument(docId);
         Toast.show('Bookmark updated.', 'info');
-        renderView();
+        updateResultsMount();
       });
     });
 
@@ -330,7 +380,7 @@ export function renderMaterials(container, queryParams = {}) {
             if (val) {
               workspaceStore.renameDocument(docId, val);
               Toast.show('Document renamed successfully.', 'success');
-              renderView();
+              updateResultsMount();
             }
           },
           'Save Name'
@@ -353,7 +403,7 @@ export function renderMaterials(container, queryParams = {}) {
           () => {
             workspaceStore.deleteDocument(docId);
             Toast.show('Document removed from library.', 'info');
-            renderView();
+            updateResultsMount();
           },
           'Delete Document',
           'danger'

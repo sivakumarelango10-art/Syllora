@@ -13,20 +13,11 @@ class Router {
     this.routes = new Map();
     this.currentRoute = null;
     this.currentParams = {};
+    this.lastRenderedKey = null;
     this.routeListeners = new Set();
 
     window.addEventListener('hashchange', () => this.handleRouting());
-    window.addEventListener('popstate', () => this.handleRouting());
     window.addEventListener('load', () => this.handleRouting());
-
-    // Defensive watcher for external automated URL mutations
-    let lastObservedHash = window.location.hash;
-    setInterval(() => {
-      if (window.location.hash !== lastObservedHash) {
-        lastObservedHash = window.location.hash;
-        this.handleRouting();
-      }
-    }, 150);
   }
 
   register(path, viewHandler) {
@@ -44,7 +35,12 @@ class Router {
     if (query) {
       hash += `?${query}`;
     }
-    window.location.hash = hash;
+    if (window.location.hash === hash) {
+      // If hash is identical, still ensure route handler fires once if needed
+      this.handleRouting(true);
+    } else {
+      window.location.hash = hash;
+    }
   }
 
   getCurrentPath() {
@@ -64,7 +60,22 @@ class Router {
     return params;
   }
 
-  handleRouting() {
+  updateDocumentTitle(path) {
+    const titles = {
+      '/app/overview': 'Syllora — Overview',
+      '/app/materials': 'Syllora — Study Materials',
+      '/app/ask': 'Syllora — Ask Syllora',
+      '/app/syllabus': 'Syllora — Syllabus Map',
+      '/app/understanding': 'Syllora — Check Understanding',
+      '/app/misconceptions': 'Syllora — Misconception Notebook',
+      '/app/revision': 'Syllora — Revision Planner',
+      '/app/settings': 'Syllora — Settings',
+      '/login': 'Syllora — Log In | Your syllabus, simplified.'
+    };
+    document.title = titles[path] || 'Syllora — Academic Study Assistant';
+  }
+
+  handleRouting(force = false) {
     let path = this.getCurrentPath();
     const queryParams = this.getQueryParams();
 
@@ -81,13 +92,23 @@ class Router {
     // Workspace Route Guard: auto-initialize demo user if visiting /app directly
     if (path.startsWith('/app')) {
       if (!sessionAdapter.isAuthenticated()) {
-        // Auto-seed demo session for direct visits per Section 1 requirements
         sessionAdapter.loginDemoUser({ name: 'Prajith P', email: 'demo@syllora.com' });
       }
     }
 
+    const queryKey = new URLSearchParams(queryParams).toString();
+    const routeKey = `${path}?${queryKey}`;
+
+    // Deduplicate identical sequential calls unless forced
+    if (!force && this.lastRenderedKey === routeKey) {
+      return;
+    }
+
     this.currentRoute = path;
     this.currentParams = queryParams;
+    this.lastRenderedKey = routeKey;
+
+    this.updateDocumentTitle(path);
 
     const handler = this.routes.get(path) || this.routes.get('/app/404');
 

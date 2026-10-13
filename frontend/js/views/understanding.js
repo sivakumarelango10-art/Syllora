@@ -18,7 +18,7 @@ import { Toast } from '../components/modal.js';
 export function renderUnderstanding(container, queryParams = {}) {
   const state = workspaceStore.getState();
   let selectedTopicId = queryParams.topic || 'top-3'; // default to Deadlock vs Starvation
-  let explanationInputText = '';
+  let explanationInputText = workspaceStore.getDraft(`und_${selectedTopicId}`) || '';
   let activeEvaluation = null;
   let scenarioAnswer = null; // for scenario 2
   let scenarioSubmitted = false;
@@ -300,7 +300,7 @@ export function renderUnderstanding(container, queryParams = {}) {
     if (topicSelect) {
       topicSelect.addEventListener('change', (e) => {
         selectedTopicId = e.target.value;
-        explanationInputText = '';
+        explanationInputText = workspaceStore.getDraft(`und_${selectedTopicId}`) || '';
         activeEvaluation = null;
         renderView();
       });
@@ -312,6 +312,7 @@ export function renderUnderstanding(container, queryParams = {}) {
       charCounter.textContent = `${textarea.value.length} characters`;
       textarea.addEventListener('input', () => {
         explanationInputText = textarea.value;
+        workspaceStore.saveDraft(`und_${selectedTopicId}`, textarea.value);
         charCounter.textContent = `${textarea.value.length} characters`;
       });
     }
@@ -324,21 +325,27 @@ export function renderUnderstanding(container, queryParams = {}) {
     if (fillIncorrect) {
       fillIncorrect.addEventListener('click', () => {
         explanationInputText = 'Deadlock and starvation are basically the same thing because both make threads stop running forever.';
-        renderView();
+        workspaceStore.saveDraft(`und_${selectedTopicId}`, explanationInputText);
+        if (textarea) textarea.value = explanationInputText;
+        if (charCounter) charCounter.textContent = `${explanationInputText.length} characters`;
       });
     }
 
     if (fillPartial) {
       fillPartial.addEventListener('click', () => {
         explanationInputText = 'Starvation is when a low-priority thread waits a long time because high-priority threads keep jumping ahead, while deadlock is when threads are waiting on each other.';
-        renderView();
+        workspaceStore.saveDraft(`und_${selectedTopicId}`, explanationInputText);
+        if (textarea) textarea.value = explanationInputText;
+        if (charCounter) charCounter.textContent = `${explanationInputText.length} characters`;
       });
     }
 
     if (fillExemplary) {
       fillExemplary.addEventListener('click', () => {
         explanationInputText = 'Deadlock is a circular waiting state where none of the involved threads can ever proceed because each holds a resource the other needs. Starvation is indefinite postponement where resources are continually being allocated to higher-priority threads, leaving a runnable thread perpetually waiting without circular dependency.';
-        renderView();
+        workspaceStore.saveDraft(`und_${selectedTopicId}`, explanationInputText);
+        if (textarea) textarea.value = explanationInputText;
+        if (charCounter) charCounter.textContent = `${explanationInputText.length} characters`;
       });
     }
 
@@ -369,8 +376,11 @@ export function renderUnderstanding(container, queryParams = {}) {
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
         explanationInputText = '';
+        workspaceStore.clearDraft(`und_${selectedTopicId}`);
         activeEvaluation = null;
-        renderView();
+        if (textarea) textarea.value = '';
+        if (charCounter) charCounter.textContent = '0 characters';
+        Toast.show('Explanation cleared.', 'info');
       });
     }
 

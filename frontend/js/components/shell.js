@@ -345,13 +345,26 @@ export class AppShell {
     if (notifTag) notifTag.textContent = `${stats.openMisconceptionsCount} Active`;
   }
 
+  setDrawerState(isOpen) {
+    this.isDrawerOpen = isOpen;
+    const sidebar = this.container.querySelector('#workspaceSidebar');
+    const backdrop = this.container.querySelector('#drawerBackdrop');
+    const toggleBtn = this.container.querySelector('#drawerToggleBtn');
+
+    if (sidebar) sidebar.classList.toggle('drawer-open', isOpen);
+    if (backdrop) {
+      backdrop.classList.toggle('visible', isOpen);
+      backdrop.classList.toggle('active', isOpen);
+    }
+    if (toggleBtn) {
+      toggleBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    }
+    document.body.classList.toggle('drawer-open', isOpen);
+  }
+
   closeAllMenus() {
     if (this.isDrawerOpen) {
-      this.isDrawerOpen = false;
-      const sidebar = this.container.querySelector('#workspaceSidebar');
-      const backdrop = this.container.querySelector('#drawerBackdrop');
-      if (sidebar) sidebar.classList.remove('drawer-open');
-      if (backdrop) backdrop.classList.remove('visible');
+      this.setDrawerState(false);
     }
 
     if (this.isUserMenuOpen) {
@@ -383,27 +396,26 @@ export class AppShell {
     // Drawer toggle on mobile
     const drawerToggleBtn = this.container.querySelector('#drawerToggleBtn');
     const drawerBackdrop = this.container.querySelector('#drawerBackdrop');
-    const sidebar = this.container.querySelector('#workspaceSidebar');
 
     if (drawerToggleBtn) {
       drawerToggleBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        this.isDrawerOpen = !this.isDrawerOpen;
-        if (sidebar) sidebar.classList.toggle('drawer-open', this.isDrawerOpen);
-        if (drawerBackdrop) {
-          drawerBackdrop.classList.toggle('visible', this.isDrawerOpen);
-          drawerBackdrop.classList.toggle('active', this.isDrawerOpen);
-        }
+        this.setDrawerState(!this.isDrawerOpen);
       });
     }
 
     if (drawerBackdrop) {
       drawerBackdrop.addEventListener('click', () => {
-        this.isDrawerOpen = false;
-        if (sidebar) sidebar.classList.remove('drawer-open');
-        drawerBackdrop.classList.remove('visible');
+        this.setDrawerState(false);
       });
     }
+
+    // Auto-close drawer if resized to desktop
+    window.addEventListener('resize', () => {
+      if (window.innerWidth >= 900 && this.isDrawerOpen) {
+        this.setDrawerState(false);
+      }
+    }, { passive: true });
 
     // Course selector dropdown toggle
     const courseDropdownBtn = this.container.querySelector('#courseDropdownBtn');

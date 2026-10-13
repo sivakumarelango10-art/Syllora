@@ -15,18 +15,114 @@ export function renderMisconceptions(container) {
   let searchQuery = '';
   let statusFilter = 'all'; // 'all' | 'Open' | 'Review needed' | 'Improving' | 'Student-marked complete'
 
-  function renderView() {
+  function getFilteredIssues() {
     const state = workspaceStore.getState();
     let issues = [...state.misconceptions];
 
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      issues = issues.filter(i => i.topicTitle.toLowerCase().includes(q) || i.observedIssue.toLowerCase().includes(q));
+      const q = searchQuery.toLowerCase().trim();
+      if (q) {
+        issues = issues.filter(i => i.topicTitle.toLowerCase().includes(q) || i.observedIssue.toLowerCase().includes(q));
+      }
     }
 
     if (statusFilter !== 'all') {
       issues = issues.filter(i => i.status === statusFilter);
     }
+
+    return issues;
+  }
+
+  function renderCardsHTML(issues) {
+    if (issues.length === 0) {
+      return `
+        <div class="card empty-state-box">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#64748B" stroke-width="1.5">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <h3>No misconceptions match filter criteria</h3>
+          <p>All matching concepts are currently solid or filtered out.</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="misconception-cards-grid">
+        ${issues.map(item => {
+          let badgeClass = 'pill-coral';
+          if (item.status === 'Improving') badgeClass = 'pill-amber';
+          if (item.status === 'Student-marked complete') badgeClass = 'pill-green';
+
+          return `
+            <div class="card misconception-card" data-misc-id="${item.id}">
+              <div class="misc-card-header">
+                <div class="misc-topic-info">
+                  <span class="topic-tag">${item.topicTitle}</span>
+                  <h3 class="misc-issue-title">${item.observedIssue}</h3>
+                </div>
+                <div class="misc-status-wrap">
+                  <span class="pill-badge ${badgeClass}">${item.status}</span>
+                </div>
+              </div>
+
+              <!-- Original Student Explanation Snippet -->
+              <div class="misc-section-box">
+                <span class="misc-section-label">Original Explanation:</span>
+                <p class="misc-orig-quote">"${item.originalExplanation}"</p>
+              </div>
+
+              <!-- Corrective Feedback & Academic Citation -->
+              <div class="misc-section-box corrective">
+                <span class="misc-section-label">Corrective Feedback:</span>
+                <p class="misc-feedback-text">${item.feedback}</p>
+                ${(item.sourceCitations || []).map(c => `
+                  <div class="misc-citation-pill">
+                    <span class="cite-doc">${c.documentTitle} • p. ${c.pageNumber}</span>
+                    <button type="button" class="btn btn-link btn-xs open-misc-citation-btn" data-doc="doc-1" data-page="${c.pageNumber}" data-quote="${c.quote.replace(/"/g, '&quot;')}">
+                      Open source passage →
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+
+              <!-- Footer Controls -->
+              <div class="misc-card-footer">
+                <div class="attempts-meta">
+                  <span>Attempts recorded: <strong>${item.attemptsCount}</strong></span>
+                  <span class="text-muted">• ${item.lastAttemptDate}</span>
+                </div>
+
+                <div class="misc-card-actions">
+                  <button type="button" class="btn btn-secondary btn-sm toggle-complete-btn" data-misc-id="${item.id}">
+                    ${item.status === 'Student-marked complete' ? 'Reopen' : 'Mark Complete'}
+                  </button>
+                  <button type="button" class="btn btn-primary btn-sm practice-again-btn" data-topic-id="${item.topicId}">
+                    Practise again
+                  </button>
+                  <button type="button" class="btn-action-icon text-danger delete-misc-btn" data-misc-id="${item.id}" title="Delete issue" aria-label="Delete issue">
+                    🗑
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          `;
+        }).join('')}
+      </div>
+    `;
+  }
+
+  function updateMount() {
+    const mount = container.querySelector('#misconceptionsResultsMount');
+    if (!mount) return;
+    const issues = getFilteredIssues();
+    mount.innerHTML = renderCardsHTML(issues);
+    bindCardEvents();
+  }
+
+  function renderView() {
+    const state = workspaceStore.getState();
+    const issues = getFilteredIssues();
 
     container.innerHTML = `
       <div class="view-misconceptions-page">
@@ -50,12 +146,12 @@ export function renderMisconceptions(container) {
             <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="18" y2="18"/>
             </svg>
-            <input type="text" id="miscSearchInput" value="${searchQuery}" placeholder="Search observed issues or topic..." class="filter-input">
+            <input type="text" id="miscSearchInput" value="${searchQuery}" placeholder="Search observed issues or topic..." class="filter-input" autocomplete="off">
           </div>
 
           <div class="toolbar-controls">
             <div class="control-group">
-              <label class="control-label">Status:</label>
+              <label class="control-label" for="miscStatusSelect">Status:</label>
               <select id="miscStatusSelect" class="filter-select">
                 <option value="all" ${statusFilter === 'all' ? 'selected' : ''}>All Statuses (${state.misconceptions.length})</option>
                 <option value="Open" ${statusFilter === 'Open' ? 'selected' : ''}>Open</option>
@@ -67,104 +163,34 @@ export function renderMisconceptions(container) {
           </div>
         </div>
 
-        <!-- Issue Cards List -->
-        <div class="misconceptions-list-container">
-          ${issues.length === 0 ? `
-            <div class="card empty-state-box">
-              <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#64748B" stroke-width="1.5">
-                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-              </svg>
-              <h3>No misconceptions match filter criteria</h3>
-              <p>All matching concepts are currently solid or filtered out.</p>
-            </div>
-          ` : `
-            <div class="misconception-cards-grid">
-              ${issues.map(item => {
-                let badgeClass = 'pill-coral';
-                if (item.status === 'Improving') badgeClass = 'pill-amber';
-                if (item.status === 'Student-marked complete') badgeClass = 'pill-green';
-
-                return `
-                  <div class="card misconception-card" data-misc-id="${item.id}">
-                    <div class="misc-card-header">
-                      <div class="misc-topic-info">
-                        <span class="topic-tag">${item.topicTitle}</span>
-                        <h3 class="misc-issue-title">${item.observedIssue}</h3>
-                      </div>
-                      <div class="misc-status-wrap">
-                        <span class="pill-badge ${badgeClass}">${item.status}</span>
-                      </div>
-                    </div>
-
-                    <!-- Original Student Explanation Snippet -->
-                    <div class="misc-section-box">
-                      <span class="misc-section-label">Original Explanation:</span>
-                      <p class="misc-orig-quote">"${item.originalExplanation}"</p>
-                    </div>
-
-                    <!-- Corrective Feedback & Academic Citation -->
-                    <div class="misc-section-box corrective">
-                      <span class="misc-section-label">Corrective Feedback:</span>
-                      <p class="misc-feedback-text">${item.feedback}</p>
-                      ${(item.sourceCitations || []).map(c => `
-                        <div class="misc-citation-pill">
-                          <span class="cite-doc">${c.documentTitle} • p. ${c.pageNumber}</span>
-                          <button type="button" class="btn btn-link btn-xs open-misc-citation-btn" data-doc="doc-1" data-page="${c.pageNumber}" data-quote="${c.quote.replace(/"/g, '&quot;')}">
-                            Open source passage →
-                          </button>
-                        </div>
-                      `).join('')}
-                    </div>
-
-                    <!-- Footer Controls -->
-                    <div class="misc-card-footer">
-                      <div class="attempts-meta">
-                        <span>Attempts recorded: <strong>${item.attemptsCount}</strong></span>
-                        <span class="text-muted">• ${item.lastAttemptDate}</span>
-                      </div>
-
-                      <div class="misc-card-actions">
-                        <button type="button" class="btn btn-secondary btn-sm toggle-complete-btn" data-misc-id="${item.id}">
-                          ${item.status === 'Student-marked complete' ? 'Reopen' : 'Mark Complete'}
-                        </button>
-                        <button type="button" class="btn btn-primary btn-sm practice-again-btn" data-topic-id="${item.topicId}">
-                          Practise again
-                        </button>
-                        <button type="button" class="btn-action-icon text-danger delete-misc-btn" data-misc-id="${item.id}" title="Delete issue">
-                          🗑
-                        </button>
-                      </div>
-                    </div>
-
-                  </div>
-                `;
-              }).join('')}
-            </div>
-          `}
+        <!-- Issue Cards List Mount -->
+        <div class="misconceptions-list-container" id="misconceptionsResultsMount">
+          ${renderCardsHTML(issues)}
         </div>
 
       </div>
     `;
 
-    bindEvents();
+    bindToolbarEvents();
+    bindCardEvents();
   }
 
-  function bindEvents() {
+  function bindToolbarEvents() {
     const searchInput = container.querySelector('#miscSearchInput');
     const statusSelect = container.querySelector('#miscStatusSelect');
     const practiceAllBtn = container.querySelector('#notebookPracticeAllBtn');
 
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
-        searchQuery = e.target.value.trim();
-        renderView();
+        searchQuery = e.target.value; // Preserve raw value and spaces!
+        updateMount();
       });
     }
 
     if (statusSelect) {
       statusSelect.addEventListener('change', (e) => {
         statusFilter = e.target.value;
-        renderView();
+        updateMount();
       });
     }
 
@@ -173,7 +199,9 @@ export function renderMisconceptions(container) {
         router.navigate('/app/understanding', { topic: 'top-3' });
       });
     }
+  }
 
+  function bindCardEvents() {
     // Open citation reader
     container.querySelectorAll('.open-misc-citation-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -202,7 +230,7 @@ export function renderMisconceptions(container) {
         const nextStatus = item.status === 'Student-marked complete' ? 'Open' : 'Student-marked complete';
         workspaceStore.updateMisconceptionStatus(miscId, nextStatus);
         Toast.show(nextStatus === 'Student-marked complete' ? 'Issue marked complete by student.' : 'Issue reopened for review.', 'info');
-        renderView();
+        updateMount();
       });
     });
 
@@ -219,7 +247,7 @@ export function renderMisconceptions(container) {
           () => {
             workspaceStore.deleteMisconception(miscId);
             Toast.show('Misconception deleted.', 'info');
-            renderView();
+            updateMount();
           },
           'Delete',
           'danger'

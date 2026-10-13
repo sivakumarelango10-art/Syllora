@@ -595,7 +595,89 @@ class WorkspaceStore {
     }
   }
 
+  // --- Bookmarking System ---
+  addBookmark({ targetType, targetId, title, snippet, metadata }) {
+    if (!this.state.bookmarks) this.state.bookmarks = [];
+    const exists = this.state.bookmarks.some(b => b.targetType === targetType && b.targetId === targetId);
+    if (!exists) {
+      const newBm = {
+        id: `bm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        targetType, // 'document' | 'passage' | 'answer' | 'topic'
+        targetId,
+        title: title || 'Untitled Bookmark',
+        snippet: snippet || '',
+        metadata: metadata || {},
+        createdAt: new Date().toISOString()
+      };
+      this.state.bookmarks.unshift(newBm);
+      this.save();
+      return newBm;
+    }
+    return null;
+  }
+
+  removeBookmark(id) {
+    if (!this.state.bookmarks) return;
+    this.state.bookmarks = this.state.bookmarks.filter(b => b.id !== id && b.targetId !== id);
+    this.save();
+  }
+
+  isBookmarked(targetType, targetId) {
+    if (!this.state.bookmarks) return false;
+    return this.state.bookmarks.some(b => b.targetType === targetType && b.targetId === targetId);
+  }
+
+  // --- Input Draft Persistence ---
+  saveDraft(key, text) {
+    if (!this.state.drafts) this.state.drafts = {};
+    this.state.drafts[key] = text;
+    try {
+      localStorage.setItem(`syllora_draft_${key}`, text);
+    } catch {}
+  }
+
+  getDraft(key) {
+    if (this.state.drafts && typeof this.state.drafts[key] === 'string') {
+      return this.state.drafts[key];
+    }
+    try {
+      return localStorage.getItem(`syllora_draft_${key}`) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  clearDraft(key) {
+    if (this.state.drafts) {
+      delete this.state.drafts[key];
+    }
+    try {
+      localStorage.removeItem(`syllora_draft_${key}`);
+    } catch {}
+  }
+
+  // --- Safe Syllabus-Only Reset ---
+  // Preserves uploaded documents, IndexedDB binary storage, study history, and user preferences
+  resetSyllabusData() {
+    this.state.topics = JSON.parse(JSON.stringify(SEED_DATA.topics));
+    // Re-verify matched passages against currently active documents
+    const activeDocIds = new Set(this.state.documents.map(d => d.id));
+    this.state.topics.forEach(t => {
+      if (Array.isArray(t.matchedPassageIds)) {
+        t.matchedPassageIds = t.matchedPassageIds.filter(pid => {
+          const pass = this.state.passages.find(p => p.id === pid);
+          return pass && activeDocIds.has(pass.documentId);
+        });
+        if (t.matchedPassageIds.length > 0) {
+          t.evidenceStatus = 'Evidence found';
+        }
+      }
+    });
+    this.save();
+  }
+
   // --- Full Demo Reset ---
+  // Explicit destructive reset only triggered by Settings confirmation dialog
   resetWorkspaceData() {
     clearAllPdfBlobs();
     this.state = JSON.parse(JSON.stringify(SEED_DATA));

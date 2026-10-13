@@ -18,13 +18,15 @@ export function renderSyllabus(container) {
   let evidenceFilter = 'all';
   let understandingFilter = 'all';
 
-  function renderView() {
+  function getFilteredTopics() {
     const state = workspaceStore.getState();
     let topics = [...state.topics];
 
     if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      topics = topics.filter(t => t.title.toLowerCase().includes(q) || t.unit.toLowerCase().includes(q));
+      const q = searchQuery.toLowerCase().trim();
+      if (q) {
+        topics = topics.filter(t => t.title.toLowerCase().includes(q) || t.unit.toLowerCase().includes(q));
+      }
     }
 
     if (evidenceFilter !== 'all') {
@@ -34,6 +36,97 @@ export function renderSyllabus(container) {
     if (understandingFilter !== 'all') {
       topics = topics.filter(t => t.understandingStatus === understandingFilter);
     }
+
+    return topics;
+  }
+
+  function renderTableHTML(topics) {
+    if (topics.length === 0) {
+      return `
+        <div class="card empty-state-box">
+          <h3>No topics match your filter</h3>
+          <p class="text-sm text-muted">Try adjusting search query or filter criteria.</p>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="card syllabus-table-card">
+        <div class="table-responsive">
+          <table class="syllabus-table full">
+            <thead>
+              <tr>
+                <th>TOPIC TITLE</th>
+                <th>MODULE / UNIT</th>
+                <th>MATERIAL EVIDENCE</th>
+                <th>STUDENT UNDERSTANDING</th>
+                <th>MATCHED PASSAGES</th>
+                <th class="text-right">ACTIONS</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${topics.map(topic => {
+                let evPill = 'pill-gray';
+                if (topic.evidenceStatus === 'Evidence found') evPill = 'pill-green';
+                else if (topic.evidenceStatus === 'Limited evidence') evPill = 'pill-amber';
+
+                let undPill = 'pill-gray';
+                if (topic.understandingStatus === 'Needs practice') undPill = 'pill-amber';
+                else if (topic.understandingStatus === 'Review needed') undPill = 'pill-coral';
+
+                const passageCount = topic.matchedPassageIds ? topic.matchedPassageIds.length : 0;
+
+                return `
+                  <tr data-topic-id="${topic.id}">
+                    <td>
+                      <button type="button" class="topic-detail-link" data-topic-id="${topic.id}">
+                        ${topic.title}
+                      </button>
+                    </td>
+                    <td class="text-muted text-sm">${topic.unit}</td>
+                    <td><span class="pill-badge ${evPill}">${topic.evidenceStatus}</span></td>
+                    <td><span class="pill-badge ${undPill}">${topic.understandingStatus}</span></td>
+                    <td>
+                      ${passageCount > 0 ? `
+                        <button type="button" class="btn-link-passage" data-topic-id="${topic.id}">
+                          ${passageCount} verified passages
+                        </button>
+                      ` : `
+                        <span class="text-muted text-sm">0 passages</span>
+                      `}
+                    </td>
+                    <td class="text-right actions-cell">
+                      <button type="button" class="btn btn-secondary btn-xs check-und-action-btn" data-topic-id="${topic.id}">
+                        Check
+                      </button>
+                      <button type="button" class="btn-action-icon edit-topic-btn" data-topic-id="${topic.id}" title="Edit topic">
+                        ✎
+                      </button>
+                      <button type="button" class="btn-action-icon text-danger delete-topic-btn" data-topic-id="${topic.id}" title="Delete topic">
+                        🗑
+                      </button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  function updateTableMount() {
+    const mount = container.querySelector('#syllabusResultsMount');
+    if (!mount) return;
+    const topics = getFilteredTopics();
+    mount.innerHTML = renderTableHTML(topics);
+    bindTableActionEvents();
+  }
+
+  function renderView() {
+    const state = workspaceStore.getState();
+    const topics = getFilteredTopics();
 
     container.innerHTML = `
       <div class="view-syllabus-page">
@@ -60,7 +153,7 @@ export function renderSyllabus(container) {
             <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="18" y2="18"/>
             </svg>
-            <input type="text" id="syllabusSearchInput" value="${searchQuery}" placeholder="Search topics by title or unit..." class="filter-input">
+            <input type="text" id="syllabusSearchInput" value="${searchQuery}" placeholder="Search topics by title or unit..." class="filter-input" autocomplete="off">
           </div>
 
           <div class="toolbar-controls">
@@ -105,77 +198,19 @@ export function renderSyllabus(container) {
           </div>
         </div>
 
-        <!-- Topics Table -->
-        <div class="card syllabus-table-card">
-          <div class="table-responsive">
-            <table class="syllabus-table full">
-              <thead>
-                <tr>
-                  <th>TOPIC TITLE</th>
-                  <th>MODULE / UNIT</th>
-                  <th>MATERIAL EVIDENCE</th>
-                  <th>STUDENT UNDERSTANDING</th>
-                  <th>MATCHED PASSAGES</th>
-                  <th class="text-right">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${topics.map(topic => {
-                  let evPill = 'pill-gray';
-                  if (topic.evidenceStatus === 'Evidence found') evPill = 'pill-green';
-                  else if (topic.evidenceStatus === 'Limited evidence') evPill = 'pill-amber';
-
-                  let undPill = 'pill-gray';
-                  if (topic.understandingStatus === 'Needs practice') undPill = 'pill-amber';
-                  else if (topic.understandingStatus === 'Review needed') undPill = 'pill-coral';
-
-                  const passageCount = topic.matchedPassageIds ? topic.matchedPassageIds.length : 0;
-
-                  return `
-                    <tr data-topic-id="${topic.id}">
-                      <td>
-                        <button type="button" class="topic-detail-link" data-topic-id="${topic.id}">
-                          ${topic.title}
-                        </button>
-                      </td>
-                      <td class="text-muted text-sm">${topic.unit}</td>
-                      <td><span class="pill-badge ${evPill}">${topic.evidenceStatus}</span></td>
-                      <td><span class="pill-badge ${undPill}">${topic.understandingStatus}</span></td>
-                      <td>
-                        ${passageCount > 0 ? `
-                          <button type="button" class="btn-link-passage" data-topic-id="${topic.id}">
-                            ${passageCount} verified passages
-                          </button>
-                        ` : `
-                          <span class="text-muted text-sm">0 passages</span>
-                        `}
-                      </td>
-                      <td class="text-right actions-cell">
-                        <button type="button" class="btn btn-secondary btn-xs check-und-action-btn" data-topic-id="${topic.id}">
-                          Check
-                        </button>
-                        <button type="button" class="btn-action-icon edit-topic-btn" data-topic-id="${topic.id}" title="Edit topic">
-                          ✎
-                        </button>
-                        <button type="button" class="btn-action-icon text-danger delete-topic-btn" data-topic-id="${topic.id}" title="Delete topic">
-                          🗑
-                        </button>
-                      </td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
+        <!-- Stable Topics Table Mount -->
+        <div id="syllabusResultsMount">
+          ${renderTableHTML(topics)}
         </div>
 
       </div>
     `;
 
-    bindEvents();
+    bindToolbarEvents();
+    bindTableActionEvents();
   }
 
-  function bindEvents() {
+  function bindToolbarEvents() {
     const searchInput = container.querySelector('#syllabusSearchInput');
     const evSelect = container.querySelector('#evidenceFilterSelect');
     const undSelect = container.querySelector('#understandingFilterSelect');
@@ -184,29 +219,44 @@ export function renderSyllabus(container) {
 
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
-        searchQuery = e.target.value.trim();
-        renderView();
+        searchQuery = e.target.value; // Preserve raw value with spaces!
+        updateTableMount();
       });
     }
 
-    if (evSelect) evSelect.addEventListener('change', (e) => { evidenceFilter = e.target.value; renderView(); });
-    if (undSelect) undSelect.addEventListener('change', (e) => { understandingFilter = e.target.value; renderView(); });
+    if (evSelect) {
+      evSelect.addEventListener('change', (e) => {
+        evidenceFilter = e.target.value;
+        updateTableMount();
+      });
+    }
+
+    if (undSelect) {
+      undSelect.addEventListener('change', (e) => {
+        understandingFilter = e.target.value;
+        updateTableMount();
+      });
+    }
 
     if (addTopicBtn) addTopicBtn.addEventListener('click', openAddTopicModal);
+
     if (reloadBtn) {
       reloadBtn.addEventListener('click', () => {
         Modal.open(
           'Reload Sample Syllabus',
-          '<p>Are you sure you want to reload the official CS301 sample syllabus? Any custom topics you added will be refreshed.</p>',
+          '<p>Are you sure you want to reload the official CS301 sample syllabus? All curriculum topics will be refreshed to default, while your uploaded PDFs and study history remain safely preserved.</p>',
           () => {
-            workspaceStore.resetWorkspaceData();
-            Toast.show('Sample syllabus reloaded.', 'success');
+            workspaceStore.resetSyllabusData();
+            Toast.show('Official syllabus topics reloaded. Uploaded PDFs preserved.', 'success');
             renderView();
           },
           'Reload Syllabus'
         );
       });
     }
+  }
+
+  function bindTableActionEvents() {
 
     // Detail modal
     container.querySelectorAll('.topic-detail-link').forEach(btn => {
