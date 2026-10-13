@@ -12,8 +12,12 @@ backend_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_dir))
 
 from dotenv import load_dotenv
-load_dotenv(backend_dir / ".env")
-load_dotenv(backend_dir.parent / ".env.local", override=True)
+root_env = backend_dir.parent / ".env"
+if root_env.is_file():
+    load_dotenv(root_env, override=False)
+else:
+    load_dotenv(backend_dir.parent / ".env.local", override=False)
+    load_dotenv(backend_dir / ".env", override=False)
 
 from app.db.postgres_adapter import normalize_postgres_url
 

@@ -61,15 +61,42 @@ function getEnv(key, fallback = '') {
   return fallback;
 }
 
-// 2. Strict PUBLIC-ONLY Allowlist
-const publicApiBase = getEnv('PUBLIC_API_BASE_URL', getEnv('API_BASE_URL', 'http://127.0.0.1:8000'));
+// 2. Strict PUBLIC-ONLY Allowlist & Environment Validation
+const isProductionBuild = process.env.VERCEL === '1' ||
+  process.env.NODE_ENV === 'production' ||
+  process.env.APP_ENV === 'production' ||
+  process.argv.includes('--production') ||
+  process.argv.includes('--verify-production');
+
+const publicApiBase = getEnv('PUBLIC_API_BASE_URL', getEnv('API_BASE_URL', isProductionBuild ? '' : 'http://127.0.0.1:8000'));
 const publicSupabaseUrl = getEnv('PUBLIC_SUPABASE_URL', getEnv('SUPABASE_URL', 'https://lgiarosqejiaejizrxdu.supabase.co'));
 const publicSupabaseKey = getEnv('PUBLIC_SUPABASE_PUBLISHABLE_KEY', getEnv('SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_AasSK22U-NcZhWk4e-7VAA_FFAUyQIU'));
 const publicStorageBucket = getEnv('SUPABASE_STORAGE_BUCKET', 'syllora-study-pdfs');
 
-// Validate public URLs
-if (!publicSupabaseUrl || !publicSupabaseUrl.startsWith('http')) {
-  console.error('[Syllora Build] ❌ Invalid or missing PUBLIC_SUPABASE_URL.');
+// Production Validation: enforce secure HTTPS API endpoint; reject localhost, 127.0.0.1, or temporary tunnels
+if (isProductionBuild) {
+  console.log('[Syllora Build] 🔒 Mode: PRODUCTION / DEPLOYMENT BUILD');
+  if (!publicApiBase || !publicApiBase.startsWith('https://')) {
+    console.error('[Syllora Build] ❌ Production build requires an explicitly configured, secure HTTPS API URL (PUBLIC_API_BASE_URL).');
+    console.error('  Received:', publicApiBase || '(empty)');
+    console.error('  Configure PUBLIC_API_BASE_URL in your Vercel Project Settings or server environment.');
+    process.exit(1);
+  }
+  if (publicApiBase.includes('localhost') || publicApiBase.includes('127.0.0.1')) {
+    console.error('[Syllora Build] ❌ Production build cannot use localhost or loopback address for PUBLIC_API_BASE_URL.');
+    process.exit(1);
+  }
+  if (publicApiBase.includes('trycloudflare.com')) {
+    console.error('[Syllora Build] ❌ Temporary Cloudflare tunnel URLs (trycloudflare.com) are strictly rejected for production builds.');
+    process.exit(1);
+  }
+} else {
+  console.log('[Syllora Build] 🛠️ Mode: LOCAL DEVELOPMENT BUILD');
+}
+
+// Validate public Supabase URL
+if (!publicSupabaseUrl || !publicSupabaseUrl.startsWith('https://')) {
+  console.error('[Syllora Build] ❌ Invalid or missing PUBLIC_SUPABASE_URL. Must be a valid HTTPS URL.');
   process.exit(1);
 }
 
@@ -97,7 +124,9 @@ const EXCLUDED_PATTERNS = [
   /^\.git/i,
   /\.sqlite/i,
   /\.pyc?$/i,
-  /^backend/i
+  /^backend/i,
+  /\.pdf$/i,
+  /^docs$/i
 ];
 
 function isExcluded(name) {

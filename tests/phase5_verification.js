@@ -119,6 +119,7 @@ assert(fs.existsSync(path.join(distDir, 'index.html')), 'dist/index.html exists'
 assert(fs.existsSync(path.join(distDir, 'config.js')), 'dist/config.js exists');
 assert(!fs.existsSync(path.join(distDir, '.env')), 'dist/.env does NOT exist');
 assert(!fs.existsSync(path.join(distDir, '.env.example')), 'dist/.env.example does NOT exist');
+assert(!fs.existsSync(path.join(distDir, 'assets', 'docs')), 'dist/assets/docs historical sample PDFs directory does NOT exist');
 
 // Read config.js in dist
 const distConfigContent = fs.readFileSync(path.join(distDir, 'config.js'), 'utf-8');

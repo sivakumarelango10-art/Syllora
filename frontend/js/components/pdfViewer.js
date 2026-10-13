@@ -9,6 +9,8 @@
 import { workspaceStore } from '../state.js';
 import { Toast, Modal, lockBodyScroll, unlockBodyScroll } from './modal.js';
 import { getManagedBlobUrl } from '../storage.js';
+import { getApiBase } from '../services/aiApi.js';
+import { getAuthToken } from '../services/supabase.js';
 
 export const PdfReader = {
   async open(documentId, targetPage = 1, passageQuote = null, sectionTitle = null) {
@@ -21,15 +23,24 @@ export const PdfReader = {
 
     let effectivePdfSrc = null;
 
-    if (doc.backendDocument) {
-      // User-uploaded PDFs are indexed by the AI backend; open the browser-saved original.
-      effectivePdfSrc = await getManagedBlobUrl(doc.id, doc.blobFile || null);
-    } else if (doc.status === 'indexed') {
-      // Built-in verified sample PDF bundled with the frontend.
-      effectivePdfSrc = `assets/docs/${doc.filename}`;
-    } else {
-      // Local preview uploaded file — get managed blob URL from IndexedDB or memory.
-      effectivePdfSrc = await getManagedBlobUrl(doc.id, doc.blobFile || null);
+    // 1. First check IndexedDB / memory managed blob URL
+    effectivePdfSrc = await getManagedBlobUrl(doc.id, doc.blobFile || null);
+
+    // 2. If not in local browser cache, stream directly from authenticated backend download API
+    if (!effectivePdfSrc && doc.id) {
+      try {
+        const apiBase = getApiBase();
+        const token = getAuthToken();
+        const res = await fetch(`${apiBase}/api/v1/documents/${encodeURIComponent(doc.id)}/download`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {}
+        });
+        if (res.ok) {
+          const blob = await res.blob();
+          effectivePdfSrc = URL.createObjectURL(blob);
+        }
+      } catch (fetchErr) {
+        console.warn('[PdfReader] Failed to stream document from backend:', fetchErr);
+      }
     }
 
     if (!effectivePdfSrc) {
