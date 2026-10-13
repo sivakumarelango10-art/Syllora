@@ -18,10 +18,12 @@ import { signInWithPassword, signOut, getAuthToken, getCurrentUser } from './ser
 import { renderOverview } from './views/overview.js';
 import { renderMaterials } from './views/materials.js';
 import { renderAsk } from './views/ask.js';
+import { renderExams } from './views/exams.js';
 import { renderSyllabus } from './views/syllabus.js';
 import { renderUnderstanding } from './views/understanding.js';
 import { renderMisconceptions } from './views/misconceptions.js';
 import { renderRevision } from './views/revision.js';
+import { renderFaculty } from './views/faculty.js';
 import { renderSettings } from './views/settings.js';
 import { renderNotFound } from './views/notFound.js';
 
@@ -34,10 +36,12 @@ let appShell = null;
 router.register('/app/overview', renderOverview);
 router.register('/app/materials', renderMaterials);
 router.register('/app/ask', renderAsk);
+router.register('/app/exams', renderExams);
 router.register('/app/syllabus', renderSyllabus);
 router.register('/app/understanding', renderUnderstanding);
 router.register('/app/misconceptions', renderMisconceptions);
 router.register('/app/revision', renderRevision);
+router.register('/app/faculty', renderFaculty);
 router.register('/app/settings', renderSettings);
 router.register('/app/404', renderNotFound);
 

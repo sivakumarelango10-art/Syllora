@@ -97,6 +97,7 @@ export function renderSyllabus(container) {
                       <button type="button" class="topic-detail-link" data-topic-id="${topic.id}">
                         ${topic.title}
                       </button>
+                      ${topic.pyqCount ? `<span class="pill-badge pill-purple" style="margin-left: 6px; font-size: 11px;">PYQ: ${topic.pyqCount}x</span>` : ''}
                     </td>
                     <td class="text-muted text-sm">${topic.unit}</td>
                     <td><span class="pill-badge ${evPill}">${topic.evidenceStatus}</span></td>
@@ -266,8 +267,23 @@ export function renderSyllabus(container) {
         syncBtn.disabled = true;
         syncBtn.textContent = 'Syncing...';
         try {
+          const state = workspaceStore.getState();
           await workspaceStore.syncWithBackend();
-          Toast.show('Syllabus updated from database.', 'success');
+          try {
+            const covRes = await sylloraApi.getSyllabusCoverage(state.course?.id || null);
+            if (covRes && covRes.topics) {
+              const pyqMap = {};
+              (covRes.topics || []).forEach(t => {
+                if (t.pyq_frequency) pyqMap[t.id || t.title] = t.pyq_frequency;
+              });
+              workspaceStore.getState().topics.forEach(top => {
+                if (pyqMap[top.id] || pyqMap[top.title]) {
+                  top.pyqCount = pyqMap[top.id] || pyqMap[top.title];
+                }
+              });
+            }
+          } catch {}
+          Toast.show('Syllabus & exam coverage updated from database.', 'success');
           renderView();
         } catch (err) {
           Toast.show(`Sync error: ${err.message}`, 'error');

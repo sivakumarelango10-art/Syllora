@@ -242,6 +242,10 @@ export function renderMaterials(container, queryParams = {}) {
           </div>
 
           <div class="header-buttons">
+            <button type="button" class="btn btn-secondary" id="checkConflictsBtn" style="display: inline-flex; align-items: center; gap: 6px;">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Source Conflicts
+            </button>
             <button type="button" class="btn btn-secondary" id="compareVersionsBtn">
               <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 4v12m12-12v12M8 8h4M8 12h4"/>
@@ -320,6 +324,71 @@ export function renderMaterials(container, queryParams = {}) {
     const switchGridBtn = container.querySelector('#switchGridBtn');
     const openUploadModalBtn = container.querySelector('#openUploadModalBtn');
     const compareVersionsBtn = container.querySelector('#compareVersionsBtn');
+    const checkConflictsBtn = container.querySelector('#checkConflictsBtn');
+
+    if (checkConflictsBtn) {
+      checkConflictsBtn.addEventListener('click', async () => {
+        checkConflictsBtn.disabled = true;
+        checkConflictsBtn.textContent = 'Scanning...';
+        try {
+          const state = workspaceStore.getState();
+          const res = await sylloraApi.listConflicts(state.course?.id || null);
+          const conflicts = res.conflicts || [];
+          if (conflicts.length === 0) {
+            Modal.open(
+              'Source Conflict Detector (F12)',
+              `
+                <div style="padding: 24px; text-align: center;">
+                  <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#059669" stroke-width="2" style="margin: 0 auto 12px;"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  <h3 style="font-size: 17px; font-weight: 700; color: #1E293B;">No Conflicting Passages Found</h3>
+                  <p style="color: #64748B; font-size: 13.5px; margin-top: 6px;">All indexed study documents are mutually consistent. When contradictory definitions, formulas, or numbers are identified across different editions or notes, they will appear here with page citations.</p>
+                </div>
+              `,
+              null,
+              'Got It'
+            );
+          } else {
+            Modal.open(
+              'Source Conflicts Detected (F12)',
+              `
+                <div style="display: flex; flex-direction: column; gap: 16px; max-height: 480px; overflow-y: auto;">
+                  ${conflicts.map((c, i) => `
+                    <div style="border: 1px solid #E2E8EE; border-radius: 10px; padding: 14px; background: #FFFFFF;">
+                      <div style="font-size: 14px; font-weight: 700; color: #DC2626; margin-bottom: 8px;">
+                        Conflict #${i + 1}: ${c.conflict_type || 'Discrepancy'}
+                      </div>
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px;">
+                        <div style="background: #F8FAFC; padding: 10px; border-radius: 6px; border-left: 3px solid #03605E;">
+                          <div style="font-size: 12px; font-weight: 600; color: #5F6F82; margin-bottom: 4px;">Source A (${c.source_a?.document_title || 'Document'}, p.${c.source_a?.page || '?'})</div>
+                          <div style="font-size: 13px; color: #1E293B;">"${c.source_a?.passage || ''}"</div>
+                        </div>
+                        <div style="background: #F8FAFC; padding: 10px; border-radius: 6px; border-left: 3px solid #E11D48;">
+                          <div style="font-size: 12px; font-weight: 600; color: #5F6F82; margin-bottom: 4px;">Source B (${c.source_b?.document_title || 'Document'}, p.${c.source_b?.page || '?'})</div>
+                          <div style="font-size: 13px; color: #1E293B;">"${c.source_b?.passage || ''}"</div>
+                        </div>
+                      </div>
+                      <div style="font-size: 12.5px; color: #64748B;">
+                        <strong>AI Analysis:</strong> ${c.explanation || ''}
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              `,
+              null,
+              'Close'
+            );
+          }
+        } catch (err) {
+          Toast.show(`Could not scan conflicts: ${err.message}`, 'error');
+        } finally {
+          checkConflictsBtn.disabled = false;
+          checkConflictsBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+            Source Conflicts
+          `;
+        }
+      });
+    }
 
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {

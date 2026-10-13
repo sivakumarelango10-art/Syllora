@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Literal
 from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel
 from app.auth import get_current_user_id
 from app.repositories.academic_repository import get_academic_repository
 from app.schemas.academic_schemas import (
@@ -76,3 +77,27 @@ async def generate_revision_tasks(
         daily_study_minutes=body.daily_study_minutes,
     )
     return [RevisionTaskResponse(**t) for t in generated]
+
+
+class ExamPlanRequest(BaseModel):
+    exam_date: str
+    daily_minutes: int = 45
+    course_id: str | None = None
+
+
+@router.post("/generate-exam-plan")
+async def generate_exam_revision_plan(
+    body: ExamPlanRequest,
+    request: Request,
+):
+    """Generates deterministic spaced-repetition plan fitted to exam countdown (F10)."""
+    user_id = get_current_user_id(request)
+    from app.services.revision_engine import get_revision_engine
+    engine = get_revision_engine()
+    return engine.generate_exam_revision_plan(
+        user_id=user_id,
+        exam_date_str=body.exam_date,
+        daily_minutes=body.daily_minutes,
+        course_id=body.course_id,
+    )
+

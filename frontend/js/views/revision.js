@@ -66,11 +66,14 @@ export function renderRevision(container) {
             <span class="text-xs text-muted">Estimated durations based on topic difficulty</span>
           </div>
 
-          <div class="rev-setting-summary">
+          <div class="rev-setting-summary" style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
             <div class="rev-summary-pill">
               <span class="text-xs text-muted">Scheduling Rule:</span>
-              <strong>Unresolved Misconceptions &rarr; Needs Practice &rarr; General Review</strong>
+              <strong>Unresolved Misconceptions &rarr; High PYQ Recurrence &rarr; Needs Practice</strong>
             </div>
+            <button type="button" class="btn btn-primary btn-sm" id="generateExamPlanActionBtn" style="margin-left: auto;">
+              Generate Smart Exam Plan
+            </button>
           </div>
         </div>
 
@@ -199,23 +202,35 @@ export function renderRevision(container) {
       });
     }
 
+    const runGeneratePlan = async (btn) => {
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Generating revision plan...';
+      }
+      try {
+        const state = workspaceStore.getState();
+        const res = await sylloraApi.generateExamRevisionPlan(examDate, dailyMinutes, state.course?.id || null);
+        await workspaceStore.syncWithBackend();
+        Toast.show(`Generated ${res.tasks_count || 'exam'} prioritized revision sessions!`, 'success');
+        renderView();
+      } catch (err) {
+        Toast.show(`Could not generate plan: ${err.message}`, 'error');
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = btn.id === 'generateExamPlanActionBtn' ? 'Generate Smart Exam Plan' : 'Generate 7-Day Revision Plan';
+        }
+      }
+    };
+
     const generatePlanBtn = container.querySelector('#generatePlanBtn');
     if (generatePlanBtn) {
-      generatePlanBtn.addEventListener('click', async () => {
-        generatePlanBtn.disabled = true;
-        generatePlanBtn.textContent = 'Generating revision plan...';
-        try {
-          await sylloraApi.generateRevisionPlan(7);
-          await workspaceStore.syncWithBackend();
-          Toast.show('7-Day revision plan generated from your syllabus!', 'success');
-          renderView();
-        } catch (err) {
-          Toast.show(`Could not generate plan: ${err.message}`, 'error');
-        } finally {
-          generatePlanBtn.disabled = false;
-          generatePlanBtn.textContent = 'Generate 7-Day Revision Plan';
-        }
-      });
+      generatePlanBtn.addEventListener('click', () => runGeneratePlan(generatePlanBtn));
+    }
+
+    const generateExamPlanActionBtn = container.querySelector('#generateExamPlanActionBtn');
+    if (generateExamPlanActionBtn) {
+      generateExamPlanActionBtn.addEventListener('click', () => runGeneratePlan(generateExamPlanActionBtn));
     }
 
     // Toggle task completed

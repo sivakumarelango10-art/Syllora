@@ -937,6 +937,737 @@ class AcademicRepository:
         self._execute_mutate(pg_sql, sqlite_sql, (uid, dname, avatar, now, now), user_id=uid)
         return self.get_profile(uid)
 
+    # -----------------------------------------------------------------------
+    # F1: Exam Papers & Past-Paper Intelligence
+    # -----------------------------------------------------------------------
+    def list_exam_papers(self, user_id: str, course_id: str | None = None) -> list[dict[str, Any]]:
+        uid = _to_uuid_str(user_id)
+        cid = _to_uuid_str(course_id) if course_id else None
+        if cid:
+            pg_sql = """
+                SELECT p.id, p.user_id, p.course_id, p.title, p.filename, p.storage_path,
+                       p.exam_year, p.semester, p.exam_type, p.page_count, p.created_at, p.updated_at,
+                       (SELECT count(*) FROM public.exam_questions q WHERE q.exam_paper_id = p.id AND q.user_id = p.user_id) as question_count
+                FROM public.exam_papers p
+                WHERE p.user_id = %s AND p.course_id = %s
+                ORDER BY p.exam_year DESC, p.created_at DESC;
+            """
+            sqlite_sql = """
+                SELECT p.id, p.user_id, p.course_id, p.title, p.filename, p.storage_path,
+                       p.exam_year, p.semester, p.exam_type, p.page_count, p.created_at, p.updated_at,
+                       (SELECT count(*) FROM exam_questions q WHERE q.exam_paper_id = p.id AND q.user_id = p.user_id) as question_count
+                FROM exam_papers p
+                WHERE p.user_id = ? AND p.course_id = ?
+                ORDER BY p.exam_year DESC, p.created_at DESC;
+            """
+            return self._execute_query(pg_sql, sqlite_sql, (uid, cid), user_id=uid)
+        else:
+            pg_sql = """
+                SELECT p.id, p.user_id, p.course_id, p.title, p.filename, p.storage_path,
+                       p.exam_year, p.semester, p.exam_type, p.page_count, p.created_at, p.updated_at,
+                       (SELECT count(*) FROM public.exam_questions q WHERE q.exam_paper_id = p.id AND q.user_id = p.user_id) as question_count
+                FROM public.exam_papers p
+                WHERE p.user_id = %s
+                ORDER BY p.exam_year DESC, p.created_at DESC;
+            """
+            sqlite_sql = """
+                SELECT p.id, p.user_id, p.course_id, p.title, p.filename, p.storage_path,
+                       p.exam_year, p.semester, p.exam_type, p.page_count, p.created_at, p.updated_at,
+                       (SELECT count(*) FROM exam_questions q WHERE q.exam_paper_id = p.id AND q.user_id = p.user_id) as question_count
+                FROM exam_papers p
+                WHERE p.user_id = ?
+                ORDER BY p.exam_year DESC, p.created_at DESC;
+            """
+            return self._execute_query(pg_sql, sqlite_sql, (uid,), user_id=uid)
+
+    def get_exam_paper(self, user_id: str, paper_id: str) -> dict[str, Any] | None:
+        uid = _to_uuid_str(user_id)
+        pid = _to_uuid_str(paper_id)
+        pg_sql = """
+            SELECT id, user_id, course_id, title, filename, storage_path,
+                   exam_year, semester, exam_type, page_count, created_at, updated_at
+            FROM public.exam_papers WHERE user_id = %s AND id = %s;
+        """
+        sqlite_sql = """
+            SELECT id, user_id, course_id, title, filename, storage_path,
+                   exam_year, semester, exam_type, page_count, created_at, updated_at
+            FROM exam_papers WHERE user_id = ? AND id = ?;
+        """
+        return self._execute_single(pg_sql, sqlite_sql, (uid, pid), user_id=uid)
+
+    def create_exam_paper(
+        self,
+        user_id: str,
+        title: str,
+        filename: str,
+        storage_path: str,
+        exam_year: int,
+        semester: str = "Spring",
+        exam_type: str = "End-Semester",
+        page_count: int = 1,
+        course_id: str | None = None,
+        paper_id: str | None = None,
+    ) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        pid = _to_uuid_str(paper_id)
+        cid = _to_uuid_str(course_id) if course_id else None
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.exam_papers (id, user_id, course_id, title, filename, storage_path, exam_year, semester, exam_type, page_count, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING id;
+        """
+        sqlite_sql = """
+            INSERT INTO exam_papers (id, user_id, course_id, title, filename, storage_path, exam_year, semester, exam_type, page_count, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (pid, uid, cid, title, filename, storage_path, exam_year, semester, exam_type, page_count, now, now), user_id=uid)
+        return self.get_exam_paper(uid, pid)
+
+    def delete_exam_paper(self, user_id: str, paper_id: str) -> None:
+        uid = _to_uuid_str(user_id)
+        pid = _to_uuid_str(paper_id)
+        pg_sql = "DELETE FROM public.exam_papers WHERE user_id = %s AND id = %s;"
+        sqlite_sql = "DELETE FROM exam_papers WHERE user_id = ? AND id = ?;"
+        self._execute_mutate(pg_sql, sqlite_sql, (uid, pid), user_id=uid)
+
+    def list_exam_questions(
+        self,
+        user_id: str,
+        paper_id: str | None = None,
+        course_id: str | None = None,
+        unit_number: int | None = None,
+    ) -> list[dict[str, Any]]:
+        uid = _to_uuid_str(user_id)
+        pid = _to_uuid_str(paper_id) if paper_id else None
+        params: list[Any] = [uid]
+        pg_where = ["q.user_id = %s"]
+        sqlite_where = ["q.user_id = ?"]
+
+        if pid:
+            pg_where.append("q.exam_paper_id = %s")
+            sqlite_where.append("q.exam_paper_id = ?")
+            params.append(pid)
+        if unit_number is not None:
+            pg_where.append("q.unit_number = %s")
+            sqlite_where.append("q.unit_number = ?")
+            params.append(unit_number)
+
+        pg_sql = f"""
+            SELECT q.id, q.user_id, q.exam_paper_id, q.question_number, q.question_text,
+                   q.marks, q.unit_number, q.topic_hint, q.repetition_group_id, q.repeat_count,
+                   q.extraction_confidence, q.evidence_status, q.created_at, q.updated_at,
+                   p.title as paper_title, p.exam_year, p.exam_type
+            FROM public.exam_questions q
+            JOIN public.exam_papers p ON p.id = q.exam_paper_id AND p.user_id = q.user_id
+            WHERE {" AND ".join(pg_where)}
+            ORDER BY q.created_at ASC;
+        """
+        sqlite_sql = f"""
+            SELECT q.id, q.user_id, q.exam_paper_id, q.question_number, q.question_text,
+                   q.marks, q.unit_number, q.topic_hint, q.repetition_group_id, q.repeat_count,
+                   q.extraction_confidence, q.evidence_status, q.created_at, q.updated_at,
+                   p.title as paper_title, p.exam_year, p.exam_type
+            FROM exam_questions q
+            JOIN exam_papers p ON p.id = q.exam_paper_id AND p.user_id = q.user_id
+            WHERE {" AND ".join(sqlite_where)}
+            ORDER BY q.created_at ASC;
+        """
+        return self._execute_query(pg_sql, sqlite_sql, tuple(params), user_id=uid)
+
+    def get_exam_question(self, user_id: str, question_id: str) -> dict[str, Any] | None:
+        uid = _to_uuid_str(user_id)
+        qid = _to_uuid_str(question_id)
+        pg_sql = """
+            SELECT q.id, q.user_id, q.exam_paper_id, q.question_number, q.question_text,
+                   q.marks, q.unit_number, q.topic_hint, q.repetition_group_id, q.repeat_count,
+                   q.extraction_confidence, q.evidence_status, q.created_at, q.updated_at,
+                   p.title as paper_title, p.exam_year, p.exam_type
+            FROM public.exam_questions q
+            JOIN public.exam_papers p ON p.id = q.exam_paper_id AND p.user_id = q.user_id
+            WHERE q.user_id = %s AND q.id = %s;
+        """
+        sqlite_sql = """
+            SELECT q.id, q.user_id, q.exam_paper_id, q.question_number, q.question_text,
+                   q.marks, q.unit_number, q.topic_hint, q.repetition_group_id, q.repeat_count,
+                   q.extraction_confidence, q.evidence_status, q.created_at, q.updated_at,
+                   p.title as paper_title, p.exam_year, p.exam_type
+            FROM exam_questions q
+            JOIN exam_papers p ON p.id = q.exam_paper_id AND p.user_id = q.user_id
+            WHERE q.user_id = ? AND q.id = ?;
+        """
+        return self._execute_single(pg_sql, sqlite_sql, (uid, qid), user_id=uid)
+
+    def create_exam_question(
+        self,
+        user_id: str,
+        exam_paper_id: str,
+        question_number: str,
+        question_text: str,
+        marks: int = 5,
+        unit_number: int | None = None,
+        topic_hint: str = "",
+        repetition_group_id: str | None = None,
+        repeat_count: int = 1,
+        extraction_confidence: float = 0.95,
+        question_id: str | None = None,
+    ) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        qid = _to_uuid_str(question_id)
+        pid = _to_uuid_str(exam_paper_id)
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.exam_questions (id, user_id, exam_paper_id, question_number, question_text, marks, unit_number, topic_hint, repetition_group_id, repeat_count, extraction_confidence, evidence_status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s);
+        """
+        sqlite_sql = """
+            INSERT INTO exam_questions (id, user_id, exam_paper_id, question_number, question_text, marks, unit_number, topic_hint, repetition_group_id, repeat_count, extraction_confidence, evidence_status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (qid, uid, pid, question_number, question_text, marks, unit_number, topic_hint, repetition_group_id, repeat_count, extraction_confidence, now, now), user_id=uid)
+        return self.get_exam_question(uid, qid)
+
+    def update_exam_question(
+        self,
+        user_id: str,
+        question_id: str,
+        question_text: str | None = None,
+        marks: int | None = None,
+        unit_number: int | None = None,
+        topic_hint: str | None = None,
+        evidence_status: str | None = None,
+        repeat_count: int | None = None,
+    ) -> dict[str, Any] | None:
+        uid = _to_uuid_str(user_id)
+        qid = _to_uuid_str(question_id)
+        curr = self.get_exam_question(uid, qid)
+        if not curr:
+            return None
+        q_text = question_text if question_text is not None else curr["question_text"]
+        q_marks = marks if marks is not None else curr["marks"]
+        q_unit = unit_number if unit_number is not None else curr["unit_number"]
+        q_hint = topic_hint if topic_hint is not None else curr["topic_hint"]
+        q_status = evidence_status if evidence_status is not None else curr["evidence_status"]
+        q_repeat = repeat_count if repeat_count is not None else curr["repeat_count"]
+        now = _now_iso()
+
+        pg_sql = """
+            UPDATE public.exam_questions
+            SET question_text = %s, marks = %s, unit_number = %s, topic_hint = %s, evidence_status = %s, repeat_count = %s, updated_at = %s
+            WHERE user_id = %s AND id = %s;
+        """
+        sqlite_sql = """
+            UPDATE exam_questions
+            SET question_text = ?, marks = ?, unit_number = ?, topic_hint = ?, evidence_status = ?, repeat_count = ?, updated_at = ?
+            WHERE user_id = ? AND id = ?;
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (q_text, q_marks, q_unit, q_hint, q_status, q_repeat, now, uid, qid), user_id=uid)
+        return self.get_exam_question(uid, qid)
+
+    def link_question_evidence(self, user_id: str, question_id: str, chunk_id: str, similarity: float) -> None:
+        uid = _to_uuid_str(user_id)
+        qid = _to_uuid_str(question_id)
+        cid = _to_uuid_str(chunk_id)
+        eid = str(uuid.uuid4())
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.exam_question_evidence (id, user_id, question_id, chunk_id, similarity, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (question_id, chunk_id) DO UPDATE SET similarity = EXCLUDED.similarity;
+        """
+        sqlite_sql = """
+            INSERT INTO exam_question_evidence (id, user_id, question_id, chunk_id, similarity, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (question_id, chunk_id) DO UPDATE SET similarity = excluded.similarity;
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (eid, uid, qid, cid, similarity, now), user_id=uid)
+
+    def get_question_evidence(self, user_id: str, question_id: str) -> list[dict[str, Any]]:
+        uid = _to_uuid_str(user_id)
+        qid = _to_uuid_str(question_id)
+        pg_sql = """
+            SELECT e.chunk_id, e.similarity, c.page_number, c.chunk_index, c.content, d.title as document_title, d.filename
+            FROM public.exam_question_evidence e
+            JOIN public.document_chunks c ON c.id = e.chunk_id AND c.user_id = e.user_id
+            JOIN public.study_documents d ON d.id = c.document_id AND d.user_id = e.user_id
+            WHERE e.user_id = %s AND e.question_id = %s
+            ORDER BY e.similarity DESC;
+        """
+        sqlite_sql = """
+            SELECT e.chunk_id, e.similarity, c.page_number, c.chunk_index, c.text as content, d.title as document_title, d.filename
+            FROM exam_question_evidence e
+            JOIN chunks c ON c.id = e.chunk_id
+            JOIN documents d ON d.id = c.document_id
+            WHERE e.user_id = ? AND e.question_id = ?
+            ORDER BY e.similarity DESC;
+        """
+        return self._execute_query(pg_sql, sqlite_sql, (uid, qid), user_id=uid)
+
+    def get_exam_analytics(self, user_id: str, course_id: str | None = None) -> dict[str, Any]:
+        """Calculates repetition trends, topic heatmap, and marks breakdown across uploaded PYQs."""
+        questions = self.list_exam_questions(user_id, course_id=course_id)
+        papers = self.list_exam_papers(user_id, course_id=course_id)
+
+        total_papers = len(papers)
+        total_questions = len(questions)
+
+        # Repetition breakdown
+        repeated_questions = [q for q in questions if q.get("repeat_count", 1) > 1]
+        repeated_questions.sort(key=lambda x: x.get("repeat_count", 1), reverse=True)
+
+        # Unit Heatmap
+        unit_counts: dict[int, int] = {}
+        marks_distribution: dict[str, int] = {"1-3 Marks": 0, "5 Marks": 0, "10 Marks": 0, "15+ Marks": 0}
+        topics_frequency: dict[str, int] = {}
+
+        for q in questions:
+            unit = q.get("unit_number") or 1
+            unit_counts[unit] = unit_counts.get(unit, 0) + 1
+
+            m = q.get("marks", 5)
+            if m <= 3:
+                marks_distribution["1-3 Marks"] += 1
+            elif m <= 8:
+                marks_distribution["5 Marks"] += 1
+            elif m <= 12:
+                marks_distribution["10 Marks"] += 1
+            else:
+                marks_distribution["15+ Marks"] += 1
+
+            thint = (q.get("topic_hint") or "").strip()
+            if thint:
+                topics_frequency[thint] = topics_frequency.get(thint, 0) + 1
+
+        top_topics = sorted(
+            [{"topic": k, "frequency": v} for k, v in topics_frequency.items()],
+            key=lambda x: x["frequency"],
+            reverse=True,
+        )[:8]
+
+        unit_breakdown = [
+            {"unit": u, "count": unit_counts[u], "percentage": round((unit_counts[u] / total_questions * 100), 1) if total_questions else 0}
+            for u in sorted(unit_counts.keys())
+        ]
+
+        supported_count = len([q for q in questions if q.get("evidence_status") in ("supported", "partial")])
+        notes_coverage = round((supported_count / total_questions * 100), 1) if total_questions else 0.0
+
+        return {
+            "total_papers": total_papers,
+            "total_questions": total_questions,
+            "repeated_questions_count": len(repeated_questions),
+            "notes_coverage_percentage": notes_coverage,
+            "unit_heatmap": unit_breakdown,
+            "marks_distribution": marks_distribution,
+            "top_recurring_topics": top_topics,
+            "high_frequency_questions": repeated_questions[:5],
+        }
+
+    # -----------------------------------------------------------------------
+    # F3: Answer Evaluations
+    # -----------------------------------------------------------------------
+    def save_answer_evaluation(
+        self,
+        user_id: str,
+        question_text: str,
+        student_answer: str,
+        marks_allocated: int,
+        score_awarded: float,
+        percentage: float,
+        rubric_breakdown: dict[str, Any],
+        covered_points: list[str],
+        missing_points: list[str],
+        inaccuracies: list[str],
+        feedback: str,
+        question_id: str | None = None,
+        topic_id: str | None = None,
+    ) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        eid = str(uuid.uuid4())
+        qid = _to_uuid_str(question_id) if question_id else None
+        tid = _to_uuid_str(topic_id) if topic_id else None
+        now = _now_iso()
+
+        rubric_json = json.dumps(rubric_breakdown)
+        cov_json = json.dumps(covered_points)
+        mis_json = json.dumps(missing_points)
+        inac_json = json.dumps(inaccuracies)
+
+        pg_sql = """
+            INSERT INTO public.answer_evaluations (id, user_id, question_id, topic_id, question_text, student_answer, marks_allocated, score_awarded, percentage, rubric_breakdown, covered_points, missing_points, inaccuracies, feedback, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        """
+        sqlite_sql = """
+            INSERT INTO answer_evaluations (id, user_id, question_id, topic_id, question_text, student_answer, marks_allocated, score_awarded, percentage, rubric_breakdown, covered_points, missing_points, inaccuracies, feedback, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (eid, uid, qid, tid, question_text, student_answer, marks_allocated, score_awarded, percentage, rubric_json, cov_json, mis_json, inac_json, feedback, now), user_id=uid)
+        return {
+            "id": eid,
+            "user_id": uid,
+            "question_id": qid,
+            "topic_id": tid,
+            "question_text": question_text,
+            "student_answer": student_answer,
+            "marks_allocated": marks_allocated,
+            "score_awarded": score_awarded,
+            "percentage": percentage,
+            "rubric_breakdown": rubric_breakdown,
+            "covered_points": covered_points,
+            "missing_points": missing_points,
+            "inaccuracies": inaccuracies,
+            "feedback": feedback,
+            "created_at": now,
+        }
+
+    def list_answer_evaluations(self, user_id: str, limit: int = 20) -> list[dict[str, Any]]:
+        uid = _to_uuid_str(user_id)
+        pg_sql = """
+            SELECT id, user_id, question_id, topic_id, question_text, student_answer, marks_allocated,
+                   score_awarded, percentage, rubric_breakdown, covered_points, missing_points, inaccuracies, feedback, created_at
+            FROM public.answer_evaluations
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s;
+        """
+        sqlite_sql = """
+            SELECT id, user_id, question_id, topic_id, question_text, student_answer, marks_allocated,
+                   score_awarded, percentage, rubric_breakdown, covered_points, missing_points, inaccuracies, feedback, created_at
+            FROM answer_evaluations
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?;
+        """
+        rows = self._execute_query(pg_sql, sqlite_sql, (uid, limit), user_id=uid)
+        for r in rows:
+            for key in ("rubric_breakdown", "covered_points", "missing_points", "inaccuracies"):
+                if isinstance(r.get(key), str):
+                    try:
+                        r[key] = json.loads(r[key])
+                    except Exception:
+                        pass
+        return rows
+
+    # -----------------------------------------------------------------------
+    # F4: Claim Verifications (Proof Mode)
+    # -----------------------------------------------------------------------
+    def save_claim_verification(
+        self,
+        user_id: str,
+        claim_text: str,
+        status: str,
+        source_id: str = "S1",
+        message_id: str | None = None,
+        document_id: str | None = None,
+        page_number: int | None = None,
+        evidence_quote: str = "",
+        confidence: float = 0.9,
+    ) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        cid = str(uuid.uuid4())
+        mid = _to_uuid_str(message_id) if message_id else None
+        did = _to_uuid_str(document_id) if document_id else None
+        now = _now_iso()
+
+        pg_sql = """
+            INSERT INTO public.claim_verifications (id, user_id, message_id, claim_text, status, source_id, document_id, page_number, evidence_quote, confidence, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        """
+        sqlite_sql = """
+            INSERT INTO claim_verifications (id, user_id, message_id, claim_text, status, source_id, document_id, page_number, evidence_quote, confidence, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (cid, uid, mid, claim_text, status, source_id, did, page_number, evidence_quote, confidence, now), user_id=uid)
+        return {
+            "id": cid,
+            "claim_text": claim_text,
+            "status": status,
+            "source_id": source_id,
+            "document_id": did,
+            "page_number": page_number,
+            "evidence_quote": evidence_quote,
+            "confidence": confidence,
+            "created_at": now,
+        }
+
+    # -----------------------------------------------------------------------
+    # F5: Practice Attempts
+    # -----------------------------------------------------------------------
+    def save_practice_attempt(
+        self,
+        user_id: str,
+        question_id: str,
+        student_attempt: str,
+        hints_used: int = 0,
+        score: float = 0.0,
+        status: str = "completed",
+    ) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        aid = str(uuid.uuid4())
+        qid = _to_uuid_str(question_id)
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.practice_attempts (id, user_id, question_id, student_attempt, hints_used, score, status, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+        """
+        sqlite_sql = """
+            INSERT INTO practice_attempts (id, user_id, question_id, student_attempt, hints_used, score, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (aid, uid, qid, student_attempt, hints_used, score, status, now), user_id=uid)
+        return {"id": aid, "question_id": qid, "score": score, "status": status, "created_at": now}
+
+    # -----------------------------------------------------------------------
+    # F11: Figure Assets (Diagram Retrieval)
+    # -----------------------------------------------------------------------
+    def save_figure_asset(
+        self,
+        user_id: str,
+        document_id: str,
+        page_number: int,
+        caption: str,
+        storage_path: str,
+        relevance_tags: str = "",
+    ) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        fid = str(uuid.uuid4())
+        did = _to_uuid_str(document_id)
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.figure_assets (id, user_id, document_id, page_number, caption, storage_path, relevance_tags, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s);
+        """
+        sqlite_sql = """
+            INSERT INTO figure_assets (id, user_id, document_id, page_number, caption, storage_path, relevance_tags, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (fid, uid, did, page_number, caption, storage_path, relevance_tags, now), user_id=uid)
+        return {"id": fid, "document_id": did, "page_number": page_number, "caption": caption, "storage_path": storage_path, "created_at": now}
+
+    def list_figure_assets(self, user_id: str, document_id: str | None = None) -> list[dict[str, Any]]:
+        uid = _to_uuid_str(user_id)
+        if document_id:
+            did = _to_uuid_str(document_id)
+            pg_sql = "SELECT id, user_id, document_id, page_number, caption, storage_path, relevance_tags, created_at FROM public.figure_assets WHERE user_id = %s AND document_id = %s ORDER BY page_number ASC;"
+            sqlite_sql = "SELECT id, user_id, document_id, page_number, caption, storage_path, relevance_tags, created_at FROM figure_assets WHERE user_id = ? AND document_id = ? ORDER BY page_number ASC;"
+            return self._execute_query(pg_sql, sqlite_sql, (uid, did), user_id=uid)
+        else:
+            pg_sql = "SELECT id, user_id, document_id, page_number, caption, storage_path, relevance_tags, created_at FROM public.figure_assets WHERE user_id = %s ORDER BY created_at DESC;"
+            sqlite_sql = "SELECT id, user_id, document_id, page_number, caption, storage_path, relevance_tags, created_at FROM figure_assets WHERE user_id = ? ORDER BY created_at DESC;"
+            return self._execute_query(pg_sql, sqlite_sql, (uid,), user_id=uid)
+
+    # -----------------------------------------------------------------------
+    # F12: Source Conflicts
+    # -----------------------------------------------------------------------
+    def list_conflicts(self, user_id: str, course_id: str | None = None, status: str | None = None) -> list[dict[str, Any]]:
+        uid = _to_uuid_str(user_id)
+        cid = _to_uuid_str(course_id) if course_id else None
+        params: list[Any] = [uid]
+        pg_where = ["user_id = %s"]
+        sqlite_where = ["user_id = ?"]
+        if cid:
+            pg_where.append("course_id = %s")
+            sqlite_where.append("course_id = ?")
+            params.append(cid)
+        if status:
+            pg_where.append("status = %s")
+            sqlite_where.append("status = ?")
+            params.append(status)
+
+        pg_sql = f"SELECT id, user_id, course_id, concept_title, doc_a_id, doc_a_page, doc_a_quote, doc_b_id, doc_b_page, doc_b_quote, explanation, status, created_at, updated_at FROM public.source_conflicts WHERE {' AND '.join(pg_where)} ORDER BY created_at DESC;"
+        sqlite_sql = f"SELECT id, user_id, course_id, concept_title, doc_a_id, doc_a_page, doc_a_quote, doc_b_id, doc_b_page, doc_b_quote, explanation, status, created_at, updated_at FROM source_conflicts WHERE {' AND '.join(sqlite_where)} ORDER BY created_at DESC;"
+        return self._execute_query(pg_sql, sqlite_sql, tuple(params), user_id=uid)
+
+    def create_conflict(
+        self,
+        user_id: str,
+        concept_title: str,
+        doc_a_id: str,
+        doc_a_page: int,
+        doc_a_quote: str,
+        doc_b_id: str,
+        doc_b_page: int,
+        doc_b_quote: str,
+        explanation: str = "",
+        course_id: str | None = None,
+    ) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        cid = str(uuid.uuid4())
+        course = _to_uuid_str(course_id) if course_id else None
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.source_conflicts (id, user_id, course_id, concept_title, doc_a_id, doc_a_page, doc_a_quote, doc_b_id, doc_b_page, doc_b_quote, explanation, status, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'detected', %s, %s);
+        """
+        sqlite_sql = """
+            INSERT INTO source_conflicts (id, user_id, course_id, concept_title, doc_a_id, doc_a_page, doc_a_quote, doc_b_id, doc_b_page, doc_b_quote, explanation, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'detected', ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (cid, uid, course, concept_title, doc_a_id, doc_a_page, doc_a_quote, doc_b_id, doc_b_page, doc_b_quote, explanation, now, now), user_id=uid)
+        return {"id": cid, "concept_title": concept_title, "status": "detected", "explanation": explanation}
+
+    def update_conflict_status(self, user_id: str, conflict_id: str, status: str) -> None:
+        uid = _to_uuid_str(user_id)
+        cid = _to_uuid_str(conflict_id)
+        now = _now_iso()
+        pg_sql = "UPDATE public.source_conflicts SET status = %s, updated_at = %s WHERE user_id = %s AND id = %s;"
+        sqlite_sql = "UPDATE source_conflicts SET status = ?, updated_at = ? WHERE user_id = ? AND id = ?;"
+        self._execute_mutate(pg_sql, sqlite_sql, (status, now, uid, cid), user_id=uid)
+
+    # -----------------------------------------------------------------------
+    # F13: Viva Simulator
+    # -----------------------------------------------------------------------
+    def create_viva_session(self, user_id: str, topic_title: str, course_id: str | None = None, topic_id: str | None = None) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        sid = str(uuid.uuid4())
+        cid = _to_uuid_str(course_id) if course_id else None
+        tid = _to_uuid_str(topic_id) if topic_id else None
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.viva_sessions (id, user_id, course_id, topic_id, topic_title, status, transcript, overall_score, feedback, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, 'in_progress', '[]', 0.0, '', %s, %s);
+        """
+        sqlite_sql = """
+            INSERT INTO viva_sessions (id, user_id, course_id, topic_id, topic_title, status, transcript, overall_score, feedback, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'in_progress', '[]', 0.0, '', ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (sid, uid, cid, tid, topic_title, now, now), user_id=uid)
+        return {"id": sid, "topic_title": topic_title, "status": "in_progress", "transcript": [], "created_at": now}
+
+    def update_viva_session(
+        self,
+        user_id: str,
+        session_id: str,
+        transcript: list[dict[str, Any]],
+        overall_score: float = 0.0,
+        feedback: str = "",
+        status: str = "completed",
+    ) -> None:
+        uid = _to_uuid_str(user_id)
+        sid = _to_uuid_str(session_id)
+        now = _now_iso()
+        t_json = json.dumps(transcript)
+        pg_sql = """
+            UPDATE public.viva_sessions
+            SET transcript = %s, overall_score = %s, feedback = %s, status = %s, updated_at = %s
+            WHERE user_id = %s AND id = %s;
+        """
+        sqlite_sql = """
+            UPDATE viva_sessions
+            SET transcript = ?, overall_score = ?, feedback = ?, status = ?, updated_at = ?
+            WHERE user_id = ? AND id = ?;
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (t_json, overall_score, feedback, status, now, uid, sid), user_id=uid)
+
+    def list_viva_sessions(self, user_id: str, limit: int = 10) -> list[dict[str, Any]]:
+        uid = _to_uuid_str(user_id)
+        pg_sql = "SELECT id, user_id, course_id, topic_id, topic_title, status, transcript, overall_score, feedback, created_at, updated_at FROM public.viva_sessions WHERE user_id = %s ORDER BY created_at DESC LIMIT %s;"
+        sqlite_sql = "SELECT id, user_id, course_id, topic_id, topic_title, status, transcript, overall_score, feedback, created_at, updated_at FROM viva_sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT ?;"
+        rows = self._execute_query(pg_sql, sqlite_sql, (uid, limit), user_id=uid)
+        for r in rows:
+            if isinstance(r.get("transcript"), str):
+                try:
+                    r["transcript"] = json.loads(r["transcript"])
+                except Exception:
+                    pass
+        return rows
+
+    def get_viva_session(self, user_id: str, session_id: str) -> dict[str, Any] | None:
+        uid = _to_uuid_str(user_id)
+        sid = _to_uuid_str(session_id)
+        pg_sql = "SELECT id, user_id, course_id, topic_id, topic_title, status, transcript, overall_score, feedback, created_at, updated_at FROM public.viva_sessions WHERE user_id = %s AND id = %s;"
+        sqlite_sql = "SELECT id, user_id, course_id, topic_id, topic_title, status, transcript, overall_score, feedback, created_at, updated_at FROM viva_sessions WHERE user_id = ? AND id = ?;"
+        row = self._execute_single(pg_sql, sqlite_sql, (uid, sid), user_id=uid)
+        if row and isinstance(row.get("transcript"), str):
+            try:
+                row["transcript"] = json.loads(row["transcript"])
+            except Exception:
+                pass
+        return row
+
+    # -----------------------------------------------------------------------
+    # F14: Faculty Questions & Blueprints
+    # -----------------------------------------------------------------------
+    def list_faculty_questions(self, user_id: str, course_id: str | None = None) -> list[dict[str, Any]]:
+        uid = _to_uuid_str(user_id)
+        if course_id:
+            cid = _to_uuid_str(course_id)
+            pg_sql = "SELECT id, user_id, course_id, question_text, marks, unit_number, bloom_level, difficulty, created_at, updated_at FROM public.faculty_questions WHERE user_id = %s AND course_id = %s ORDER BY unit_number, marks;"
+            sqlite_sql = "SELECT id, user_id, course_id, question_text, marks, unit_number, bloom_level, difficulty, created_at, updated_at FROM faculty_questions WHERE user_id = ? AND course_id = ? ORDER BY unit_number, marks;"
+            return self._execute_query(pg_sql, sqlite_sql, (uid, cid), user_id=uid)
+        else:
+            pg_sql = "SELECT id, user_id, course_id, question_text, marks, unit_number, bloom_level, difficulty, created_at, updated_at FROM public.faculty_questions WHERE user_id = %s ORDER BY created_at DESC;"
+            sqlite_sql = "SELECT id, user_id, course_id, question_text, marks, unit_number, bloom_level, difficulty, created_at, updated_at FROM faculty_questions WHERE user_id = ? ORDER BY created_at DESC;"
+            return self._execute_query(pg_sql, sqlite_sql, (uid,), user_id=uid)
+
+    def create_faculty_question(
+        self,
+        user_id: str,
+        course_id: str,
+        question_text: str,
+        marks: int = 5,
+        unit_number: int = 1,
+        bloom_level: str = "Understand",
+        difficulty: str = "Medium",
+    ) -> dict[str, Any]:
+        uid = _to_uuid_str(user_id)
+        qid = str(uuid.uuid4())
+        cid = _to_uuid_str(course_id)
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.faculty_questions (id, user_id, course_id, question_text, marks, unit_number, bloom_level, difficulty, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
+        """
+        sqlite_sql = """
+            INSERT INTO faculty_questions (id, user_id, course_id, question_text, marks, unit_number, bloom_level, difficulty, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (qid, uid, cid, question_text, marks, unit_number, bloom_level, difficulty, now, now), user_id=uid)
+        return {
+            "id": qid,
+            "course_id": cid,
+            "question_text": question_text,
+            "marks": marks,
+            "unit_number": unit_number,
+            "bloom_level": bloom_level,
+            "difficulty": difficulty,
+            "created_at": now,
+        }
+
+    def get_faculty_course_analytics(self, user_id: str, course_id: str) -> dict[str, Any]:
+        """Provides aggregate misconception counts and topic performance without leaking individual student records."""
+        uid = _to_uuid_str(user_id)
+        cid = _to_uuid_str(course_id)
+        pg_sql = """
+            SELECT t.id as topic_id, t.title as topic_title, t.sort_order as unit_number,
+                   count(m.id) as misconception_count,
+                   count(a.id) as total_attempts
+            FROM public.syllabus_topics t
+            LEFT JOIN public.misconceptions m ON m.topic_id = t.id
+            LEFT JOIN public.understanding_attempts a ON a.topic_id = t.id
+            WHERE t.course_id = %s
+            GROUP BY t.id, t.title, t.sort_order
+            ORDER BY misconception_count DESC;
+        """
+        sqlite_sql = """
+            SELECT t.id as topic_id, t.title as topic_title, t.sort_order as unit_number,
+                   count(m.id) as misconception_count,
+                   count(a.id) as total_attempts
+            FROM syllabus_topics t
+            LEFT JOIN misconceptions m ON m.topic_id = t.id
+            LEFT JOIN understanding_attempts a ON a.topic_id = t.id
+            WHERE t.course_id = ?
+            GROUP BY t.id, t.title, t.sort_order
+            ORDER BY misconception_count DESC;
+        """
+        topics_data = self._execute_query(pg_sql, sqlite_sql, (cid,), user_id=uid)
+        return {
+            "course_id": cid,
+            "topic_analytics": topics_data,
+            "total_topics": len(topics_data),
+            "high_struggle_topics": [t for t in topics_data if t.get("misconception_count", 0) > 0],
+        }
+
 
 _ACADEMIC_REPO = None
 

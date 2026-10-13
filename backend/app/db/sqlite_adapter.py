@@ -181,6 +181,154 @@ class SQLiteAdapter(DatabaseAdapter):
                     preferences TEXT NOT NULL DEFAULT '{}',
                     updated_at TEXT NOT NULL
                 );
+
+                CREATE TABLE IF NOT EXISTS exam_papers (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    course_id TEXT,
+                    title TEXT NOT NULL,
+                    filename TEXT NOT NULL,
+                    storage_path TEXT NOT NULL,
+                    exam_year INTEGER NOT NULL,
+                    semester TEXT NOT NULL DEFAULT 'Spring',
+                    exam_type TEXT NOT NULL DEFAULT 'End-Semester',
+                    page_count INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_exam_papers_user ON exam_papers(user_id);
+
+                CREATE TABLE IF NOT EXISTS exam_questions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    exam_paper_id TEXT NOT NULL REFERENCES exam_papers(id) ON DELETE CASCADE,
+                    question_number TEXT NOT NULL DEFAULT '1',
+                    question_text TEXT NOT NULL,
+                    marks INTEGER NOT NULL DEFAULT 5,
+                    unit_number INTEGER,
+                    topic_hint TEXT NOT NULL DEFAULT '',
+                    repetition_group_id TEXT,
+                    repeat_count INTEGER NOT NULL DEFAULT 1,
+                    extraction_confidence REAL NOT NULL DEFAULT 0.95,
+                    evidence_status TEXT NOT NULL DEFAULT 'pending',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_exam_questions_user ON exam_questions(user_id, exam_paper_id);
+
+                CREATE TABLE IF NOT EXISTS exam_question_evidence (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    question_id TEXT NOT NULL REFERENCES exam_questions(id) ON DELETE CASCADE,
+                    chunk_id TEXT NOT NULL,
+                    similarity REAL NOT NULL DEFAULT 0.0,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(question_id, chunk_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS answer_evaluations (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    question_id TEXT,
+                    topic_id TEXT,
+                    question_text TEXT NOT NULL,
+                    student_answer TEXT NOT NULL,
+                    marks_allocated INTEGER NOT NULL DEFAULT 5,
+                    score_awarded REAL NOT NULL DEFAULT 0.0,
+                    percentage REAL NOT NULL DEFAULT 0.0,
+                    rubric_breakdown TEXT NOT NULL DEFAULT '{}',
+                    covered_points TEXT NOT NULL DEFAULT '[]',
+                    missing_points TEXT NOT NULL DEFAULT '[]',
+                    inaccuracies TEXT NOT NULL DEFAULT '[]',
+                    feedback TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_answer_evals_user ON answer_evaluations(user_id, created_at);
+
+                CREATE TABLE IF NOT EXISTS claim_verifications (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    message_id TEXT,
+                    claim_text TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    source_id TEXT NOT NULL DEFAULT 'S1',
+                    document_id TEXT,
+                    page_number INTEGER,
+                    evidence_quote TEXT NOT NULL DEFAULT '',
+                    confidence REAL NOT NULL DEFAULT 0.9,
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_claim_verif_user ON claim_verifications(user_id);
+
+                CREATE TABLE IF NOT EXISTS practice_attempts (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    question_id TEXT NOT NULL,
+                    student_attempt TEXT NOT NULL,
+                    hints_used INTEGER NOT NULL DEFAULT 0,
+                    score REAL NOT NULL DEFAULT 0.0,
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS figure_assets (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    document_id TEXT NOT NULL,
+                    page_number INTEGER NOT NULL,
+                    caption TEXT NOT NULL DEFAULT '',
+                    storage_path TEXT NOT NULL,
+                    relevance_tags TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_figure_assets_user ON figure_assets(user_id, document_id);
+
+                CREATE TABLE IF NOT EXISTS source_conflicts (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    course_id TEXT,
+                    concept_title TEXT NOT NULL,
+                    doc_a_id TEXT NOT NULL,
+                    doc_a_page INTEGER NOT NULL,
+                    doc_a_quote TEXT NOT NULL,
+                    doc_b_id TEXT NOT NULL,
+                    doc_b_page INTEGER NOT NULL,
+                    doc_b_quote TEXT NOT NULL,
+                    explanation TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'detected',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_source_conflicts_user ON source_conflicts(user_id, status);
+
+                CREATE TABLE IF NOT EXISTS viva_sessions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    course_id TEXT,
+                    topic_id TEXT,
+                    topic_title TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'in_progress',
+                    transcript TEXT NOT NULL DEFAULT '[]',
+                    overall_score REAL NOT NULL DEFAULT 0.0,
+                    feedback TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_viva_sessions_user ON viva_sessions(user_id);
+
+                CREATE TABLE IF NOT EXISTS faculty_questions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    course_id TEXT NOT NULL,
+                    question_text TEXT NOT NULL,
+                    marks INTEGER NOT NULL DEFAULT 5,
+                    unit_number INTEGER NOT NULL DEFAULT 1,
+                    bloom_level TEXT NOT NULL DEFAULT 'Understand',
+                    difficulty TEXT NOT NULL DEFAULT 'Medium',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS idx_faculty_q_user ON faculty_questions(user_id, course_id);
                 """
             )
 

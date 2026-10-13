@@ -65,10 +65,12 @@ class Router {
       '/app/overview': 'Syllora — Overview',
       '/app/materials': 'Syllora — Study Materials',
       '/app/ask': 'Syllora — Ask Syllora',
+      '/app/exams': 'Syllora — Exam Intelligence',
       '/app/syllabus': 'Syllora — Syllabus Map',
       '/app/understanding': 'Syllora — Check Understanding',
       '/app/misconceptions': 'Syllora — Misconception Notebook',
       '/app/revision': 'Syllora — Revision Planner',
+      '/app/faculty': 'Syllora — Faculty Console',
       '/app/settings': 'Syllora — Settings',
       '/login': 'Syllora — Log In | Your syllabus, simplified.'
     };

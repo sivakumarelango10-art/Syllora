@@ -25,6 +25,11 @@ export function renderAsk(container, queryParams = {}) {
   let activeAnswerData = null;
   let activeRequestId = 0;
   let showEvidenceInspector = false;
+  let selectedMarks = queryParams.marks ? parseInt(queryParams.marks, 10) : 0;
+  let isProofModeEnabled = false;
+  let searchScope = 'current';
+  let answerabilityData = null;
+  let retrievedDiagrams = [];
 
   const state = workspaceStore.getState();
   // Only PDFs successfully indexed by the local AI backend are sent to RAG.
@@ -167,6 +172,30 @@ export function renderAsk(container, queryParams = {}) {
 
             <!-- Query Input Bar -->
             <div class="card ask-input-box">
+              <div class="ask-controls-toolbar" style="display: flex; justify-content: space-between; align-items: center; padding: 4px 4px 10px; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #F1F5F9; margin-bottom: 10px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                  <select id="askMarksSelect" class="input" style="padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #CBD5E1; background: #FFFFFF; font-weight: 500;">
+                    <option value="0" ${selectedMarks === 0 ? 'selected' : ''}>Auto Mark Format</option>
+                    <option value="2" ${selectedMarks === 2 ? 'selected' : ''}>2 Marks (Short)</option>
+                    <option value="5" ${selectedMarks === 5 ? 'selected' : ''}>5 Marks (Medium)</option>
+                    <option value="10" ${selectedMarks === 10 ? 'selected' : ''}>10 Marks (Comprehensive)</option>
+                    <option value="15" ${selectedMarks === 15 ? 'selected' : ''}>15+ Marks (University)</option>
+                  </select>
+                  <select id="askScopeSelect" class="input" style="padding: 4px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #CBD5E1; background: #FFFFFF; font-weight: 500;">
+                    <option value="current" ${searchScope === 'current' ? 'selected' : ''}>Current Course Scope</option>
+                    <option value="semester" ${searchScope === 'semester' ? 'selected' : ''}>Semester Library (All Courses)</option>
+                  </select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <label style="display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; color: #03605E; cursor: pointer; user-select: none;">
+                    <input type="checkbox" id="toggleProofModeCheckbox" ${isProofModeEnabled ? 'checked' : ''} style="accent-color: #03605E;">
+                    <span>Proof Mode</span>
+                  </label>
+                  <span id="answerabilityPill" class="badge" style="background: #E6F4F2; color: #03605E; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;">
+                    Evidence Ready
+                  </span>
+                </div>
+              </div>
               <div class="input-row">
                 <textarea id="askQuestionInput" class="ask-textarea" rows="2" placeholder="${
                   activeTab === 'ask' ? 'Ask a question across your academic materials...' :
@@ -291,6 +320,51 @@ export function renderAsk(container, queryParams = {}) {
         <div class="answer-body-markdown">
           ${formatMarkdown(data.answer)}
         </div>
+
+        <!-- Proof Mode Claims Checklist (F4) -->
+        ${data.proofClaims && data.proofClaims.length > 0 ? `
+          <div class="proof-mode-box" style="margin-top: 14px; padding: 14px; background: #F8FAFC; border: 1px solid #E2E8EE; border-radius: 10px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 13px; font-weight: 700; color: #03605E;">🛡️ Proof Mode Entailment Check (${data.proofScore || 0}% Verified)</span>
+              <span class="badge" style="background: #E6F4F2; color: #03605E; font-size: 11px;">Claim-Level Grounding</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              ${data.proofClaims.map(cl => {
+                const isSupp = cl.status === 'supported';
+                const isPart = cl.status === 'partially_supported';
+                const badgeCol = isSupp ? '#03605E' : isPart ? '#D97706' : '#64748B';
+                const badgeBg = isSupp ? '#E6F4F2' : isPart ? '#FEF3C7' : '#F1F5F9';
+                const label = isSupp ? 'Supported' : isPart ? 'Partially Supported' : 'Unsupported in Cited Notes';
+                return `
+                  <div style="padding: 8px 10px; background: #FFFFFF; border: 1px solid #E2E8EE; border-radius: 6px; font-size: 12.5px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 4px;">
+                      <span style="color: #1E293B; font-weight: 500;">"${escapeHtml(cl.claim_text)}"</span>
+                      <span class="badge" style="background: ${badgeBg}; color: ${badgeCol}; font-weight: 600; font-size: 10.5px; white-space: nowrap;">${label}</span>
+                    </div>
+                    ${cl.evidence_quote ? `<div style="font-size: 11.5px; color: #64748B; font-style: italic;">Cited: ${escapeHtml(cl.document_title)} (p. ${cl.page_number}) — "${escapeHtml(cl.evidence_quote)}"</div>` : ''}
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Retrieved Course Note Diagrams (F11) -->
+        ${data.diagrams && data.diagrams.length > 0 ? `
+          <div class="retrieved-diagrams-box" style="margin-top: 14px; padding: 14px; background: #FFFFFF; border: 1px solid #E2E8EE; border-radius: 10px;">
+            <div style="font-size: 13px; font-weight: 700; color: #14212B; margin-bottom: 10px;">🖼️ Retrieved Course Diagrams from Notes</div>
+            <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px;">
+              ${data.diagrams.map(diag => `
+                <div style="flex: 0 0 160px; border: 1px solid #E2E8EE; border-radius: 8px; overflow: hidden; background: #F8FAFC; text-align: center;">
+                  <img src="${diag.image_url}" alt="${escapeHtml(diag.caption)}" style="width: 100%; height: 95px; object-fit: contain; background: #FFFFFF; cursor: pointer;" onclick="window.open('${diag.image_url}', '_blank')">
+                  <div style="padding: 6px 8px; font-size: 11px; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${escapeHtml(diag.caption)}">
+                    Page ${diag.page_number}: ${escapeHtml(diag.caption || 'Diagram')}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : ''}
 
         <!-- Verified Citations Row -->
         ${data.citations && data.citations.length > 0 ? `
@@ -572,31 +646,72 @@ function formatMarkdown(text) {
 
       let apiResult;
       if (activeTab === 'search') {
-        const searchResult = await sylloraApi.search(questionText, searchMode, documentIds, 5);
-        const rows = Array.isArray(searchResult.results) ? searchResult.results : [];
-        apiResult = {
-          status: rows.length ? 'answered' : 'insufficient_evidence',
-          question: questionText,
-          answer: rows.length
-            ? rows.map((item, index) => `${index + 1}. **${item.title || item.filename || 'Study material'} — Page ${item.page_number || '?'}**\n${item.excerpt || ''}`).join('\n\n')
-            : 'No matching passages were found in the selected, AI-indexed study materials.',
-          citations: rows.map(item => ({
-            document_id: item.document_id,
-            filename: item.filename,
-            title: item.title,
-            page_number: item.page_number,
-            excerpt: item.excerpt
-          })),
-          model: null
-        };
+        if (searchScope === 'semester') {
+          const searchResult = await sylloraApi.searchLibrary(questionText, null, null, 8);
+          const rows = Array.isArray(searchResult.results) ? searchResult.results : [];
+          apiResult = {
+            status: rows.length ? 'answered' : 'insufficient_evidence',
+            question: questionText,
+            answer: rows.length
+              ? rows.map((item, index) => `${index + 1}. **${item.course_title || 'Course'} • ${item.title || item.filename || 'Material'} (p. ${item.page_number || '?'})**\n${item.excerpt || ''}`).join('\n\n')
+              : 'No matching passages were found across your semester library.',
+            citations: rows.map(item => ({
+              document_id: item.document_id,
+              filename: item.filename,
+              title: item.title,
+              page_number: item.page_number,
+              excerpt: item.excerpt
+            })),
+            model: null
+          };
+        } else {
+          const searchResult = await sylloraApi.search(questionText, searchMode, documentIds, 5);
+          const rows = Array.isArray(searchResult.results) ? searchResult.results : [];
+          apiResult = {
+            status: rows.length ? 'answered' : 'insufficient_evidence',
+            question: questionText,
+            answer: rows.length
+              ? rows.map((item, index) => `${index + 1}. **${item.title || item.filename || 'Study material'} — Page ${item.page_number || '?'}**\n${item.excerpt || ''}`).join('\n\n')
+              : 'No matching passages were found in the selected, AI-indexed study materials.',
+            citations: rows.map(item => ({
+              document_id: item.document_id,
+              filename: item.filename,
+              title: item.title,
+              page_number: item.page_number,
+              excerpt: item.excerpt
+            })),
+            model: null
+          };
+        }
       } else {
         const questionForModel = activeTab === 'summarise'
           ? `Summarise this topic using only the uploaded study materials: ${questionText}`
           : questionText;
-        apiResult = await sylloraApi.ask(questionForModel, documentIds, 5);
+        if (selectedMarks > 0) {
+          apiResult = await sylloraApi.generateMarkAnswer(questionForModel, selectedMarks, documentIds);
+        } else {
+          apiResult = await sylloraApi.ask(questionForModel, documentIds, 5);
+        }
       }
 
       if (thisRequestId !== activeRequestId || !container.isConnected) return;
+
+      // Check Proof Mode if enabled (F4)
+      let proofResult = null;
+      if (isProofModeEnabled && apiResult.answer && apiResult.status !== 'insufficient_evidence') {
+        try {
+          proofResult = await sylloraApi.verifyProof(apiResult.answer, apiResult.citations || []);
+        } catch (e) {
+          console.warn('[ProofMode] Verification failed:', e);
+        }
+      }
+
+      // Check Diagrams (F11)
+      let diagrams = [];
+      try {
+        const figRes = await sylloraApi.searchFigures(questionText);
+        diagrams = figRes.figures || [];
+      } catch (e) {}
 
       const citations = (Array.isArray(apiResult.citations) ? apiResult.citations : []).map(c => ({
         docId: c.document_id,
@@ -606,7 +721,7 @@ function formatMarkdown(text) {
       }));
       const status = apiResult.status || (citations.length ? 'answered' : 'insufficient_evidence');
       const evidenceLabels = {
-        answered: 'Supported by uploaded materials',
+        answered: selectedMarks > 0 ? `Answered (${selectedMarks} Marks Format)` : 'Supported by uploaded materials',
         partially_supported: 'Partially supported by uploaded materials',
         insufficient_evidence: 'Insufficient evidence in uploaded materials',
         error: 'AI request failed'
@@ -621,6 +736,10 @@ function formatMarkdown(text) {
         citations,
         allCitations: citations,
         claims: [],
+        proofClaims: proofResult?.claims || [],
+        proofScore: proofResult?.verification_score || 0,
+        diagrams: diagrams,
+        marks: selectedMarks,
         insufficientReason: status === 'insufficient_evidence' ? 'Upload the relevant lecture notes or textbook section, then ask again.' : '',
         model: apiResult.model || null
       };
@@ -642,6 +761,28 @@ function formatMarkdown(text) {
   }
 
   function bindEvents() {
+    // Controls Toolbar
+    const marksSelect = container.querySelector('#askMarksSelect');
+    if (marksSelect) {
+      marksSelect.addEventListener('change', (e) => {
+        selectedMarks = parseInt(e.target.value, 10) || 0;
+      });
+    }
+
+    const scopeSelect = container.querySelector('#askScopeSelect');
+    if (scopeSelect) {
+      scopeSelect.addEventListener('change', (e) => {
+        searchScope = e.target.value || 'current';
+      });
+    }
+
+    const proofCheckbox = container.querySelector('#toggleProofModeCheckbox');
+    if (proofCheckbox) {
+      proofCheckbox.addEventListener('change', (e) => {
+        isProofModeEnabled = e.target.checked;
+        Toast.info(isProofModeEnabled ? 'Proof Mode enabled: claims will be checked against citations' : 'Proof Mode disabled');
+      });
+    }
     // Tabs
     const tabAskBtn = container.querySelector('#tabAskBtn');
     const tabSearchBtn = container.querySelector('#tabSearchBtn');

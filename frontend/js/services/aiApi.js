@@ -395,5 +395,133 @@ export const sylloraApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data)
     });
+  },
+
+  // F2 Mark-Aware Answers
+  generateMarkAnswer(question, marks = 5, documentIds = null) {
+    return request("/api/v1/answers/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        marks,
+        document_ids: documentIds
+      })
+    });
+  },
+
+  // F3 Source-Grounded Answer Evaluator
+  evaluateAnswer(question, studentAnswer, marks = 5, courseId = null, topicId = null, questionId = null) {
+    return request("/api/v1/answers/evaluate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        student_answer: studentAnswer,
+        marks,
+        course_id: courseId,
+        topic_id: topicId,
+        question_id: questionId
+      })
+    });
+  },
+
+  // F4 Proof Mode
+  verifyProof(answer, citations = [], messageId = null) {
+    return request("/api/v1/answers/verify-proof", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        answer,
+        citations,
+        message_id: messageId
+      })
+    });
+  },
+
+  // F8 Answerability Meter
+  checkAnswerability(question, courseId = null, documentIds = null) {
+    return request("/api/v1/answers/check-answerability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        course_id: courseId,
+        document_ids: documentIds
+      })
+    });
+  },
+
+  // F11 Diagram Retrieval
+  searchFigures(query, documentId = null) {
+    const q = new URLSearchParams({ query });
+    if (documentId) q.append("document_id", documentId);
+    return request(`/api/v1/figures/search?${q.toString()}`);
+  },
+
+  // F13 Viva Simulator
+  startViva(topicTitle, courseId = null, topicId = null) {
+    return request("/api/v1/viva/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic_title: topicTitle,
+        course_id: courseId,
+        topic_id: topicId
+      })
+    });
+  },
+
+  respondViva(sessionId, transcript) {
+    return request("/api/v1/viva/respond", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        session_id: sessionId,
+        student_transcript: transcript
+      })
+    });
+  },
+
+  // F9 & F10 Advanced Syllabus & Revision
+  getSyllabusCoverage(courseId = null) {
+    const q = courseId ? `?course_id=${encodeURIComponent(courseId)}` : "";
+    return request(`/api/v1/syllabus/coverage${q}`);
+  },
+
+  generateExamRevisionPlan(examDate, dailyMinutes = 45, courseId = null) {
+    return request("/api/v1/revision/generate-exam-plan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        exam_date: examDate,
+        daily_minutes: dailyMinutes,
+        course_id: courseId
+      })
+    });
+  },
+
+  // F6 Semester Library Search
+  searchLibrary(query, courseId = null, docTypes = null, limit = 8) {
+    return request("/api/v1/library/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query,
+        course_id: courseId,
+        doc_types: docTypes,
+        limit
+      })
+    });
+  },
+
+  // F12 Source Conflicts
+  listConflicts(courseId = null, status = null) {
+    const params = new URLSearchParams();
+    if (courseId) params.append("course_id", courseId);
+    if (status) params.append("status", status);
+    const q = params.toString() ? `?${params.toString()}` : "";
+    return request(`/api/v1/conflicts${q}`);
   }
 };
+

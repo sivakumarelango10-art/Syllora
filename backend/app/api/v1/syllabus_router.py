@@ -89,3 +89,25 @@ async def link_evidence(topic_id: str, body: LinkEvidenceRequest, request: Reque
     repo = get_academic_repository()
     linked = repo.link_topic_evidence(user_id, topic_id, body.chunk_id, body.similarity)
     return linked
+
+
+@router.get("/coverage")
+async def get_syllabus_coverage(
+    request: Request,
+    course_id: str | None = None,
+) -> dict[str, Any]:
+    """Calculates Advanced Syllabus Coverage (F9) combining study notes evidence, PYQ frequency, and mastery."""
+    user_id = get_current_user_id(request)
+    repo = get_academic_repository()
+    target_course = course_id
+    if not target_course:
+        courses = repo.list_courses(user_id=user_id)
+        if courses:
+            target_course = courses[0]["id"]
+    if not target_course:
+        return {"topics": [], "critical_blindspots": [], "message": "No courses found."}
+
+    from app.services.revision_engine import get_revision_engine
+    engine = get_revision_engine()
+    return engine.get_advanced_syllabus_coverage(user_id=user_id, course_id=target_course)
+

@@ -53,6 +53,14 @@ from app.api.v1 import (
     misconceptions_router,
     revision_router,
     settings_router,
+    exams_router,
+    answers_router,
+    practice_router,
+    library_router,
+    figures_router,
+    conflicts_router,
+    viva_router,
+    faculty_router,
 )
 
 INSUFFICIENT_EVIDENCE_MESSAGE = (
@@ -87,6 +95,15 @@ app.include_router(understanding_router)
 app.include_router(misconceptions_router)
 app.include_router(revision_router)
 app.include_router(settings_router)
+app.include_router(exams_router)
+app.include_router(answers_router)
+app.include_router(practice_router)
+app.include_router(library_router)
+app.include_router(figures_router)
+app.include_router(conflicts_router)
+app.include_router(viva_router)
+app.include_router(faculty_router)
+
 
 
 class ModelTestRequest(BaseModel):
@@ -348,6 +365,11 @@ async def upload_document(
             for index, chunk in enumerate(pdf_chunks)
         ]
         insert_document(document, chunks, user_id=user_id)
+        try:
+            from app.services.figure_service import get_figure_service
+            get_figure_service().extract_figures_from_pdf(user_id, document_id, pdf_bytes)
+        except Exception:
+            pass
     except Exception as exc:
         storage_adapter.delete_file(storage_path)
         raise HTTPException(status_code=500, detail=f"Could not store the indexed PDF: {exc}") from exc
