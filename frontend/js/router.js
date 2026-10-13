@@ -16,7 +16,17 @@ class Router {
     this.routeListeners = new Set();
 
     window.addEventListener('hashchange', () => this.handleRouting());
+    window.addEventListener('popstate', () => this.handleRouting());
     window.addEventListener('load', () => this.handleRouting());
+
+    // Defensive watcher for external automated URL mutations
+    let lastObservedHash = window.location.hash;
+    setInterval(() => {
+      if (window.location.hash !== lastObservedHash) {
+        lastObservedHash = window.location.hash;
+        this.handleRouting();
+      }
+    }, 150);
   }
 
   register(path, viewHandler) {

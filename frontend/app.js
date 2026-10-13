@@ -181,12 +181,12 @@
       panelCenterY = 0.38 * panelH;
     } else {
       panelW = vw;
-      panelH = vh * 0.4;
+      panelH = Math.max(260, vh * 0.4);
       logoEndX = 0.50 * vw - 310;
-      logoEndY = 0.18 * vh - 271.25;
-      logoEndScale = 220 / 620; // 220px on mobile
+      logoEndY = 0.12 * vh - 271.25;
+      logoEndScale = 160 / 620; // 160px on mobile
       panelCenterX = 0.50 * panelW;
-      panelCenterY = 0.18 * vh;
+      panelCenterY = 0.12 * vh;
     }
 
     // Panel reveal circle: diameter 2.6x panel diagonal
@@ -207,8 +207,12 @@
   function applyGeometricSetup() {
     const geo = calculatePositions();
 
-    // 1. Initial logo position
-    introLogoRig.style.transform = `translate(${geo.logoStartX}px, ${geo.logoStartY}px) scale(1)`;
+    // 1. Initial or resting logo position
+    if (introActive) {
+      introLogoRig.style.transform = `translate(${geo.logoStartX}px, ${geo.logoStartY}px) scale(1)`;
+    } else {
+      introLogoRig.style.transform = `translate(${geo.logoEndX}px, ${geo.logoEndY}px) scale(${geo.logoEndScale})`;
+    }
 
     // 2. Panel reveal circle position (centered on logo's final spot)
     panelRevealCircle.style.width = `${geo.circleDiameter}px`;
@@ -462,6 +466,21 @@
     layerA.style.opacity = '0';
     layerB.style.opacity = '1';
 
+    // Settle book & letter elements reliably
+    if (checkReveal) checkReveal.style.strokeDashoffset = '0';
+    if (pageLeft) {
+      pageLeft.style.transform = 'scale(1)';
+      pageLeft.style.opacity = '1';
+    }
+    if (pageRight) {
+      pageRight.style.transform = 'scale(1)';
+      pageRight.style.opacity = '1';
+    }
+    ltrElements.forEach((l) => {
+      l.style.opacity = '1';
+      l.style.transform = 'translateY(0)';
+    });
+
     paperItems.forEach((p) => {
       p.style.opacity = '1';
       p.classList.add('drifting'); // Activate pure CSS compositor ambient keyframes
@@ -488,6 +507,30 @@
       }
     }, 60);
   }
+
+  function resetLoginState() {
+    isSubmitting = false;
+    loginBtn.setAttribute('aria-busy', 'false');
+    loginBtn.disabled = false;
+    loginBtn.classList.remove('pressed');
+    loginBtn.style.width = '';
+    loginBtn.style.borderRadius = '';
+    loginBtn.style.backgroundColor = '';
+    btnLabel.style.opacity = '1';
+    btnSpinner.style.display = 'none';
+    btnSpinner.style.opacity = '0';
+    btnCheckmarkMorph.style.display = 'none';
+    morphCheckPath.style.strokeDashoffset = '1.02';
+    tealFloodOverlay.classList.remove('active');
+    welcomeScreen.classList.remove('active');
+    welcomeProgressFill.style.transform = 'scaleX(0)';
+    emailInput.value = '';
+    passwordInput.value = '';
+    clearFieldError(emailGroup, emailError);
+    clearFieldError(passwordGroup, passwordError);
+    completeIntro();
+  }
+  window.sylloraResetLogin = resetLoginState;
 
   function skipIntro() {
     if (!introActive) return;
@@ -645,9 +688,9 @@
       });
     }, 500);
 
-    // Fire Mock Auth Request in Parallel (demo@syllora.com / password123)
+    // Fire Mock Auth Request in Parallel (accepts demo@syllora.com / password123 or any test credentials in prototype mode)
     const authStartTime = performance.now();
-    const isMockSuccess = (email === 'demo@syllora.com' && password === 'password123');
+    const isMockSuccess = (email === 'demo@syllora.com' || (email.includes('@') && password.length >= 4));
 
     setTimeout(() => {
       const elapsed = (performance.now() - authStartTime) / 1000;

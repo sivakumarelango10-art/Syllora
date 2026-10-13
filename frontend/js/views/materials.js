@@ -14,6 +14,7 @@
 import { workspaceStore } from '../state.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Modal, Toast } from '../components/modal.js';
+import { savePdfBlob } from '../storage.js';
 
 export function renderMaterials(container, queryParams = {}) {
   let viewMode = 'list'; // 'list' | 'grid'
@@ -156,7 +157,7 @@ export function renderMaterials(container, queryParams = {}) {
                         </div>
                       </td>
                       <td class="text-muted">${doc.author}</td>
-                      <td>${doc.pageCount} pp</td>
+                      <td>${typeof doc.pageCount === 'number' && doc.pageCount > 0 ? `${doc.pageCount} pp` : '<span class="text-muted" title="Page count unavailable">Unavailable</span>'}</td>
                       <td class="text-muted">${doc.fileSize}</td>
                       <td>
                         ${doc.status === 'indexed' ? `
@@ -216,7 +217,7 @@ export function renderMaterials(container, queryParams = {}) {
 
                 <div class="grid-doc-meta-row">
                   <span>${doc.author}</span>
-                  <span>${doc.pageCount} pages • ${doc.fileSize}</span>
+                  <span>${typeof doc.pageCount === 'number' && doc.pageCount > 0 ? `${doc.pageCount} pages` : 'Page count unavailable'} • ${doc.fileSize}</span>
                 </div>
 
                 <div class="grid-card-footer">
@@ -284,7 +285,7 @@ export function renderMaterials(container, queryParams = {}) {
     }
 
     if (openUploadModalBtn) {
-      openUploadModalBtn.addEventListener('click', openUploadModal);
+      openUploadModalBtn.addEventListener('click', () => openUploadModal(renderView));
     }
 
     if (compareVersionsBtn) {
@@ -361,62 +362,82 @@ export function renderMaterials(container, queryParams = {}) {
     });
   }
 
-  // Accessible Drag-and-Drop & File Picker Upload Modal
-  function openUploadModal() {
-    let uploadQueue = [];
+  // Initial render
+  renderView();
 
-    const modalContent = `
-      <div class="upload-dialog-inner">
-        <div class="upload-dropzone" id="modalDropzone">
-          <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#0F766E" stroke-width="1.8">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
-          </svg>
-          <h4>Drag & Drop academic PDF here</h4>
-          <p class="text-muted text-sm">Strictly PDF files up to 20MB per file.</p>
-          <input type="file" id="modalFileInput" accept=".pdf,application/pdf" multiple style="display:none;">
-          <button type="button" class="btn btn-secondary btn-sm mt-2" id="triggerFileSelectBtn">Browse local files</button>
-        </div>
+  // Trigger modal if queryParams has upload flag
+  if (queryParams.upload === '1') {
+    setTimeout(() => openUploadModal(renderView), 100);
+  }
+}
 
-        <div class="upload-validation-banner pill-amber" id="uploadNoticeBanner">
-          <strong>Note:</strong> Uploaded files in this frontend demo are added as <em>LOCAL PREVIEWS</em> for page inspection. They are not indexed by backend AI services.
-        </div>
+export function openUploadModal(onSuccess) {
+  let uploadQueue = [];
 
-        <div class="upload-queue-container" id="uploadQueueContainer" style="display:none;">
-          <h5 class="queue-heading">Upload Queue</h5>
-          <ul class="queue-list" id="queueList"></ul>
+  const modalContent = `
+    <div class="upload-dialog-inner">
+      <div class="upload-dropzone" id="modalDropzone">
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#0F766E" stroke-width="1.8">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
+        </svg>
+        <h4>Drag & Drop academic PDF here</h4>
+        <p class="text-muted text-sm">Strictly PDF files up to 20MB per file.</p>
+        <input type="file" id="modalFileInput" accept=".pdf,application/pdf" multiple style="display:none;">
+        <div class="dropzone-actions mt-2">
+          <button type="button" class="btn btn-secondary btn-sm" id="triggerFileSelectBtn">Browse local files</button>
+          <button type="button" class="btn btn-secondary btn-sm ml-2" id="testLoadSampleBtn" title="Load sample student PDF for local preview testing">Load Test PDF</button>
         </div>
       </div>
-    `;
 
-    const overlay = Modal.open(
-      'Upload Study Materials',
-      modalContent,
-      () => {
-        if (uploadQueue.length === 0) {
-          Toast.show('No valid PDFs in upload queue.', 'error');
-          return;
+      <div class="upload-validation-banner pill-amber" id="uploadNoticeBanner">
+        <strong>Note:</strong> Uploaded files in this frontend demo are added as <em>LOCAL PREVIEWS</em> for page inspection. They are not indexed by backend AI services.
+      </div>
+
+      <div class="upload-queue-container" id="uploadQueueContainer" style="display:none;">
+        <h5 class="queue-heading">Upload Queue</h5>
+        <ul class="queue-list" id="queueList"></ul>
+      </div>
+    </div>
+  `;
+
+  const overlay = Modal.open(
+    'Upload Study Materials',
+    modalContent,
+    () => {
+      if (uploadQueue.length === 0) {
+        Toast.show('No valid PDFs in upload queue.', 'error');
+        return;
+      }
+
+      const savePromises = uploadQueue.map(async (file) => {
+        const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        try {
+          await savePdfBlob(docId, file);
+        } catch (err) {
+          console.warn('[Upload] IndexedDB save failed:', err);
         }
-
-        uploadQueue.forEach(file => {
-          workspaceStore.addDocument({
-            id: `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-            title: file.name.replace(/\.pdf$/i, '').replace(/_/g, ' '),
-            filename: file.name,
-            author: 'Local Student Upload',
-            pageCount: file.simulatedPages || 3,
-            fileSize: `${(file.size / 1024).toFixed(1)} KB`,
-            uploadedAt: new Date().toISOString().split('T')[0],
-            status: 'local_preview', // explicit LOCAL PREVIEW labelling
-            isBookmarked: false
-          });
+        workspaceStore.addDocument({
+          id: docId,
+          title: file.name.replace(/\.pdf$/i, '').replace(/_/g, ' '),
+          filename: file.name,
+          author: 'Local Student Upload',
+          pageCount: null,
+          fileSize: `${(file.size / 1024).toFixed(1)} KB`,
+          uploadedAt: new Date().toISOString().split('T')[0],
+          status: 'local_preview', // explicit LOCAL PREVIEW labelling
+          isBookmarked: false,
+          blobFile: file
         });
+      });
 
+      Promise.all(savePromises).then(() => {
         Toast.show(`Successfully added ${uploadQueue.length} document(s) as local previews.`, 'success');
-        renderView();
-      },
-      'Add to Workspace',
-      'primary'
-    );
+        if (typeof onSuccess === 'function') onSuccess();
+      });
+    },
+    'Add to Workspace',
+    'primary'
+  );
 
     const dropzone = overlay.querySelector('#modalDropzone');
     const fileInput = overlay.querySelector('#modalFileInput');
@@ -425,6 +446,20 @@ export function renderMaterials(container, queryParams = {}) {
     const queueList = overlay.querySelector('#queueList');
 
     triggerBtn.addEventListener('click', () => fileInput.click());
+
+    const testSampleBtn = overlay.querySelector('#testLoadSampleBtn');
+    if (testSampleBtn) {
+      testSampleBtn.addEventListener('click', async () => {
+        try {
+          const res = await fetch('assets/docs/Silberschatz_OS_Deadlocks_Ch8.pdf');
+          const blob = await res.blob();
+          const file = new File([blob], 'student_coursework_sample.pdf', { type: 'application/pdf' });
+          handleFiles([file]);
+        } catch (e) {
+          Toast.show('Failed to load sample: ' + e.message, 'error');
+        }
+      });
+    }
 
     const handleFiles = (fileList) => {
       const state = workspaceStore.getState();
@@ -449,7 +484,9 @@ export function renderMaterials(container, queryParams = {}) {
           return;
         }
 
-        file.simulatedPages = Math.max(1, Math.min(20, Math.round(file.size / 1200)));
+        try {
+          file.blobUrl = URL.createObjectURL(file);
+        } catch {}
         uploadQueue.push(file);
       });
 
@@ -466,7 +503,7 @@ export function renderMaterials(container, queryParams = {}) {
         <li class="queue-item">
           <div class="queue-item-info">
             <span class="queue-doc-name">${file.name}</span>
-            <span class="queue-doc-meta">${(file.size / 1024).toFixed(1)} KB • ~${file.simulatedPages} pages</span>
+            <span class="queue-doc-meta">${(file.size / 1024).toFixed(1)} KB • Local preview (Page count: Unknown)</span>
           </div>
           <button type="button" class="btn-remove-queue" data-index="${i}" aria-label="Remove">&times;</button>
         </li>
@@ -565,11 +602,4 @@ export function renderMaterials(container, queryParams = {}) {
     );
   }
 
-  // Initial render
-  renderView();
 
-  // If queryParams has upload flag
-  if (queryParams.upload === '1') {
-    setTimeout(openUploadModal, 100);
-  }
-}

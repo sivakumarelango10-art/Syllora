@@ -50,6 +50,7 @@ const criticalFiles = [
   'js/state.js',
   'js/session.js',
   'js/router.js',
+  'js/storage.js',
   'assets/docs/Silberschatz_OS_Deadlocks_Ch8.pdf',
   'assets/docs/Tanenbaum_MOS_Deadlocks_Excerpt.pdf',
   'assets/docs/Lecture_Slides_Week6_Concurrency.pdf',

@@ -6,6 +6,8 @@
  * and reactive subscription listeners. All dashboard counts derive from state.
  */
 
+import { deletePdfBlob, clearAllPdfBlobs } from './storage.js';
+
 const STORAGE_KEY = 'syllora_workspace_state_v1';
 
 // Initial Pristine Fixtures
@@ -379,6 +381,14 @@ class WorkspaceStore {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && parsed.course && parsed.topics) {
+          // Normalize documents
+          if (Array.isArray(parsed.documents)) {
+            parsed.documents.forEach(d => {
+              if (typeof d.pageCount !== 'number' || isNaN(d.pageCount)) {
+                d.pageCount = null;
+              }
+            });
+          }
           return parsed;
         }
       }
@@ -391,7 +401,15 @@ class WorkspaceStore {
 
   save() {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(this.state));
+      // Do not store transient blobUrl strings or File objects in localStorage
+      const clone = JSON.parse(JSON.stringify(this.state));
+      if (clone.documents) {
+        clone.documents.forEach(d => {
+          delete d.blobUrl;
+          delete d.blobFile;
+        });
+      }
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(clone));
     } catch (e) {
       console.warn('[Syllora State] Storage write failed (quota exceeded or incognito):', e);
     }
@@ -406,6 +424,10 @@ class WorkspaceStore {
         console.error('[Syllora State] Listener error:', err);
       }
     });
+    // Broadcast state change to update navigation and shell counters
+    try {
+      window.dispatchEvent(new Event('syllora_state_updated'));
+    } catch {}
   }
 
   subscribe(listener) {
@@ -447,9 +469,41 @@ class WorkspaceStore {
   }
 
   deleteDocument(docId) {
+    // Delete stored blob in IndexedDB and revoke managed URL
+    deletePdfBlob(docId);
+
+    // Remove document
     this.state.documents = this.state.documents.filter(d => d.id !== docId);
+
     // Clean up passages to avoid dangling references
+    const removedPassageIds = new Set(this.state.passages.filter(p => p.documentId === docId).map(p => p.id));
     this.state.passages = this.state.passages.filter(p => p.documentId !== docId);
+
+    // Clean bookmarks pointing to document or removed passages
+    this.state.bookmarks = this.state.bookmarks.filter(b => {
+      if (b.targetType === 'document' && b.targetId === docId) return false;
+      if (b.targetType === 'passage' && removedPassageIds.has(b.targetId)) return false;
+      return true;
+    });
+
+    // Clean comparison pointers
+    this.state.documents.forEach(d => {
+      if (d.comparisonDocId === docId) {
+        delete d.comparisonDocId;
+        d.hasComparison = false;
+      }
+    });
+
+    // Clean matched passages on syllabus topics
+    this.state.topics.forEach(t => {
+      if (t.matchedPassageIds) {
+        t.matchedPassageIds = t.matchedPassageIds.filter(id => !removedPassageIds.has(id));
+        if (t.matchedPassageIds.length === 0 && t.evidenceStatus === 'Evidence found') {
+          t.evidenceStatus = 'No matching evidence found';
+        }
+      }
+    });
+
     this.save();
   }
 
@@ -543,6 +597,7 @@ class WorkspaceStore {
 
   // --- Full Demo Reset ---
   resetWorkspaceData() {
+    clearAllPdfBlobs();
     this.state = JSON.parse(JSON.stringify(SEED_DATA));
     this.save();
   }

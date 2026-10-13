@@ -3,7 +3,8 @@
  * SYLLORA APPLICATION BOOTSTRAPPER & ROUTE ORCHESTRATOR
  * ============================================================================
  * Connects login submit completion to the workspace router, manages AppShell,
- * and renders all primary routes (/app/*) in strictly LIGHT MODE.
+ * preserves view inputs, prevents focus scroll clipping, and renders all
+ * primary routes (/app/*) in strictly LIGHT MODE.
  */
 
 import { router } from './router.js';
@@ -40,33 +41,62 @@ router.register('/app/404', renderNotFound);
 // Route Change Listener
 router.subscribe((path, params, viewHandler) => {
   if (path.startsWith('/app')) {
+    // Switch document scroll state and mode classes
+    document.body.classList.remove('login-mode');
+    document.body.classList.add('workspace-mode');
+
     // Switch to Workspace Container
     if (loginStage) loginStage.style.display = 'none';
     if (workspaceContainer) workspaceContainer.style.display = 'block';
 
-    // Initialize AppShell if not already rendered
+    // Mount AppShell ONCE if not already mounted
     if (!appShell) {
       appShell = new AppShell('workspaceContainer');
+      appShell.mount();
     }
-    appShell.render(path);
+    // Update navigation and breadcrumb in place without destroying layout
+    appShell.setActivePath(path);
 
     // Mount view inside #workspaceViewMount
     const mountPoint = document.getElementById('workspaceViewMount');
     if (mountPoint && viewHandler) {
+      // Clear mount point and render view
+      mountPoint.innerHTML = '';
       viewHandler(mountPoint, params);
-      mountPoint.focus();
+
+      // Manage focus and scrolling intentionally:
+      // Use preventScroll to prevent browser from auto-scrolling content under the sticky header
+      mountPoint.focus({ preventScroll: true });
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
   } else {
+    // Switch document scroll state to login mode
+    document.body.classList.remove('workspace-mode');
+    document.body.classList.add('login-mode');
+
     // Switch to Login Stage
     if (workspaceContainer) workspaceContainer.style.display = 'none';
     if (loginStage) loginStage.style.display = 'flex';
+
+    // Reset login form and overlays if returning from workspace (e.g. logout)
+    if (typeof window.sylloraResetLogin === 'function') {
+      window.sylloraResetLogin();
+    }
   }
 });
 
-// Listener for user profile updates to refresh shell
+// Listener for user profile updates to refresh shell in place without rerendering view
 window.addEventListener('syllora_user_updated', () => {
   if (appShell && router.getCurrentPath().startsWith('/app')) {
-    appShell.render(router.getCurrentPath());
+    appShell.updateUser();
+    appShell.updateStats();
+  }
+});
+
+// Listener for shared state updates to refresh badge counters
+window.addEventListener('syllora_state_updated', () => {
+  if (appShell && router.getCurrentPath().startsWith('/app')) {
+    appShell.updateStats();
   }
 });
 
@@ -78,4 +108,3 @@ window.sylloraEnterWorkspace = function () {
 
 // Initial routing evaluation after all routes are registered
 router.handleRouting();
-

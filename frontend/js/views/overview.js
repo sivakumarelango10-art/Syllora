@@ -14,13 +14,17 @@
  */
 
 import { workspaceStore } from '../state.js';
+import { sessionAdapter } from '../session.js';
 import { router } from '../router.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Modal, Toast } from '../components/modal.js';
+import { openUploadModal } from './materials.js';
 
 export function renderOverview(container) {
   const state = workspaceStore.getState();
   const stats = workspaceStore.getStats();
+  const user = sessionAdapter.getDemoUser() || { name: 'Prajith P' };
+  const firstName = (user.name || 'Prajith').split(' ')[0];
 
   const recentDocs = state.documents.filter(d => !d.isComparisonOnly).slice(0, 3);
   const activeMisconception = state.misconceptions[0];
@@ -31,7 +35,7 @@ export function renderOverview(container) {
       <!-- Top Welcome Banner & Actions -->
       <section class="overview-welcome-banner">
         <div class="welcome-copy">
-          <h1 class="welcome-heading">Welcome back, Prajith</h1>
+          <h1 class="welcome-heading">Welcome back, ${firstName}</h1>
           <p class="welcome-subtext">You have <strong>${stats.needsPracticeCount} topics</strong> needing practice before the CS301 mid-term on Nov 18, 2026.</p>
         </div>
 
@@ -270,7 +274,7 @@ export function renderOverview(container) {
   const overviewUploadBtn = container.querySelector('#overviewUploadBtn');
   if (overviewUploadBtn) {
     overviewUploadBtn.addEventListener('click', () => {
-      router.navigate('/app/materials', { upload: '1' });
+      openUploadModal(() => renderOverview(container));
     });
   }
 

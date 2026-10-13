@@ -2,6 +2,8 @@
  * ============================================================================
  * ACCESSIBLE MODALS & TOAST NOTIFICATIONS MANAGER
  * ============================================================================
+ * Accessible modal dialogs with focus trapping, Escape dismissal, backdrop
+ * click dismissal, explicit body scroll locking, and focus restoration.
  */
 
 export const Toast = {
@@ -30,7 +32,7 @@ export const Toast = {
     toast.innerHTML = `
       <div class="toast-icon">${iconSvg}</div>
       <div class="toast-message">${message}</div>
-      <button class="toast-close-btn" aria-label="Close notification">&times;</button>
+      <button type="button" class="toast-close-btn" aria-label="Close notification">&times;</button>
     `;
 
     const closeBtn = toast.querySelector('.toast-close-btn');
@@ -53,11 +55,15 @@ export const Toast = {
 export const Modal = {
   activeModal: null,
   previousFocus: null,
+  keyHandler: null,
 
   open(title, contentHtml, onConfirm = null, confirmText = 'Confirm', confirmStyle = 'primary') {
     this.close();
 
     this.previousFocus = document.activeElement;
+
+    // Lock body scrolling
+    document.body.classList.add('modal-open');
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -70,7 +76,7 @@ export const Modal = {
       <div class="modal-card">
         <div class="modal-header">
           <h3 id="modalDialogTitle" class="modal-title">${title}</h3>
-          <button class="modal-close-btn" id="modalCloseBtn" aria-label="Close dialog">&times;</button>
+          <button type="button" class="modal-close-btn" id="modalCloseBtn" aria-label="Close dialog">&times;</button>
         </div>
         <div class="modal-body">
           ${contentHtml}
@@ -87,7 +93,6 @@ export const Modal = {
     document.body.appendChild(overlay);
     this.activeModal = overlay;
 
-    // Focus close or confirm button
     const closeBtn = overlay.querySelector('#modalCloseBtn');
     const cancelBtn = overlay.querySelector('#modalCancelBtn');
     const confirmBtn = overlay.querySelector('#modalConfirmBtn');
@@ -101,13 +106,35 @@ export const Modal = {
       });
     }
 
-    // Escape listener
-    this.escapeHandler = (e) => {
+    // Keyboard navigation (Escape to close, Tab to trap focus)
+    this.keyHandler = (e) => {
       if (e.key === 'Escape') {
+        e.preventDefault();
         this.close();
+        return;
+      }
+
+      if (e.key === 'Tab') {
+        const focusable = overlay.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (e.shiftKey) {
+          if (document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
     };
-    window.addEventListener('keydown', this.escapeHandler);
+    window.addEventListener('keydown', this.keyHandler);
 
     // Click outside backdrop
     overlay.addEventListener('click', (e) => {
@@ -116,8 +143,16 @@ export const Modal = {
       }
     });
 
+    // Initial focus
     setTimeout(() => {
-      (confirmBtn || closeBtn).focus();
+      const initialInput = overlay.querySelector('input:not([type="hidden"]), select, textarea');
+      if (initialInput) {
+        initialInput.focus();
+      } else if (confirmBtn) {
+        confirmBtn.focus();
+      } else if (closeBtn) {
+        closeBtn.focus();
+      }
     }, 50);
 
     return overlay;
@@ -127,10 +162,15 @@ export const Modal = {
     if (this.activeModal) {
       this.activeModal.remove();
       this.activeModal = null;
-      if (this.escapeHandler) {
-        window.removeEventListener('keydown', this.escapeHandler);
+
+      // Clean up body scroll lock
+      document.body.classList.remove('modal-open');
+
+      if (this.keyHandler) {
+        window.removeEventListener('keydown', this.keyHandler);
+        this.keyHandler = null;
       }
-      if (this.previousFocus && this.previousFocus.focus) {
+      if (this.previousFocus && typeof this.previousFocus.focus === 'function') {
         this.previousFocus.focus();
       }
     }
