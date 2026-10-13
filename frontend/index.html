@@ -16,11 +16,14 @@
   <link rel="icon" type="image/svg+xml" href="logo.svg">
   
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="workspace.css">
 </head>
 <body>
 
-  <!-- Fullscreen Main Container -->
-  <div class="app-stage" id="appStage">
+  <!-- Login Stage Container -->
+  <div id="loginStage">
+    <!-- Fullscreen Main Container -->
+    <div class="app-stage" id="appStage">
 
     <!-- ======================================================================
          LEFT HALF: BRAND PANEL (50vw width, 100vh height on desktop)
@@ -301,11 +304,18 @@
   <div class="intro-skip-hint" id="introSkipHint">
     Press any key or click to skip
   </div>
+</div>
 
-  <!-- Screen Reader Announcements -->
-  <div id="a11yAnnouncer" class="sr-only" aria-live="polite"></div>
+<!-- ======================================================================
+     WORKSPACE APPLICATION MOUNT CONTAINER (Light Mode Only, #F5F7F8 Canvas)
+     ====================================================================== -->
+<div id="workspaceContainer" style="display: none;"></div>
 
-  <!-- Application Logic & Web Animations Controller -->
-  <script src="app.js"></script>
+<!-- Screen Reader Announcements -->
+<div id="a11yAnnouncer" class="sr-only" aria-live="polite"></div>
+
+<!-- Application Logic & Web Animations Controller -->
+<script src="app.js"></script>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>

@@ -1,0 +1,80 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 590 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 1 of 5) Tj -400 -25 Td /F2 16 Tf (CS301: CS301 Lecture Slides: Concurrency & Deadlocks) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (CS301 Lecture 12: Concurrency & Synchronization) Tj /F1 11 Tf T* (Instructor: Department of Computer Science) Tj T* (Welcome to Module 3: Concurrency Control and Synchronization.) Tj T* (Today we cover mutual exclusion primitives, critical section criteria,) Tj T* (and system-level deadlock emergence in modern multi-threaded operating systems.) Tj T* ET
+endstream
+endobj
+4 0 obj
+<< /Length 878 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 2 of 5) Tj -400 -25 Td /F2 16 Tf (CS301: CS301 Lecture Slides: Concurrency & Deadlocks) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (Slide 2: Critical Section Problem Criteria) Tj /F1 11 Tf T* (Any valid solution to the critical section problem must satisfy three strict requirements:) Tj T* (1. Mutual Exclusion: If process Pi is executing in its critical section, no other processes can enter.) Tj T* (2. Progress: If no process is executing in its critical section and some wish to enter,) Tj T* (   only processes not in remainder section can participate in the selection.) Tj T* (3. Bounded Waiting: There must be a bound on the number of times other processes are allowed) Tj T* (   to enter their critical sections after a process has made a request to enter.) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Length 622 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 3 of 5) Tj -400 -25 Td /F2 16 Tf (CS301: CS301 Lecture Slides: Concurrency & Deadlocks) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (Slide 3: Summary of the Four Coffman Conditions) Tj /F1 11 Tf T* (Remember the acronym M-H-N-C:) Tj T* (- Mutual Exclusion \(exclusive ownership\)) Tj T* (- Hold and Wait \(holding while requesting\)) Tj T* (- No Preemption \(cannot steal\)) Tj T* (- Circular Wait \(chain of waiting dependencies\)) Tj T* (ALL 4 conditions MUST be simultaneously true for deadlock to manifest.) Tj T* ET
+endstream
+endobj
+6 0 obj
+<< /Length 572 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 4 of 5) Tj -400 -25 Td /F2 16 Tf (CS301: CS301 Lecture Slides: Concurrency & Deadlocks) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (Slide 4: Real-world Deadlock in Multi-tier Storage) Tj /F1 11 Tf T* (Deadlocks are not merely theoretical; they routinely occur in database transaction managers) Tj T* (and distributed storage arrays with two-phase locking protocols.) Tj T* (Graph cycle detection is actively implemented in PostgreSQL and MySQL InnoDB engines.) Tj T* ET
+endstream
+endobj
+7 0 obj
+<< /Length 733 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 5 of 5) Tj -400 -25 Td /F2 16 Tf (CS301: CS301 Lecture Slides: Concurrency & Deadlocks) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (Slide 5: Starvation Mitigation via Aging) Tj /F1 11 Tf T* /F2 10 Tf (    "Aging gradually increases the priority of processes that wait in the system for a long time.") Tj /F1 11 Tf T* (To resolve starvation caused by priority scheduling algorithms, operating systems implement aging.) Tj T* (Over time, an aging priority scheduler ensures that even the lowest-priority process will eventually) Tj T* (become the highest-priority runnable process and gain access to the required resource.) Tj T* ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+9 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 4 0 R >>
+endobj
+10 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 5 0 R >>
+endobj
+11 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 6 0 R >>
+endobj
+12 0 obj
+<< /Type /Page /Parent 8 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 7 0 R >>
+endobj
+13 0 obj
+<< /Type /Pages /Kids [8 0 R 9 0 R 10 0 R 11 0 R 12 0 R] /Count 5 >>
+endobj
+14 0 obj
+<< /Type /Catalog /Pages 13 0 R >>
+endobj
+xref
+0 15
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000154 00000 n 
+0000000795 00000 n 
+0000001724 00000 n 
+0000002397 00000 n 
+0000003020 00000 n 
+0000003804 00000 n 
+0000003940 00000 n 
+0000004076 00000 n 
+0000004213 00000 n 
+0000004350 00000 n 
+0000004487 00000 n 
+0000004572 00000 n 
+trailer
+<< /Size 15 /Root 14 0 R >>
+startxref
+4623
+%%EOF

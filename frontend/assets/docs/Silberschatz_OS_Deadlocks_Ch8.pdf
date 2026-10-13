@@ -1,0 +1,69 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 896 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 1 of 4) Tj -400 -25 Td /F2 16 Tf (CS301: Silberschatz - Operating System Concepts \(Ch. 8\)) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (Chapter 8: Deadlocks) Tj /F1 11 Tf T* (8.1 System Model & Foundational Definitions) Tj T* (A computer system consists of a finite number of resources to be distributed) Tj T* (among a number of competing processes. Resources are categorized into several types,) Tj T* (each consisting of some number of identical instances \(CPU cycles, memory, files, printers\).) Tj T* (A process must request a resource before using it and must release the resource after finishing.) Tj T* (A set of processes is in an anomalous deadlock state when every process in the set is waiting) Tj T* (for an event that can only be caused by another process in the set.) Tj T* ET
+endstream
+endobj
+4 0 obj
+<< /Length 1116 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 2 of 4) Tj -400 -25 Td /F2 16 Tf (CS301: Silberschatz - Operating System Concepts \(Ch. 8\)) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (8.2 Deadlock Characterization: The Four Coffman Conditions) Tj /F1 11 Tf T* (A deadlock situation can arise if and only if the following four conditions hold) Tj T* (simultaneously in a concurrent computing system:) Tj T* (1. Mutual Exclusion: At least one resource must be held in a nonsharable mode.) Tj T* (2. Hold and Wait: A process must be simultaneously holding at least one resource) Tj T* (   and actively requesting additional resources held by other executing processes.) Tj T* (3. No Preemption: Resources cannot be forcibly preempted; a resource can be released) Tj T* (   only voluntarily by the process holding it after that process completes its task.) Tj T* (4. Circular Wait: A closed set {P0, P1, ..., Pn} of waiting processes must exist such that) Tj T* (   P0 is waiting for a resource held by P1, P1 is waiting for P2, and Pn is waiting for P0.) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Length 1347 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 3 of 4) Tj -400 -25 Td /F2 16 Tf (CS301: Silberschatz - Operating System Concepts \(Ch. 8\)) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (8.3 Resource-Allocation Graphs & Deadlock vs Starvation) Tj /F1 11 Tf T* /F2 10 Tf (    "A deadlock occurs when every process in a set is waiting for an event that only another process in the set can cause.") Tj /F1 11 Tf T* /F2 10 Tf (    "In contrast, starvation \(indefinite postponement\) occurs when a runnable process is perpetually denied access because resources are continuously allocated to higher-priority processes.") Tj /F1 11 Tf T* (It is vital to distinguish deadlock from starvation:) Tj T* (- Deadlock represents a cyclic dependency where progress is mathematically impossible without intervention.) Tj T* (- Starvation represents an unfair scheduling outcome where progress is delayed indefinitely,) Tj T* (  even though no circular wait exists and the system as a whole continues executing tasks.) Tj T* (If a resource allocation graph contains cycles and each resource type has only one instance,) Tj T* (then a deadlock has definitely occurred. With multiple instances per resource type, a cycle) Tj T* (indicates a potential deadlock, but not a guaranteed deadlock condition.) Tj T* ET
+endstream
+endobj
+6 0 obj
+<< /Length 826 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 4 of 4) Tj -400 -25 Td /F2 16 Tf (CS301: Silberschatz - Operating System Concepts \(Ch. 8\)) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (8.4 Deadlock Avoidance & The Banker's Algorithm) Tj /F1 11 Tf T* (Deadlock avoidance algorithms require that the operating system be given priori information) Tj T* (concerning which resources a process will request throughout its lifetime.) Tj T* (The Banker's Algorithm ensures the system never enters an unsafe state.) Tj T* (A state is considered safe if the system can allocate resources to each process \(up to its maximum\)) Tj T* (in some specified order without ever triggering a deadlock.) Tj T* (Safety check condition: Allocation + Need <= Max resources available.) Tj T* ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 7 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+8 0 obj
+<< /Type /Page /Parent 7 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 4 0 R >>
+endobj
+9 0 obj
+<< /Type /Page /Parent 7 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 5 0 R >>
+endobj
+10 0 obj
+<< /Type /Page /Parent 7 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 6 0 R >>
+endobj
+11 0 obj
+<< /Type /Pages /Kids [7 0 R 8 0 R 9 0 R 10 0 R] /Count 4 >>
+endobj
+12 0 obj
+<< /Type /Catalog /Pages 11 0 R >>
+endobj
+xref
+0 13
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000154 00000 n 
+0000001101 00000 n 
+0000002269 00000 n 
+0000003668 00000 n 
+0000004545 00000 n 
+0000004681 00000 n 
+0000004817 00000 n 
+0000004953 00000 n 
+0000005090 00000 n 
+0000005167 00000 n 
+trailer
+<< /Size 13 /Root 12 0 R >>
+startxref
+5218
+%%EOF

@@ -1,0 +1,58 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 778 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 1 of 3) Tj -400 -25 Td /F2 16 Tf (CS301: Tanenbaum - Modern Operating Systems Excerpt) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (Chapter 6: Deadlocks in Modern Operating Systems) Tj /F1 11 Tf T* (6.1 Resources and Preemptibility) Tj T* (In operating systems, a resource is an object that can be acquired, used, and released.) Tj T* (Resources can be preemptible \(like CPU or memory pages, which can be taken away without harm\)) Tj T* (or non-preemptible \(like dedicated Blu-ray burners or database row locks\).) Tj T* (Deadlocks typically involve non-preemptible resources where forcing preemption) Tj T* (would corrupt system state or lead to race conditions.) Tj T* ET
+endstream
+endobj
+4 0 obj
+<< /Length 917 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 2 of 3) Tj -400 -25 Td /F2 16 Tf (CS301: Tanenbaum - Modern Operating Systems Excerpt) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (6.2 The Dining Philosophers Problem & Circular Wait) Tj /F1 11 Tf T* /F2 10 Tf (    "Deadlock requires circular wait across non-preemptible resources; breaking the cycle prevents deadlocks completely.") Tj /F1 11 Tf T* (Consider five philosophers sitting around a circular table with five chopsticks.) Tj T* (If every philosopher picks up their left chopstick at the exact same instant,) Tj T* (every philosopher will hold one chopstick and wait perpetually for the right one.) Tj T* (This textbook example illustrates circular wait in its purest form.) Tj T* (Starvation can also occur if two cooperative philosophers continually eat, leaving a middle philosopher starved.) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Length 744 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 3 of 3) Tj -400 -25 Td /F2 16 Tf (CS301: Tanenbaum - Modern Operating Systems Excerpt) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (6.3 Deadlock Detection and Recovery) Tj /F1 11 Tf T* (When prevention is too restrictive, systems allow deadlocks to occur and periodically detect them.) Tj T* (Recovery strategies include:) Tj T* (1. Recovery through preemption: Temporarily taking a resource away from another process.) Tj T* (2. Recovery through rollback: Checkpointing processes periodically and restarting from a clean point.) Tj T* (3. Recovery through killing processes: Terminating one or more processes in the circular cycle.) Tj T* ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 6 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+7 0 obj
+<< /Type /Page /Parent 6 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 4 0 R >>
+endobj
+8 0 obj
+<< /Type /Page /Parent 6 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 5 0 R >>
+endobj
+9 0 obj
+<< /Type /Pages /Kids [6 0 R 7 0 R 8 0 R] /Count 3 >>
+endobj
+10 0 obj
+<< /Type /Catalog /Pages 9 0 R >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000154 00000 n 
+0000000983 00000 n 
+0000001951 00000 n 
+0000002746 00000 n 
+0000002882 00000 n 
+0000003018 00000 n 
+0000003154 00000 n 
+0000003223 00000 n 
+trailer
+<< /Size 11 /Root 10 0 R >>
+startxref
+3273
+%%EOF

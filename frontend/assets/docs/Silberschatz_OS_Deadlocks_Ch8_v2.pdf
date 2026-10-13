@@ -1,0 +1,69 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+2 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+3 0 obj
+<< /Length 709 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 1 of 4) Tj -400 -25 Td /F2 16 Tf (CS301: Silberschatz - OS Concepts \(Ch. 8 - 10th Edition Revised\)) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (Chapter 8: Deadlocks \(10th Edition Revised\)) Tj /F1 11 Tf T* (8.1 System Model & Modern Multicore Architectures) Tj T* (In revised multicore architectures, resources are categorized with hardware affinity.) Tj T* (A process must request a resource before using it and must release it afterwards.) Tj T* (Deadlock occurs when every thread in a set is blocked waiting for an event that only another) Tj T* (blocked thread in the same set can trigger.) Tj T* ET
+endstream
+endobj
+4 0 obj
+<< /Length 905 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 2 of 4) Tj -400 -25 Td /F2 16 Tf (CS301: Silberschatz - OS Concepts \(Ch. 8 - 10th Edition Revised\)) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (8.2 Deadlock Characterization: Updated Coffman Criteria) Tj /F1 11 Tf T* (The 10th edition refines the classical 1971 Coffman definition for modern distributed locks:) Tj T* (1. Mutual Exclusion: At least one resource must be held in an exclusive lock mode.) Tj T* (2. Hold and Wait: A process holds at least one resource and requests additional locks.) Tj T* (3. No Preemption: Resources cannot be preempted; lock release is cooperative only.) Tj T* (   *Revision note: Non-cooperative thread termination now introduces orphan mutex issues.*) Tj T* (4. Circular Wait: A closed directed cycle of lock dependencies exists across executing threads.) Tj T* ET
+endstream
+endobj
+5 0 obj
+<< /Length 807 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 3 of 4) Tj -400 -25 Td /F2 16 Tf (CS301: Silberschatz - OS Concepts \(Ch. 8 - 10th Edition Revised\)) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (8.3 Clarified Starvation Metrics & Benchmarks) Tj /F1 11 Tf T* /F2 10 Tf (    "Revised Definition: Deadlock is a static terminal state with 0% throughput across the blocked set.") Tj /F1 11 Tf T* /F2 10 Tf (    "Starvation is a dynamic performance pathology where system throughput continues normally while specific threads suffer infinite latency.") Tj /F1 11 Tf T* (Statistical benchmarks show starvation occurs 14x more frequently than deadlock in cloud clusters) Tj T* (due to non-uniform priority queuing and tail-latency scheduling anomalies.) Tj T* ET
+endstream
+endobj
+6 0 obj
+<< /Length 595 >>
+stream
+BT /F2 10 Tf 50 750 Td (Syllora Academic Repository | Course: CS301 Operating Systems) Tj 400 0 Td (Page 4 of 4) Tj -400 -25 Td /F2 16 Tf (CS301: Silberschatz - OS Concepts \(Ch. 8 - 10th Edition Revised\)) Tj 0 -30 Td /F1 11 Tf 16 TL T* /F2 13 Tf (8.4 Banker's Algorithm with Vector Extensions) Tj /F1 11 Tf T* (Modern Banker's Algorithm implementations employ SIMD vector instructions for fast safety checking.) Tj T* (The safety algorithm complexity remains O\(m * n^2\), where m is resource types and n is processes.) Tj T* (Safety invariant: Allocation + Need <= Available vector.) Tj T* ET
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 7 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 3 0 R >>
+endobj
+8 0 obj
+<< /Type /Page /Parent 7 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 4 0 R >>
+endobj
+9 0 obj
+<< /Type /Page /Parent 7 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 5 0 R >>
+endobj
+10 0 obj
+<< /Type /Page /Parent 7 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 1 0 R /F2 2 0 R >> >> /Contents 6 0 R >>
+endobj
+11 0 obj
+<< /Type /Pages /Kids [7 0 R 8 0 R 9 0 R 10 0 R] /Count 4 >>
+endobj
+12 0 obj
+<< /Type /Catalog /Pages 11 0 R >>
+endobj
+xref
+0 13
+0000000000 65535 f 
+0000000009 00000 n 
+0000000079 00000 n 
+0000000154 00000 n 
+0000000914 00000 n 
+0000001870 00000 n 
+0000002728 00000 n 
+0000003374 00000 n 
+0000003510 00000 n 
+0000003646 00000 n 
+0000003782 00000 n 
+0000003919 00000 n 
+0000003996 00000 n 
+trailer
+<< /Size 13 /Root 12 0 R >>
+startxref
+4047
+%%EOF

@@ -116,21 +116,86 @@ All timings are controlled via a single `SPEED` constant (`1.0` default; set `0.
 
 ---
 
-## 💻 Local Development
+## 💻 Local Development & Build Scripts
 
 ```bash
 # Clone the repository
 git clone https://github.com/sivakumarelango10-art/Syllora.git
 cd Syllora
 
-# Start a local static server
-python -m http.server 8080
+# 1. Run local development server (zero dependencies required)
+npm run dev
+# or: python -m http.server 8080
 
-# Visit the application:
-# http://127.0.0.1:8080/ (automatically redirects to http://127.0.0.1:8080/frontend/index.html)
+# 2. Build for production (packages frontend into dist/ with all verified PDFs)
+npm run build
+
+# 3. Preview production distribution
+npm run preview
 ```
+
+---
+
+## 🚀 Post-Login Application Workspace
+
+The Syllora application workspace is built in **strict light mode** (`#F5F7F8` canvas, `#FFFFFF` surface, `#0F766E` primary teal) with a responsive, accessible AppShell and eight primary routes:
+
+| Route | View | Capabilities |
+| :--- | :--- | :--- |
+| `#/app/overview` | **Overview Dashboard** | 4 derived metric cards, wide syllabus map table, pale teal check card, recent materials, continue learning card, quick ask bar. |
+| `#/app/materials` | **Study Materials** | List & grid views, search/status filters, 20MB drag-and-drop upload modal with duplicate validation, edition diff comparison modal (v1 vs v2), embedded PDF reader. |
+| `#/app/ask` | **Ask Syllora** | Source checklist, Ask/Search/Summarise tabs, keyword & semantic search modes, 5 deterministic academic sample questions, cancellation, formula cards, citation pills linking to verified PDF excerpts. |
+| `#/app/syllabus` | **Syllabus Map** | Coverage summary, evidence & understanding indicators, topic details drawer with prerequisites, manual custom topic addition & editing. |
+| `#/app/understanding` | **Check Understanding** | Concept prompt, student explanation textarea with 3 test sample chips (incorrect, partial, exemplary), rubric evaluation (accuracy, essential points, reasoning), follow-up scenario 2 printer priority test. |
+| `#/app/misconceptions` | **Misconception Notebook** | Searchable issue cards, original student quotes, rubric feedback with citation links, status toggles, practice again triggers. |
+| `#/app/revision` | **Revision Planner** | Exam target date picker, daily available time, prioritized scheduling algorithm (targeting open misconceptions), past-paper questions linked to citations. |
+| `#/app/settings` | **Settings & Profile** | Editable Prajith P profile, workspace entity diagnostics, localized demo data reset. |
+
+---
+
+## 🔌 Architecture: Frontend Service Adapters & Future Backend Integration
+
+All client-side data flows through decoupled service adapters designed for seamless drop-in replacement by production backend APIs:
+
+1. **State Store (`frontend/js/state.js`)**:
+   - Strongly typed entities: `Course`, `StudyDocument`, `SourcePassage`, `Citation`, `SyllabusTopic`, `AnswerResult`, `UnderstandingAttempt`, `Misconception`, `RevisionTask`, `PastPaperQuestion`.
+   - Namespaced browser persistence: `syllora_workspace_state_v1`.
+   - **Backend Swap**: Replace `workspaceStore.getState()` and mutator functions with standard REST or GraphQL API clients (`fetch('/api/v1/workspace')`).
+
+2. **Session Adapter (`frontend/js/session.js`)**:
+   - Manages client-side demo user session (`Prajith P`, `demo@syllora.com`) without storing passwords or claiming false cryptographic authentication.
+   - Logout clears only Syllora demo-session keys without wiping arbitrary browser storage.
+   - **Backend Swap**: Connect `sessionAdapter.loginDemoUser()` to an OAuth2 / OIDC provider or JWT session service.
+
+3. **Academic Query & Rubric Engine (`frontend/js/views/ask.js` & `views/understanding.js`)**:
+   - Uses deterministic academic fixtures with verified citation metadata and bounds.
+   - **Backend Swap**: Replace fixtures with an authenticated RAG (Retrieval-Augmented Generation) endpoint streaming responses and citations.
+
+---
+
+## 🌐 Vercel Deployment Configuration
+
+Syllora is pre-configured for instant, zero-configuration deployment on **Vercel**:
+
+- **Framework Preset**: Other / None (Pure Native Web Platform)
+- **Build Command**: `node build.js` (or `npm run build`)
+- **Output Directory**: `dist`
+- **Root Rewrite**: Handled automatically via `vercel.json`:
+  ```json
+  {
+    "version": 2,
+    "outputDirectory": "dist",
+    "rewrites": [
+      {
+        "source": "/(.*)",
+        "destination": "/index.html"
+      }
+    ]
+  }
+  ```
 
 ---
 
 ## 📄 License
 © 2026 Syllora. All rights reserved.
+

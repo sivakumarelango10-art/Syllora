@@ -1,0 +1,22 @@
+{
+  "name": "syllora",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Syllora — Academic search, evidence inspection, syllabus mapping, and understanding platform",
+  "scripts": {
+    "build": "node build.js",
+    "dev": "node server.js",
+    "start": "node server.js",
+    "preview": "node server.js"
+  },
+  "keywords": [
+    "syllora",
+    "education",
+    "learning",
+    "syllabus",
+    "operating-systems",
+    "evidence-inspection"
+  ],
+  "author": "Prajith P",
+  "license": "MIT"
+}

@@ -152,7 +152,8 @@
   let activeAnimations = [];
   let isSubmitting = false;
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const introSeenThisSession = getSessionStorage('syllora_intro_seen') === 'true';
+  const isDirectWorkspaceVisit = window.location.hash.startsWith('#/app');
+  const introSeenThisSession = (getSessionStorage('syllora_intro_seen') === 'true') || isDirectWorkspaceVisit;
 
   // --------------------------------------------------------------------------
   // 3. LAYOUT & PROPORTIONAL GEOMETRY CALCULATIONS
@@ -480,9 +481,9 @@
       item.style.transform = 'translateY(0)';
     });
 
-    // Focus email input seamlessly
+    // Focus email input seamlessly (only if on login page)
     setTimeout(() => {
-      if (document.activeElement !== passwordInput) {
+      if (!window.location.hash.startsWith('#/app') && document.activeElement !== passwordInput) {
         emailInput.focus();
       }
     }, 60);
@@ -805,7 +806,10 @@
       // On completion
       setTimeout(() => {
         a11yAnnouncer.textContent = 'Welcome to Syllora Dashboard!';
-        console.log('[Syllora Auth] Transitioning to /dashboard...');
+        console.log('[Syllora Auth] Transitioning to workspace...');
+        if (typeof window.sylloraEnterWorkspace === 'function') {
+          window.sylloraEnterWorkspace();
+        }
       }, 1450);
     }, 1650);
   }
@@ -852,7 +856,7 @@
     document.fonts ? document.fonts.ready : Promise.resolve(),
     new Promise((resolve) => setTimeout(resolve, 300))
   ]).then(() => {
-    if (prefersReducedMotion || introSeenThisSession) {
+    if (prefersReducedMotion || introSeenThisSession || isDirectWorkspaceVisit) {
       completeIntro();
     } else {
       setTimeout(() => {
