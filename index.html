@@ -1,356 +1,388 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-mode="signin">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-  <title>Syllora — Sign in &amp; Access Knowledge</title>
-  <meta name="description" content="Sign in or create your Syllora account with Email, Password, or Google to continue your journey.">
+  <title>Syllora — Log In | Your syllabus, simplified.</title>
+  <meta name="description" content="Sign in to Syllora, the intelligent learning platform. Your syllabus, simplified.">
   
   <!-- Favicon -->
-  <link rel="icon" type="image/jpeg" href="assets/syllora-logo.jpg">
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
   
-  <!-- Premium Typography: Plus Jakarta Sans & JetBrains Mono -->
+  <!-- Google Fonts: Outfit (headings & wordmark) + Inter (body) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Ambient Lighting / Glowing Aura Background -->
-  <div class="ambient-glow" aria-hidden="true">
-    <div class="glow-orb orb-primary"></div>
-    <div class="glow-orb orb-secondary"></div>
-    <div class="glow-orb orb-tertiary"></div>
-    <div class="noise-overlay"></div>
-  </div>
 
-  <!-- Top Floating Utility Bar -->
-  <header class="top-nav">
-    <a href="#main" class="brand-link" aria-label="Syllora Home">
-      <div class="brand-mark-wrapper">
-        <img src="assets/syllora-logo.jpg" alt="Syllora Logo" class="brand-avatar-img">
+  <!-- App Wrapper (Desktop Split 50/50, Mobile Stack) -->
+  <div class="split-layout-container">
+
+    <!-- ======================================================================
+         LEFT 50%: BRAND PANEL
+         Teal gradient (#03605E -> #024A48), floating papers, animated logo & tagline
+         ====================================================================== -->
+    <section class="brand-panel" aria-label="Syllora Brand Introduction">
+      
+      <!-- Subtle Floating Background Paper Shapes (20-30s ambient drift) -->
+      <div class="floating-papers-container" aria-hidden="true">
+        <div class="paper-sheet paper-1">
+          <svg viewBox="0 0 100 130" fill="currentColor">
+            <rect width="100" height="130" rx="8"/>
+            <line x1="16" y1="28" x2="68" y2="28" stroke="rgba(255,255,255,0.4)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="16" y1="44" x2="84" y2="44" stroke="rgba(255,255,255,0.3)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="16" y1="60" x2="74" y2="60" stroke="rgba(255,255,255,0.3)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="16" y1="76" x2="52" y2="76" stroke="rgba(255,255,255,0.25)" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="paper-sheet paper-2">
+          <svg viewBox="0 0 90 120" fill="currentColor">
+            <rect width="90" height="120" rx="7"/>
+            <line x1="14" y1="24" x2="60" y2="24" stroke="rgba(255,255,255,0.4)" stroke-width="3" stroke-linecap="round"/>
+            <line x1="14" y1="38" x2="76" y2="38" stroke="rgba(255,255,255,0.3)" stroke-width="3" stroke-linecap="round"/>
+            <line x1="14" y1="52" x2="64" y2="52" stroke="rgba(255,255,255,0.3)" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="paper-sheet paper-3">
+          <svg viewBox="0 0 110 140" fill="currentColor">
+            <rect width="110" height="140" rx="9"/>
+            <circle cx="28" cy="30" r="8" fill="rgba(255,255,255,0.35)"/>
+            <line x1="44" y1="30" x2="90" y2="30" stroke="rgba(255,255,255,0.3)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="18" y1="56" x2="92" y2="56" stroke="rgba(255,255,255,0.25)" stroke-width="4" stroke-linecap="round"/>
+            <line x1="18" y1="72" x2="78" y2="72" stroke="rgba(255,255,255,0.25)" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="paper-sheet paper-4">
+          <svg viewBox="0 0 85 110" fill="currentColor">
+            <rect width="85" height="110" rx="6"/>
+            <line x1="14" y1="24" x2="56" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round"/>
+            <line x1="14" y1="38" x2="70" y2="38" stroke="rgba(255,255,255,0.25)" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+        </div>
       </div>
-      <span class="brand-title">Syllora</span>
-    </a>
-    
-    <div class="nav-actions">
-      <!-- Quick Demo Account Fill -->
-      <button type="button" class="quick-demo-pill" id="quickDemoBtn" title="Auto-fill sample credentials for quick review">
-        <svg class="demo-icon" viewBox="0 0 20 20" fill="currentColor" width="14" height="14">
-          <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
-        </svg>
-        <span>Demo Fill</span>
-      </button>
 
-      <!-- Theme Switcher -->
-      <button type="button" class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle visual theme" title="Toggle theme">
-        <svg class="theme-icon sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="4"></circle>
-          <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
-        </svg>
-        <svg class="theme-icon moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
-        </svg>
-      </button>
-    </div>
-  </header>
+      <!-- Centered Brand Identity Block -->
+      <div class="brand-content-core">
+        
+        <!-- Large Animated Logo (Inline SVG with independent left page, right page & checkmark) -->
+        <div class="logo-hero-container">
+          <svg class="syllora-hero-svg" viewBox="0 0 260 180" width="180" height="125" aria-hidden="true">
+            <defs>
+              <linearGradient id="pageGradLeft" x1="100%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stop-color="#05807D"/>
+                <stop offset="100%" stop-color="#024A48"/>
+              </linearGradient>
+              <linearGradient id="pageGradRight" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#04716E"/>
+                <stop offset="100%" stop-color="#013A38"/>
+              </linearGradient>
+              <filter id="bookShadow" x="-10%" y="-10%" width="130%" height="130%">
+                <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="rgba(0,0,0,0.35)"/>
+              </filter>
+            </defs>
 
-  <!-- Main Viewport Container -->
-  <main class="auth-viewport" id="main">
-    <div class="auth-card-outer">
-      <!-- Doppelrand / Double-Bezel Architecture: Outer Shell with ring, Inner Core with highlight -->
-      <div class="auth-card-inner">
+            <!-- Book Container Group -->
+            <g class="book-group" filter="url(#bookShadow)">
+              <!-- Left Page (Opens from spine at x=130) -->
+              <path id="leftPagePath" 
+                    class="book-page page-left"
+                    d="M 126 30 C 104 30, 54 18, 38 20 C 31 21, 26 27, 26 34 L 26 126 C 26 133, 31 138, 38 139 C 56 142, 102 152, 126 154 Z" 
+                    fill="url(#pageGradLeft)"/>
 
-        <!-- Card Header with Brand Eyebrow -->
-        <div class="card-brand-header">
-          <div class="logo-hero-badge">
-            <img src="assets/syllora-logo.jpg" alt="Syllora" class="logo-hero-img">
+              <!-- Right Page (Opens from spine at x=130) -->
+              <path id="rightPagePath" 
+                    class="book-page page-right"
+                    d="M 134 30 C 156 30, 206 18, 222 20 C 229 21, 234 27, 234 34 L 234 126 C 234 133, 229 138, 222 139 C 204 142, 158 152, 134 154 Z" 
+                    fill="url(#pageGradRight)"/>
+
+              <!-- Spine Highlight Hairline -->
+              <line x1="130" y1="31" x2="130" y2="153" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
+
+              <!-- Center White Checkmark / Sprout (Self-drawing stroke) -->
+              <path id="heroCheckmark" 
+                    class="book-checkmark"
+                    d="M 72 88 C 86 102, 114 130, 130 140 C 148 118, 178 70, 200 46" 
+                    fill="none" 
+                    stroke="#FFFFFF" 
+                    stroke-width="16" 
+                    stroke-linecap="round" 
+                    stroke-linejoin="round"/>
+            </g>
+          </svg>
+
+          <!-- Staggered Animated Wordmark (Letter-by-letter slide up) -->
+          <h1 class="brand-wordmark" id="brandWordmark" aria-label="Syllora">
+            <span class="wm-letter" style="--i: 0">S</span>
+            <span class="wm-letter" style="--i: 1">y</span>
+            <span class="wm-letter" style="--i: 2">l</span>
+            <span class="wm-letter" style="--i: 3">l</span>
+            <span class="wm-letter" style="--i: 4">o</span>
+            <span class="wm-letter" style="--i: 5">r</span>
+            <span class="wm-letter" style="--i: 6">a</span>
+          </h1>
+        </div>
+
+        <!-- Tagline -->
+        <p class="brand-tagline" id="brandTagline">Your syllabus, simplified.</p>
+
+        <!-- Value Pillar Badges -->
+        <div class="brand-pillars">
+          <div class="pillar-chip">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M2 4h12M2 8h8M2 12h10"/>
+            </svg>
+            <span>Smart Modules</span>
           </div>
-          <h1 class="card-title" id="formHeaderTitle">Welcome to Syllora</h1>
-          <p class="card-subtitle" id="formHeaderSubtitle">Your intelligent gateway to curated learning &amp; research.</p>
+          <div class="pillar-chip">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <circle cx="8" cy="8" r="6"/>
+              <path d="M8 5v3l2 2"/>
+            </svg>
+            <span>Adaptive Pace</span>
+          </div>
+          <div class="pillar-chip">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+              <path d="M8 2l2 4 4.5.5-3.25 3.25.75 4.75L8 12.25 4 14.5l.75-4.75L1.5 6.5 6 6z"/>
+            </svg>
+            <span>Mastery Tracking</span>
+          </div>
         </div>
 
-        <!-- Mode Segmented Switcher (Sign In vs Create Account) -->
-        <div class="tab-switcher-wrapper" role="tablist" aria-label="Authentication mode selection">
-          <div class="tab-indicator" id="tabIndicator"></div>
-          <button type="button" class="tab-btn active" role="tab" id="tabSignIn" aria-selected="true" aria-controls="authForm">
-            <span>Sign In</span>
-          </button>
-          <button type="button" class="tab-btn" role="tab" id="tabSignUp" aria-selected="false" aria-controls="authForm">
-            <span>Create Account</span>
-          </button>
+      </div>
+
+      <!-- Brand Panel Footer -->
+      <footer class="brand-panel-footer">
+        <span>&copy; 2026 Syllora Inc. All rights reserved.</span>
+      </footer>
+    </section>
+
+    <!-- ======================================================================
+         RIGHT 50%: LOGIN FORM PANEL
+         Warm off-white background (#FAFAF8) + 400px Form Card
+         ====================================================================== -->
+    <main class="form-panel" id="mainContent">
+
+      <!-- Mobile-Only Compact Header (Hidden on Desktop) -->
+      <div class="mobile-brand-bar">
+        <svg class="mobile-logo-svg" viewBox="0 0 260 180" width="38" height="28" aria-hidden="true">
+          <path d="M 126 30 C 104 30, 54 18, 38 20 C 31 21, 26 27, 26 34 L 26 126 C 26 133, 31 138, 38 139 C 56 142, 102 152, 126 154 Z" fill="#03605E"/>
+          <path d="M 134 30 C 156 30, 206 18, 222 20 C 229 21, 234 27, 234 34 L 234 126 C 234 133, 229 138, 222 139 C 204 142, 158 152, 134 154 Z" fill="#024A48"/>
+          <path d="M 72 88 C 86 102, 114 130, 130 140 C 148 118, 178 70, 200 46" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="mobile-brand-title">Syllora</span>
+      </div>
+
+      <!-- Quick Demo Account Fill Button (Discreet helper on top right) -->
+      <div class="quick-demo-wrapper">
+        <button type="button" class="btn-demo-fill" id="btnDemoFill" title="Auto-fill credentials: demo@syllora.com / password123">
+          <svg viewBox="0 0 20 20" fill="currentColor" width="13" height="13">
+            <path fill-rule="evenodd" d="M11.3 1.046A1 1 0 0112 2v5h4a1 1 0 01.82 1.573l-7 10A1 1 0 018 18v-5H4a1 1 0 01-.82-1.573l7-10a1 1 0 011.12-.38z" clip-rule="evenodd" />
+          </svg>
+          <span>Fill Demo Credentials</span>
+        </button>
+      </div>
+
+      <!-- Form Card (Max-width 400px, rounded-2xl, soft shadow) -->
+      <div class="login-card" id="loginCard">
+
+        <!-- Card Header -->
+        <header class="card-header-block">
+          <h2 class="card-heading" id="formHeading">Welcome back</h2>
+          <p class="card-subtext" id="formSubtext">Log in to continue learning</p>
+        </header>
+
+        <!-- Authentication Form -->
+        <form id="loginForm" class="login-form-element" novalidate autocomplete="on">
+
+          <!-- Full Name Field (Smoothly revealed if user toggles to Sign Up) -->
+          <div class="form-field-wrapper field-signup-only" id="nameFieldWrapper" style="display: none;">
+            <div class="floating-input-box">
+              <input 
+                type="text" 
+                id="nameInput" 
+                name="name" 
+                placeholder=" " 
+                autocomplete="name" 
+                class="floating-text-input">
+              <label for="nameInput" class="floating-field-label">Full name</label>
+              <span class="field-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17">
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </span>
+            </div>
+            <div class="field-error-msg" id="nameError" role="alert"></div>
+          </div>
+
+          <!-- Email Input with Floating Label -->
+          <div class="form-field-wrapper" id="emailFieldWrapper">
+            <div class="floating-input-box">
+              <input 
+                type="email" 
+                id="emailInput" 
+                name="email" 
+                placeholder=" " 
+                autocomplete="email" 
+                required 
+                class="floating-text-input">
+              <label for="emailInput" class="floating-field-label">Email address</label>
+              <span class="field-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17">
+                  <rect width="20" height="16" x="2" y="4" rx="2"/>
+                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                </svg>
+              </span>
+            </div>
+            <div class="field-error-msg" id="emailError" role="alert"></div>
+          </div>
+
+          <!-- Password Input with Floating Label & Eye Toggle -->
+          <div class="form-field-wrapper" id="passwordFieldWrapper">
+            <div class="floating-input-box">
+              <input 
+                type="password" 
+                id="passwordInput" 
+                name="password" 
+                placeholder=" " 
+                autocomplete="current-password" 
+                required 
+                class="floating-text-input">
+              <label for="passwordInput" class="floating-field-label">Password</label>
+              <!-- Show / Hide Password Toggle -->
+              <button 
+                type="button" 
+                class="btn-eye-toggle" 
+                id="togglePasswordBtn" 
+                aria-label="Show password" 
+                title="Show password">
+                <svg class="eye-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18">
+                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <svg class="eye-hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18" style="display: none;">
+                  <path d="m15 18-.722-3.25"/>
+                  <path d="M2 8a10.645 10.645 0 0 0 20 0"/>
+                  <path d="m20 15-1.726-2.05"/>
+                  <path d="m4 15 1.726-2.05"/>
+                  <path d="m9 18 .722-3.25"/>
+                </svg>
+              </button>
+            </div>
+            <div class="field-error-msg" id="passwordError" role="alert"></div>
+          </div>
+
+          <!-- Remember Me + Forgot Password Row -->
+          <div class="aux-options-row" id="auxRow">
+            <label class="custom-checkbox-container">
+              <input type="checkbox" id="rememberMeCheck" name="remember" checked>
+              <span class="custom-check-box" aria-hidden="true">
+                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="2.5 7 5.5 10 11.5 4"/>
+                </svg>
+              </span>
+              <span class="checkbox-text-label">Remember me</span>
+            </label>
+
+            <a href="#forgot" class="forgot-password-link" id="forgotPasswordLink">Forgot password?</a>
+          </div>
+
+          <!-- Primary Log In Button (Morphs to spinner, then checkmark on success) -->
+          <div class="submit-button-container">
+            <button type="submit" class="btn-primary-login" id="loginBtn">
+              <!-- Default State Label -->
+              <span class="btn-caption" id="btnCaption">Log in</span>
+              
+              <!-- Loading Circular Spinner -->
+              <span class="btn-spinner-icon" id="btnSpinner" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
+                  <circle cx="12" cy="12" r="9" stroke-opacity="0.25"/>
+                  <path d="M12 3a9 9 0 0 1 9 9" stroke-linecap="round"/>
+                </svg>
+              </span>
+
+              <!-- Success Morph Checkmark -->
+              <span class="btn-success-check" id="btnSuccessCheck" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+                  <path id="btnSuccessCheckPath" d="M 5 12 L 10 17 L 19 7" />
+                </svg>
+              </span>
+            </button>
+          </div>
+
+        </form>
+
+        <!-- Divider Line -->
+        <div class="divider-box" role="separator">
+          <span class="divider-line"></span>
+          <span class="divider-label">or continue with</span>
+          <span class="divider-line"></span>
         </div>
 
-        <!-- Single Sign-On (Google Authentication) -->
-        <div class="social-auth-section">
-          <button type="button" class="btn-google-sso" id="googleAuthBtn">
-            <span class="google-icon-wrapper">
-              <!-- Official 4-color Google G Icon -->
-              <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+        <!-- Google Sign-in Button -->
+        <div class="social-login-box">
+          <button type="button" class="btn-google-auth" id="googleLoginBtn">
+            <span class="google-svg-box">
+              <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
                 <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
                 <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
                 <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
               </svg>
             </span>
-            <span class="btn-label" id="googleBtnLabel">Continue with Google</span>
-            <span class="sso-trailing-badge">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" width="12" height="12">
-                <path d="M3 8h10M9 4l4 4-4 4"/>
-              </svg>
-            </span>
+            <span class="google-btn-text">Google</span>
           </button>
         </div>
 
-        <!-- Or Divider with Hairlines -->
-        <div class="divider-line-box" role="separator">
-          <span class="divider-hairline"></span>
-          <span class="divider-text">or continue with email</span>
-          <span class="divider-hairline"></span>
-        </div>
-
-        <!-- Main Authentication Form -->
-        <form id="authForm" class="auth-form" novalidate autocomplete="on">
-
-          <!-- Full Name Field (Conditionally revealed for New Users) -->
-          <div class="input-field-group signup-only" id="fullNameGroup">
-            <label for="fullNameInput" class="field-label">
-              <span>Full Name</span>
-              <span class="required-indicator">*</span>
-            </label>
-            <div class="input-control-box">
-              <span class="field-leading-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
-              </span>
-              <input 
-                type="text" 
-                id="fullNameInput" 
-                name="name" 
-                placeholder="Jane Doe" 
-                autocomplete="name" 
-                spellcheck="false"
-                class="form-text-input">
-              <span class="field-validation-icon" id="nameValidationIcon" aria-hidden="true"></span>
-            </div>
-            <p class="field-helper-error" id="nameError" role="alert"></p>
-          </div>
-
-          <!-- Email Address Field -->
-          <div class="input-field-group">
-            <label for="emailInput" class="field-label">
-              <span>Email Address</span>
-              <span class="required-indicator">*</span>
-            </label>
-            <div class="input-control-box">
-              <span class="field-leading-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-                  <rect width="20" height="16" x="2" y="4" rx="2"></rect>
-                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
-                </svg>
-              </span>
-              <input 
-                type="email" 
-                id="emailInput" 
-                name="email" 
-                placeholder="jane@example.com" 
-                autocomplete="email" 
-                required 
-                class="form-text-input">
-              <span class="field-validation-icon" id="emailValidationIcon" aria-hidden="true"></span>
-            </div>
-            <p class="field-helper-error" id="emailError" role="alert"></p>
-          </div>
-
-          <!-- Password Field -->
-          <div class="input-field-group">
-            <div class="label-with-action">
-              <label for="passwordInput" class="field-label">
-                <span>Password</span>
-                <span class="required-indicator">*</span>
-              </label>
-              <!-- Forgot Password link (Visible on Sign In) -->
-              <button type="button" class="text-link-action signin-only" id="forgotPasswordBtn">
-                Forgot password?
-              </button>
-            </div>
-            <div class="input-control-box">
-              <span class="field-leading-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                </svg>
-              </span>
-              <input 
-                type="password" 
-                id="passwordInput" 
-                name="password" 
-                placeholder="••••••••••••" 
-                autocomplete="current-password" 
-                required 
-                class="form-text-input">
-              <!-- Toggle Visibility Button -->
-              <button type="button" class="password-toggle-btn" id="togglePasswordBtn" aria-label="Show password" title="Toggle visibility">
-                <svg class="eye-open-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
-                  <path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 .696 10.75 10.75 0 0 1-19.876 0Z"></path>
-                  <circle cx="12" cy="12" r="3"></circle>
-                </svg>
-                <svg class="eye-closed-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="18" height="18" style="display:none;">
-                  <path d="m15 18-.722-3.25"></path>
-                  <path d="M2 8a10.645 10.645 0 0 0 20 0"></path>
-                  <path d="m20 15-1.726-2.05"></path>
-                  <path d="m4 15 1.726-2.05"></path>
-                  <path d="m9 18 .722-3.25"></path>
-                </svg>
-              </button>
-            </div>
-            <p class="field-helper-error" id="passwordError" role="alert"></p>
-
-            <!-- Dynamic Password Strength Meter (Shown on Sign Up) -->
-            <div class="password-strength-widget signup-only" id="passwordStrengthWidget">
-              <div class="strength-track">
-                <div class="strength-fill" id="strengthFill"></div>
-              </div>
-              <div class="strength-meta">
-                <span class="strength-label" id="strengthText">Enter at least 8 characters</span>
-                <span class="strength-hint">Use a mix of letters, numbers &amp; symbols</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- Auxiliary Options Row (Remember Me for Sign In / Terms for Sign Up) -->
-          <div class="auxiliary-row">
-            <!-- Remember Me for Sign In -->
-            <label class="custom-checkbox-wrapper signin-only">
-              <input type="checkbox" id="rememberMeCheck" name="remember" checked>
-              <span class="checkbox-box" aria-hidden="true">
-                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="2.5 7 5.5 10 11.5 4"></polyline>
-                </svg>
-              </span>
-              <span class="checkbox-label">Keep me signed in</span>
-            </label>
-
-            <!-- Terms agreement for Sign Up -->
-            <label class="custom-checkbox-wrapper signup-only">
-              <input type="checkbox" id="termsCheck" name="terms">
-              <span class="checkbox-box" aria-hidden="true">
-                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="2.5 7 5.5 10 11.5 4"></polyline>
-                </svg>
-              </span>
-              <span class="checkbox-label">
-                I accept the <a href="#terms" class="inline-text-link">Terms</a> &amp; <a href="#privacy" class="inline-text-link">Privacy Policy</a>
-              </span>
-            </label>
-          </div>
-
-          <!-- Primary Submit Button with Button-In-Button Nested Icon Architecture -->
-          <div class="submit-action-box">
-            <button type="submit" class="btn-primary-auth" id="submitAuthBtn">
-              <span class="btn-spinner" id="btnSpinner" aria-hidden="true"></span>
-              <span class="btn-text" id="submitBtnText">Sign In</span>
-              <span class="btn-trailing-icon-circle" aria-hidden="true">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-                  <line x1="4" y1="10" x2="16" y2="10"></line>
-                  <polyline points="10 4 16 10 10 16"></polyline>
-                </svg>
-              </span>
-            </button>
-          </div>
-
-        </form>
-
-        <!-- Card Footer Switcher -->
-        <div class="card-footer-box">
-          <p class="footer-switch-text">
-            <span id="footerPromptText">Don't have an account yet?</span>
-            <button type="button" class="switch-mode-action" id="switchModeFooterBtn">
-              Create an account
-            </button>
+        <!-- Footer: Don't have an account? Sign up -->
+        <footer class="card-footer">
+          <p class="footer-account-text">
+            <span id="footerPrompt">Don't have an account?</span>
+            <button type="button" class="footer-action-link" id="toggleModeBtn">Sign up</button>
           </p>
-        </div>
+        </footer>
 
       </div>
-    </div>
 
-    <!-- Security & Trust Badge Footer -->
-    <footer class="auth-security-footer">
-      <div class="security-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+      <!-- Trust & Security Micro-note -->
+      <div class="security-caption">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13">
+          <rect width="12" height="9" x="2" y="6" rx="2"/>
+          <path d="M5 6V4a3 3 0 0 1 6 0v2"/>
         </svg>
-        <span>256-bit End-to-End Encrypted</span>
+        <span>Protected by enterprise-grade TLS encryption</span>
       </div>
-      <span class="bullet-dot" aria-hidden="true">•</span>
-      <div class="security-item">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" width="14" height="14">
-          <circle cx="12" cy="12" r="10"></circle>
-          <polyline points="12 6 12 12 14 14"></polyline>
-        </svg>
-        <span>SOC 2 Type II Compliant</span>
-      </div>
-      <span class="bullet-dot" aria-hidden="true">•</span>
-      <a href="#help" class="security-link">Help &amp; Support</a>
-    </footer>
-  </main>
 
-  <!-- Forgot Password Modal -->
-  <div class="modal-backdrop" id="forgotModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" style="display: none;">
-    <div class="modal-card">
-      <div class="modal-header">
-        <div class="modal-icon-badge">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="20" height="20">
-            <rect width="18" height="11" x="3" y="11" rx="2" ry="2"></rect>
-            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-          </svg>
+    </main>
+  </div>
+
+  <!-- Recovery Modal (Forgot password) -->
+  <div class="modal-overlay" id="recoveryModal" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle" style="display: none;">
+    <div class="modal-card-box">
+      <div class="modal-top">
+        <h3 id="recoveryTitle" class="modal-heading">Reset your password</h3>
+        <button type="button" class="modal-close" id="modalCloseBtn" aria-label="Close modal">&times;</button>
+      </div>
+      <p class="modal-text">Enter your account email below. We'll send a secure password reset link directly to your inbox.</p>
+      <form id="recoveryForm" novalidate>
+        <div class="floating-input-box" style="margin-bottom: 12px;">
+          <input type="email" id="recoveryEmailInput" placeholder=" " required class="floating-text-input">
+          <label for="recoveryEmailInput" class="floating-field-label">Account email</label>
         </div>
-        <button type="button" class="modal-close-btn" id="closeModalBtn" aria-label="Close modal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
+        <button type="submit" class="btn-primary-login" style="padding: 12px; margin-top: 8px;">
+          <span>Send Reset Link</span>
         </button>
-      </div>
-      <div class="modal-body">
-        <h2 id="modalTitle" class="modal-title">Reset your password</h2>
-        <p class="modal-desc">Enter the email associated with your Syllora account and we'll dispatch a secure recovery link.</p>
-        
-        <form id="resetForm" class="reset-form" novalidate>
-          <div class="input-field-group">
-            <label for="resetEmailInput" class="field-label">Account Email</label>
-            <div class="input-control-box">
-              <span class="field-leading-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18">
-                  <rect width="20" height="16" x="2" y="4" rx="2"></rect>
-                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path>
-                </svg>
-              </span>
-              <input type="email" id="resetEmailInput" placeholder="jane@example.com" required class="form-text-input">
-            </div>
-            <p class="field-helper-error" id="resetEmailError" role="alert"></p>
-          </div>
-          
-          <button type="submit" class="btn-primary-auth modal-action-btn">
-            <span class="btn-text">Send Recovery Link</span>
-            <span class="btn-trailing-icon-circle" aria-hidden="true">
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-                <line x1="4" y1="10" x2="16" y2="10"></line>
-                <polyline points="10 4 16 10 10 16"></polyline>
-              </svg>
-            </span>
-          </button>
-        </form>
-      </div>
+      </form>
     </div>
   </div>
 
-  <!-- Interactive Toast Notification Center -->
-  <div class="toast-container" id="toastContainer" aria-live="polite" aria-atomic="true"></div>
+  <!-- Toast Notification Center -->
+  <div class="toast-shelf" id="toastShelf" aria-live="polite"></div>
 
+  <!-- JavaScript Orchestration Engine -->
   <script src="app.js"></script>
 </body>
 </html>

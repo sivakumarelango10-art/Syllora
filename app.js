@@ -1,464 +1,364 @@
 /**
  * Syllora Authentication Engine
- * Handles State, Live Validation, Password Metrics, Google OAuth flow simulation, and Theme Persistence
+ * Orchestrates:
+ * 1. Client-side input validation (email syntax, password min 8 chars)
+ * 2. Mock 1.5s login (demo@syllora.com / password123 succeeds; others trigger gentle shake error)
+ * 3. Button morphing: Idle -> Loading Spinner -> Morphing Checkmark
+ * 4. Password show/hide visibility toggle
+ * 5. Sign In <-> Sign Up mode switching (revealing Full Name for new users)
+ * 6. Quick Demo Fill helper
+ * 7. Recovery modal and toast notification system
  */
 
 (function () {
   'use strict';
 
   // --- DOM Elements ---
-  const htmlRoot = document.documentElement;
-  const themeToggleBtn = document.getElementById('themeToggleBtn');
-  const quickDemoBtn = document.getElementById('quickDemoBtn');
+  const loginForm = document.getElementById('loginForm');
+  const loginCard = document.getElementById('loginCard');
+  const loginBtn = document.getElementById('loginBtn');
+  const btnCaption = document.getElementById('btnCaption');
 
-  // Tabs
-  const tabSignIn = document.getElementById('tabSignIn');
-  const tabSignUp = document.getElementById('tabSignUp');
-
-  // Headers & Dynamic Labels
-  const formHeaderTitle = document.getElementById('formHeaderTitle');
-  const formHeaderSubtitle = document.getElementById('formHeaderSubtitle');
-  const submitBtnText = document.getElementById('submitBtnText');
-  const footerPromptText = document.getElementById('footerPromptText');
-  const switchModeFooterBtn = document.getElementById('switchModeFooterBtn');
-
-  // Form & Inputs
-  const authForm = document.getElementById('authForm');
-  const fullNameGroup = document.getElementById('fullNameGroup');
-  const fullNameInput = document.getElementById('fullNameInput');
-  const nameError = document.getElementById('nameError');
-  const nameValidationIcon = document.getElementById('nameValidationIcon');
-
+  const emailFieldWrapper = document.getElementById('emailFieldWrapper');
   const emailInput = document.getElementById('emailInput');
   const emailError = document.getElementById('emailError');
-  const emailValidationIcon = document.getElementById('emailValidationIcon');
 
+  const passwordFieldWrapper = document.getElementById('passwordFieldWrapper');
   const passwordInput = document.getElementById('passwordInput');
   const passwordError = document.getElementById('passwordError');
   const togglePasswordBtn = document.getElementById('togglePasswordBtn');
-  const eyeOpenIcon = togglePasswordBtn.querySelector('.eye-open-icon');
-  const eyeClosedIcon = togglePasswordBtn.querySelector('.eye-closed-icon');
+  const eyeShow = togglePasswordBtn.querySelector('.eye-show');
+  const eyeHide = togglePasswordBtn.querySelector('.eye-hide');
 
-  const passwordStrengthWidget = document.getElementById('passwordStrengthWidget');
-  const strengthFill = document.getElementById('strengthFill');
-  const strengthText = document.getElementById('strengthText');
+  const nameFieldWrapper = document.getElementById('nameFieldWrapper');
+  const nameInput = document.getElementById('nameInput');
+  const nameError = document.getElementById('nameError');
 
-  const rememberMeCheck = document.getElementById('rememberMeCheck');
-  const termsCheck = document.getElementById('termsCheck');
-  const submitAuthBtn = document.getElementById('submitAuthBtn');
-  const googleAuthBtn = document.getElementById('googleAuthBtn');
+  const formHeading = document.getElementById('formHeading');
+  const formSubtext = document.getElementById('formSubtext');
+  const toggleModeBtn = document.getElementById('toggleModeBtn');
+  const footerPrompt = document.getElementById('footerPrompt');
+  const auxRow = document.getElementById('auxRow');
 
-  // Modal
-  const forgotPasswordBtn = document.getElementById('forgotPasswordBtn');
-  const forgotModal = document.getElementById('forgotModal');
-  const closeModalBtn = document.getElementById('closeModalBtn');
-  const resetForm = document.getElementById('resetForm');
-  const resetEmailInput = document.getElementById('resetEmailInput');
-  const resetEmailError = document.getElementById('resetEmailError');
+  const btnDemoFill = document.getElementById('btnDemoFill');
+  const googleLoginBtn = document.getElementById('googleLoginBtn');
 
-  // Toast Container
-  const toastContainer = document.getElementById('toastContainer');
+  // Recovery Modal
+  const forgotPasswordLink = document.getElementById('forgotPasswordLink');
+  const recoveryModal = document.getElementById('recoveryModal');
+  const modalCloseBtn = document.getElementById('modalCloseBtn');
+  const recoveryForm = document.getElementById('recoveryForm');
+  const recoveryEmailInput = document.getElementById('recoveryEmailInput');
 
-  // Current State: 'signin' | 'signup'
-  let currentMode = 'signin';
+  // Toast Shelf
+  const toastShelf = document.getElementById('toastShelf');
 
-  // --------------------------------------------------------------------------
-  // 1. Theme Management (Dark / Light with LocalStorage persistence)
-  // --------------------------------------------------------------------------
-  function initTheme() {
-    const savedTheme = localStorage.getItem('syllora_theme') || 'dark';
-    htmlRoot.setAttribute('data-theme', savedTheme);
-  }
-
-  function toggleTheme() {
-    const current = htmlRoot.getAttribute('data-theme') || 'dark';
-    const nextTheme = current === 'dark' ? 'light' : 'dark';
-    htmlRoot.setAttribute('data-theme', nextTheme);
-    localStorage.setItem('syllora_theme', nextTheme);
-    showToast(`Switched to ${nextTheme} theme`, 'info');
-  }
-
-  themeToggleBtn.addEventListener('click', toggleTheme);
+  // State
+  let currentMode = 'login'; // 'login' | 'signup'
+  let isSubmitting = false;
 
   // --------------------------------------------------------------------------
-  // 2. Mode Switcher (Sign In <-> Create Account)
-  // --------------------------------------------------------------------------
-  function setMode(mode) {
-    currentMode = mode;
-    htmlRoot.setAttribute('data-mode', mode);
-
-    // Clear existing error states
-    clearErrors();
-
-    if (mode === 'signup') {
-      tabSignUp.classList.add('active');
-      tabSignUp.setAttribute('aria-selected', 'true');
-      tabSignIn.classList.remove('active');
-      tabSignIn.setAttribute('aria-selected', 'false');
-
-      formHeaderTitle.textContent = 'Create your account';
-      formHeaderSubtitle.textContent = 'Join Syllora to access intelligent research, synthesis & notes.';
-      submitBtnText.textContent = 'Create Account';
-      footerPromptText.textContent = 'Already have an account?';
-      switchModeFooterBtn.textContent = 'Sign In';
-
-      // Focus full name if switched to signup
-      setTimeout(() => fullNameInput.focus(), 80);
-    } else {
-      tabSignIn.classList.add('active');
-      tabSignIn.setAttribute('aria-selected', 'true');
-      tabSignUp.classList.remove('active');
-      tabSignUp.setAttribute('aria-selected', 'false');
-
-      formHeaderTitle.textContent = 'Welcome back to Syllora';
-      formHeaderSubtitle.textContent = 'Sign in to access your curated library & workspace.';
-      submitBtnText.textContent = 'Sign In';
-      footerPromptText.textContent = "Don't have an account yet?";
-      switchModeFooterBtn.textContent = 'Create an account';
-
-      setTimeout(() => emailInput.focus(), 80);
-    }
-  }
-
-  tabSignIn.addEventListener('click', () => setMode('signin'));
-  tabSignUp.addEventListener('click', () => setMode('signup'));
-  switchModeFooterBtn.addEventListener('click', () => {
-    setMode(currentMode === 'signin' ? 'signup' : 'signin');
-  });
-
-  // --------------------------------------------------------------------------
-  // 3. Password Visibility Toggle
-  // --------------------------------------------------------------------------
-  togglePasswordBtn.addEventListener('click', () => {
-    const isPassword = passwordInput.getAttribute('type') === 'password';
-    passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
-    eyeOpenIcon.style.display = isPassword ? 'none' : 'block';
-    eyeClosedIcon.style.display = isPassword ? 'block' : 'none';
-    togglePasswordBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
-  });
-
-  // --------------------------------------------------------------------------
-  // 4. Real-time Password Strength Meter (for Sign Up)
-  // --------------------------------------------------------------------------
-  passwordInput.addEventListener('input', () => {
-    clearFieldError(passwordInput, passwordError);
-
-    if (currentMode !== 'signup') return;
-
-    const val = passwordInput.value;
-    if (!val) {
-      strengthFill.style.width = '0%';
-      strengthFill.style.backgroundColor = 'transparent';
-      strengthText.textContent = 'Enter at least 8 characters';
-      strengthText.style.color = 'var(--text-muted)';
-      return;
-    }
-
-    let score = 0;
-    if (val.length >= 8) score++;
-    if (/[a-z]/.test(val) && /[A-Z]/.test(val)) score++;
-    if (/\d/.test(val)) score++;
-    if (/[^A-Za-z0-9]/.test(val)) score++;
-
-    switch (score) {
-      case 1:
-        strengthFill.style.width = '25%';
-        strengthFill.style.backgroundColor = '#ef4444';
-        strengthText.textContent = 'Weak password';
-        strengthText.style.color = '#ef4444';
-        break;
-      case 2:
-        strengthFill.style.width = '50%';
-        strengthFill.style.backgroundColor = '#f59e0b';
-        strengthText.textContent = 'Fair password';
-        strengthText.style.color = '#f59e0b';
-        break;
-      case 3:
-        strengthFill.style.width = '75%';
-        strengthFill.style.backgroundColor = '#3b82f6';
-        strengthText.textContent = 'Good password';
-        strengthText.style.color = '#3b82f6';
-        break;
-      case 4:
-        strengthFill.style.width = '100%';
-        strengthFill.style.backgroundColor = '#10b981';
-        strengthText.textContent = 'Strong password';
-        strengthText.style.color = '#10b981';
-        break;
-      default:
-        strengthFill.style.width = '15%';
-        strengthFill.style.backgroundColor = '#ef4444';
-        strengthText.textContent = 'Too short';
-        strengthText.style.color = '#ef4444';
-    }
-  });
-
-  // --------------------------------------------------------------------------
-  // 5. Validation Utilities
+  // 1. Validation Utilities
   // --------------------------------------------------------------------------
   function isValidEmail(email) {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   }
 
-  function setFieldError(inputEl, errorEl, message) {
-    const group = inputEl.closest('.input-field-group');
-    if (group) group.classList.add('has-error');
-    if (errorEl) errorEl.textContent = message;
+  function setFieldError(wrapper, errorEl, message) {
+    wrapper.classList.add('is-invalid');
+    errorEl.textContent = message;
   }
 
-  function clearFieldError(inputEl, errorEl) {
-    const group = inputEl.closest('.input-field-group');
-    if (group) group.classList.remove('has-error');
-    if (errorEl) errorEl.textContent = '';
+  function clearFieldError(wrapper, errorEl) {
+    wrapper.classList.remove('is-invalid');
+    errorEl.textContent = '';
   }
 
-  function clearErrors() {
-    clearFieldError(fullNameInput, nameError);
-    clearFieldError(emailInput, emailError);
-    clearFieldError(passwordInput, passwordError);
+  function clearAllErrors() {
+    clearFieldError(emailFieldWrapper, emailError);
+    clearFieldError(passwordFieldWrapper, passwordError);
+    if (nameFieldWrapper) clearFieldError(nameFieldWrapper, nameError);
   }
 
-  fullNameInput.addEventListener('input', () => {
-    clearFieldError(fullNameInput, nameError);
-    if (fullNameInput.value.trim().length >= 2) {
-      nameValidationIcon.classList.add('valid');
-      nameValidationIcon.innerHTML = `
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <polyline points="3 8 7 12 13 4"></polyline>
-        </svg>
-      `;
-    } else {
-      nameValidationIcon.classList.remove('valid');
-      nameValidationIcon.innerHTML = '';
-    }
+  // Clear errors when typing
+  emailInput.addEventListener('input', () => clearFieldError(emailFieldWrapper, emailError));
+  passwordInput.addEventListener('input', () => clearFieldError(passwordFieldWrapper, passwordError));
+  if (nameInput) nameInput.addEventListener('input', () => clearFieldError(nameFieldWrapper, nameError));
+
+  // --------------------------------------------------------------------------
+  // 2. Password Visibility Toggle
+  // --------------------------------------------------------------------------
+  togglePasswordBtn.addEventListener('click', () => {
+    const isPassword = passwordInput.getAttribute('type') === 'password';
+    passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+    eyeShow.style.display = isPassword ? 'none' : 'block';
+    eyeHide.style.display = isPassword ? 'block' : 'none';
+    togglePasswordBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    passwordInput.focus();
   });
 
-  emailInput.addEventListener('input', () => {
-    clearFieldError(emailInput, emailError);
-    if (isValidEmail(emailInput.value)) {
-      emailValidationIcon.classList.add('valid');
-      emailValidationIcon.innerHTML = `
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-          <polyline points="3 8 7 12 13 4"></polyline>
-        </svg>
-      `;
+  // --------------------------------------------------------------------------
+  // 3. Mode Toggle (Log In <-> Sign Up with Full Name)
+  // --------------------------------------------------------------------------
+  toggleModeBtn.addEventListener('click', () => {
+    clearAllErrors();
+    if (currentMode === 'login') {
+      currentMode = 'signup';
+      nameFieldWrapper.style.display = 'flex';
+      formHeading.textContent = 'Create your account';
+      formSubtext.textContent = 'Sign up to start your learning journey';
+      btnCaption.textContent = 'Create account';
+      footerPrompt.textContent = 'Already have an account?';
+      toggleModeBtn.textContent = 'Log in';
+      auxRow.style.display = 'none';
+      setTimeout(() => nameInput.focus(), 60);
     } else {
-      emailValidationIcon.classList.remove('valid');
-      emailValidationIcon.innerHTML = '';
+      currentMode = 'login';
+      nameFieldWrapper.style.display = 'none';
+      formHeading.textContent = 'Welcome back';
+      formSubtext.textContent = 'Log in to continue learning';
+      btnCaption.textContent = 'Log in';
+      footerPrompt.textContent = "Don't have an account?";
+      toggleModeBtn.textContent = 'Sign up';
+      auxRow.style.display = 'flex';
+      setTimeout(() => emailInput.focus(), 60);
     }
   });
 
   // --------------------------------------------------------------------------
-  // 6. Form Submission Handler
+  // 4. Quick Demo Fill (demo@syllora.com / password123)
   // --------------------------------------------------------------------------
-  authForm.addEventListener('submit', (e) => {
-    e.preventDefault();
-    clearErrors();
-
-    let hasError = false;
-
-    // Validate Full Name for Sign Up
+  btnDemoFill.addEventListener('click', () => {
     if (currentMode === 'signup') {
-      const nameVal = fullNameInput.value.trim();
+      // Switch back to login for demo credentials
+      toggleModeBtn.click();
+    }
+    clearAllErrors();
+    emailInput.value = 'demo@syllora.com';
+    passwordInput.value = 'password123';
+    showToast('Demo credentials populated (demo@syllora.com / password123)', 'info');
+    emailInput.focus();
+  });
+
+  // --------------------------------------------------------------------------
+  // 5. Form Submission & Mock Authentication (1.5s timeout)
+  // --------------------------------------------------------------------------
+  loginForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+
+    clearAllErrors();
+    let hasValidationFault = false;
+
+    // Validate Full Name if Sign Up
+    if (currentMode === 'signup') {
+      const nameVal = nameInput.value.trim();
       if (!nameVal) {
-        setFieldError(fullNameInput, nameError, 'Please enter your full name.');
-        hasError = true;
+        setFieldError(nameFieldWrapper, nameError, 'Please enter your full name.');
+        hasValidationFault = true;
       } else if (nameVal.length < 2) {
-        setFieldError(fullNameInput, nameError, 'Full name must be at least 2 characters.');
-        hasError = true;
+        setFieldError(nameFieldWrapper, nameError, 'Name must be at least 2 characters.');
+        hasValidationFault = true;
       }
     }
 
     // Validate Email
     const emailVal = emailInput.value.trim();
     if (!emailVal) {
-      setFieldError(emailInput, emailError, 'Email address is required.');
-      hasError = true;
+      setFieldError(emailFieldWrapper, emailError, 'Email address is required.');
+      hasValidationFault = true;
     } else if (!isValidEmail(emailVal)) {
-      setFieldError(emailInput, emailError, 'Please enter a valid email address.');
-      hasError = true;
+      setFieldError(emailFieldWrapper, emailError, 'Please enter a valid email format.');
+      hasValidationFault = true;
     }
 
     // Validate Password
     const passwordVal = passwordInput.value;
     if (!passwordVal) {
-      setFieldError(passwordInput, passwordError, 'Password is required.');
-      hasError = true;
-    } else if (currentMode === 'signup' && passwordVal.length < 8) {
-      setFieldError(passwordInput, passwordError, 'Password must be at least 8 characters.');
-      hasError = true;
+      setFieldError(passwordFieldWrapper, passwordError, 'Password is required.');
+      hasValidationFault = true;
+    } else if (passwordVal.length < 8) {
+      setFieldError(passwordFieldWrapper, passwordError, 'Password must be at least 8 characters.');
+      hasValidationFault = true;
     }
 
-    // Validate Terms checkbox for Sign Up
-    if (currentMode === 'signup' && !termsCheck.checked) {
-      showToast('Please accept the Terms & Privacy Policy to continue', 'error');
-      hasError = true;
+    if (hasValidationFault) {
+      triggerErrorShake();
+      return;
     }
 
-    if (hasError) return;
+    // Begin Loading State (Button shrinks into circular spinner)
+    isSubmitting = true;
+    loginBtn.classList.add('is-loading');
+    loginBtn.disabled = true;
 
-    // Simulate Network Request with Tactile Loading State
-    submitAuthBtn.classList.add('is-loading');
-    submitAuthBtn.disabled = true;
-
+    // 1.5s Mock Verification
     setTimeout(() => {
-      submitAuthBtn.classList.remove('is-loading');
-      submitAuthBtn.disabled = false;
+      // If in Sign Up mode, any valid input succeeds!
+      // If in Login mode: demo@syllora.com / password123 succeeds; any other shows error!
+      const isLoginSuccess = (currentMode === 'login' && emailVal === 'demo@syllora.com' && passwordVal === 'password123') || (currentMode === 'signup');
 
-      if (currentMode === 'signup') {
-        const name = fullNameInput.value.trim();
-        showToast(`Account created for ${name}! Welcome to Syllora.`, 'success');
+      if (isLoginSuccess) {
+        // --- Success State ---
+        // Spinner morphs into white drawing checkmark
+        loginBtn.classList.remove('is-loading');
+        loginBtn.classList.add('is-success');
+
+        const successMessage = currentMode === 'signup' 
+          ? `Account created for ${nameInput.value.trim()}! Welcome to Syllora.` 
+          : 'Welcome back! Logged in successfully.';
+        
+        showToast(successMessage, 'success');
+
+        // Simulate seamless redirect after checkmark draws
+        setTimeout(() => {
+          document.body.style.transition = 'opacity 500ms ease';
+          document.body.style.opacity = '0.4';
+          showToast('Redirecting to your course dashboard...', 'info');
+          
+          setTimeout(() => {
+            document.body.style.opacity = '1';
+            loginBtn.classList.remove('is-success');
+            loginBtn.disabled = false;
+            isSubmitting = false;
+          }, 1800);
+        }, 900);
+
       } else {
-        showToast(`Welcome back, ${emailVal.split('@')[0]}! Redirecting...`, 'success');
+        // --- Error State ---
+        loginBtn.classList.remove('is-loading');
+        loginBtn.disabled = false;
+        isSubmitting = false;
+
+        // Card gentle horizontal shake
+        triggerErrorShake();
+
+        // Mark field invalid with clear instruction
+        setFieldError(
+          passwordFieldWrapper, 
+          passwordError, 
+          'Invalid credentials. Use demo@syllora.com / password123'
+        );
+        showToast('Authentication failed. Check credentials and try again.', 'error');
       }
-    }, 1100);
+    }, 1500);
   });
 
-  // --------------------------------------------------------------------------
-  // 7. Google OAuth Single Sign-On (SSO) Simulation
-  // --------------------------------------------------------------------------
-  googleAuthBtn.addEventListener('click', () => {
-    googleAuthBtn.style.opacity = '0.7';
-    googleAuthBtn.style.pointerEvents = 'none';
-
-    showToast('Connecting with Google accounts securely...', 'info');
+  // Card Shake Trigger (3 cycles, 6px)
+  function triggerErrorShake() {
+    loginCard.classList.remove('has-error-shake');
+    // Force DOM reflow so CSS animation can re-trigger
+    void loginCard.offsetWidth;
+    loginCard.classList.add('has-error-shake');
 
     setTimeout(() => {
-      googleAuthBtn.style.opacity = '1';
-      googleAuthBtn.style.pointerEvents = 'auto';
+      loginCard.classList.remove('has-error-shake');
+    }, 500);
+  }
 
-      const mockGoogleName = 'Alex Morgan';
-      const mockGoogleEmail = 'alex.morgan@syllora.edu';
+  // --------------------------------------------------------------------------
+  // 6. Google Sign-In Simulation
+  // --------------------------------------------------------------------------
+  googleLoginBtn.addEventListener('click', () => {
+    googleLoginBtn.style.opacity = '0.6';
+    googleLoginBtn.style.pointerEvents = 'none';
+    showToast('Connecting with Google identity services...', 'info');
 
-      if (currentMode === 'signup') {
-        fullNameInput.value = mockGoogleName;
-        emailInput.value = mockGoogleEmail;
-        passwordInput.value = 'GoogleAuthorized#99';
-        termsCheck.checked = true;
-        nameValidationIcon.classList.add('valid');
-        emailValidationIcon.classList.add('valid');
-        showToast(`Google authenticated! Profile linked as ${mockGoogleName}.`, 'success');
-      } else {
-        emailInput.value = mockGoogleEmail;
-        passwordInput.value = '••••••••••••';
-        showToast(`Signed in via Google as ${mockGoogleName} (${mockGoogleEmail})`, 'success');
-      }
+    setTimeout(() => {
+      googleLoginBtn.style.opacity = '1';
+      googleLoginBtn.style.pointerEvents = 'auto';
+
+      emailInput.value = 'demo@syllora.com';
+      passwordInput.value = 'password123';
+      clearAllErrors();
+      showToast('Google account verified: demo@syllora.com', 'success');
+
+      // Auto submit with success
+      loginForm.dispatchEvent(new Event('submit'));
     }, 1200);
   });
 
   // --------------------------------------------------------------------------
-  // 8. Quick Demo Account Autofill
+  // 7. Password Recovery Modal
   // --------------------------------------------------------------------------
-  quickDemoBtn.addEventListener('click', () => {
-    setMode('signin');
-    emailInput.value = 'alex.morgan@syllora.edu';
-    passwordInput.value = 'Syllora#Scholar2026';
-    emailValidationIcon.classList.add('valid');
-    emailValidationIcon.innerHTML = `
-      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-        <polyline points="3 8 7 12 13 4"></polyline>
-      </svg>
-    `;
-    showToast('Loaded demo credentials for Alex Morgan', 'info');
-  });
-
-  // --------------------------------------------------------------------------
-  // 9. Forgot Password Modal
-  // --------------------------------------------------------------------------
-  function openForgotModal() {
-    forgotModal.style.display = 'flex';
-    resetEmailInput.value = emailInput.value.trim();
-    setTimeout(() => resetEmailInput.focus(), 60);
+  function openModal() {
+    recoveryModal.style.display = 'flex';
+    recoveryEmailInput.value = emailInput.value.trim();
+    setTimeout(() => recoveryEmailInput.focus(), 50);
   }
 
-  function closeForgotModal() {
-    forgotModal.style.display = 'none';
-    clearFieldError(resetEmailInput, resetEmailError);
+  function closeModal() {
+    recoveryModal.style.display = 'none';
   }
 
-  forgotPasswordBtn.addEventListener('click', openForgotModal);
-  closeModalBtn.addEventListener('click', closeForgotModal);
-
-  // Close modal when clicking backdrop
-  forgotModal.addEventListener('click', (e) => {
-    if (e.target === forgotModal) closeForgotModal();
+  forgotPasswordLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    openModal();
   });
 
-  // Escape key closes modal
+  modalCloseBtn.addEventListener('click', closeModal);
+
+  recoveryModal.addEventListener('click', (e) => {
+    if (e.target === recoveryModal) closeModal();
+  });
+
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && forgotModal.style.display === 'flex') {
-      closeForgotModal();
+    if (e.key === 'Escape' && recoveryModal.style.display === 'flex') {
+      closeModal();
     }
   });
 
-  resetForm.addEventListener('submit', (e) => {
+  recoveryForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const val = resetEmailInput.value.trim();
-    if (!val || !isValidEmail(val)) {
-      setFieldError(resetEmailInput, resetEmailError, 'Please enter a valid email address.');
+    const mail = recoveryEmailInput.value.trim();
+    if (!mail || !isValidEmail(mail)) {
+      showToast('Please enter a valid email address.', 'error');
       return;
     }
-
-    const resetBtn = resetForm.querySelector('button[type="submit"]');
-    resetBtn.disabled = true;
-    resetBtn.querySelector('.btn-text').textContent = 'Dispatching link...';
-
-    setTimeout(() => {
-      resetBtn.disabled = false;
-      resetBtn.querySelector('.btn-text').textContent = 'Send Recovery Link';
-      closeForgotModal();
-      showToast(`Password reset link dispatched to ${val}! Check your inbox.`, 'success');
-    }, 900);
+    closeModal();
+    showToast(`Password recovery link dispatched to ${mail}`, 'success');
   });
 
   // --------------------------------------------------------------------------
-  // 10. Toast Notification Engine
+  // 8. Toast Feedback Engine
   // --------------------------------------------------------------------------
   function showToast(message, type = 'info') {
-    const toast = document.createElement('div');
-    toast.className = `toast-item toast-${type}`;
+    const bubble = document.createElement('div');
+    bubble.className = `toast-bubble toast-${type}`;
 
     let iconSvg = '';
     if (type === 'success') {
       iconSvg = `
-        <svg class="toast-item-icon" viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
-          <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        <svg viewBox="0 0 20 20" fill="#059669" width="18" height="18">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
         </svg>
       `;
     } else if (type === 'error') {
       iconSvg = `
-        <svg class="toast-item-icon" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="8" x2="12" y2="12"></line>
-          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        <svg viewBox="0 0 20 20" fill="#DC2626" width="18" height="18">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.586 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
         </svg>
       `;
     } else {
       iconSvg = `
-        <svg class="toast-item-icon" viewBox="0 0 24 24" fill="none" stroke="#008775" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="16" x2="12" y2="12"></line>
-          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        <svg viewBox="0 0 20 20" fill="#03605E" width="18" height="18">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
         </svg>
       `;
     }
 
-    toast.innerHTML = `
+    bubble.innerHTML = `
       ${iconSvg}
-      <div class="toast-item-content">${message}</div>
+      <span>${message}</span>
     `;
 
-    toastContainer.appendChild(toast);
+    toastShelf.appendChild(bubble);
 
     setTimeout(() => {
-      toast.style.opacity = '0';
-      toast.style.transform = 'translateY(16px)';
-      setTimeout(() => toast.remove(), 260);
-    }, 4200);
+      bubble.style.opacity = '0';
+      bubble.style.transform = 'translateY(12px)';
+      setTimeout(() => bubble.remove(), 260);
+    }, 4000);
   }
 
-  // Init Theme and Mode on bootstrap
-  initTheme();
-  setMode('signin');
 })();

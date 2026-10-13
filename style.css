@@ -1,91 +1,47 @@
 /* ==========================================================================
-   SYLLORA AUTHENTICATION SYSTEM — DESIGN ARCHITECTURE
-   Double-Bezel Card, Fluid Haptic Physics, Syllora Teal Palette
+   SYLLORA AUTHENTICATION SYSTEM — SPECIFICATION STYLESHEET
+   Brand Palette: Deep Teal (#03605E), Warm Off-White (#FAFAF8), Charcoal (#22272B)
+   Typography: Outfit (Headings/Logo) & Inter (Body)
+   Layout: Desktop Split 50/50, Mobile Responsive Stack
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   1. Design System Tokens & Custom Properties
+   1. Design System Tokens & Color Variables
    -------------------------------------------------------------------------- */
 :root {
-  /* Brand Spectrum (Syllora Primary Emerald-Teal) */
-  --brand-primary: #006356;
-  --brand-primary-hover: #007869;
-  --brand-primary-active: #005045;
-  --brand-primary-light: rgba(0, 99, 86, 0.12);
-  --brand-glow: rgba(0, 99, 86, 0.35);
+  /* Brand Specific Colors */
+  --color-primary-teal: #03605E;
+  --color-teal-hover: #024A48;
+  --color-teal-tint: #E6F2F1;
+  --color-charcoal-text: #22272B;
+  --color-muted-text: #6B7280;
+  --color-canvas-bg: #FAFAF8;
+  --color-error: #DC2626;
+  --color-error-bg: rgba(220, 38, 38, 0.08);
 
-  /* Typography Scale */
-  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* Functional Gradients & Tints */
+  --brand-gradient: linear-gradient(145deg, #03605E 0%, #024A48 100%);
+  --brand-gradient-hover: linear-gradient(145deg, #04706E 0%, #02403E 100%);
+  --teal-glow: 0 0 0 3.5px rgba(3, 96, 94, 0.2);
 
-  /* Physics & Dynamics */
-  --spring-ease: cubic-bezier(0.16, 1, 0.3, 1);
-  --bounce-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
-  --standard-ease: cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-fast: 160ms var(--standard-ease);
-  --transition-smooth: 280ms var(--spring-ease);
-  --transition-spring: 450ms var(--spring-ease);
+  /* Fonts */
+  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 
-  /* Semantic Palettes (Dark Theme by Default) */
-  --bg-canvas: #07090b;
-  --bg-card-outer: rgba(255, 255, 255, 0.035);
-  --bg-card-inner: #0d1115;
-  --border-outer: rgba(255, 255, 255, 0.08);
-  --border-inner: rgba(255, 255, 255, 0.06);
-  --border-input: rgba(255, 255, 255, 0.11);
-  --border-input-hover: rgba(255, 255, 255, 0.22);
-  --border-input-focus: #008775;
+  /* Card and Border Styling */
+  --border-field: #E5E7EB;
+  --border-field-focus: #03605E;
+  --shadow-soft: 0 20px 40px -15px rgba(34, 39, 43, 0.07), 0 0 1px 1px rgba(34, 39, 43, 0.05);
+  --shadow-float: 0 12px 28px -6px rgba(3, 96, 94, 0.28);
 
-  --input-bg: rgba(255, 255, 255, 0.035);
-  --input-bg-focus: rgba(255, 255, 255, 0.06);
-
-  --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-contrast: #ffffff;
-
-  --shadow-card: 0 32px 64px -16px rgba(0, 0, 0, 0.7), 0 0 80px -20px rgba(0, 99, 86, 0.18);
-  --shadow-inner-rim: inset 0 1px 1px 0 rgba(255, 255, 255, 0.08);
-
-  --status-error: #ef4444;
-  --status-error-bg: rgba(239, 68, 68, 0.12);
-  --status-success: #10b981;
-  --status-warning: #f59e0b;
-
-  --google-btn-bg: rgba(255, 255, 255, 0.05);
-  --google-btn-hover: rgba(255, 255, 255, 0.09);
-  --google-btn-border: rgba(255, 255, 255, 0.12);
-}
-
-/* Light Mode Overrides */
-[data-theme="light"] {
-  --bg-canvas: #f6f8fa;
-  --bg-card-outer: rgba(0, 0, 0, 0.03);
-  --bg-card-inner: #ffffff;
-  --border-outer: rgba(0, 0, 0, 0.06);
-  --border-inner: rgba(0, 0, 0, 0.06);
-  --border-input: #d0d7de;
-  --border-input-hover: #8c959f;
-  --border-input-focus: #006356;
-
-  --input-bg: #fdfdfd;
-  --input-bg-focus: #ffffff;
-
-  --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-muted: #64748b;
-  --text-contrast: #ffffff;
-
-  --shadow-card: 0 24px 48px -12px rgba(15, 23, 42, 0.08), 0 4px 16px -4px rgba(0, 99, 86, 0.06);
-  --shadow-inner-rim: inset 0 1px 0 0 rgba(255, 255, 255, 0.9);
-
-  --google-btn-bg: #ffffff;
-  --google-btn-hover: #f8fafc;
-  --google-btn-border: #d0d7de;
+  /* Smooth Curves */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-bounce: cubic-bezier(0.34, 1.45, 0.64, 1);
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* --------------------------------------------------------------------------
-   2. Global Reset & Base
+   2. Reset & Global Layout
    -------------------------------------------------------------------------- */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -96,1016 +52,915 @@
 html, body {
   min-height: 100dvh;
   width: 100%;
-  font-family: var(--font-sans);
-  background-color: var(--bg-canvas);
-  color: var(--text-primary);
+  font-family: var(--font-body);
+  background-color: var(--color-canvas-bg);
+  color: var(--color-charcoal-text);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
-  transition: background-color var(--transition-smooth), color var(--transition-smooth);
 }
 
-/* --------------------------------------------------------------------------
-   3. Ambient Glowing Background & Noise
-   -------------------------------------------------------------------------- */
-.ambient-glow {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-  overflow: hidden;
-}
-
-.glow-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(100px);
-  opacity: 0.5;
-  transition: opacity var(--transition-smooth);
-  animation: orbDrift 20s infinite alternate ease-in-out;
-}
-
-.orb-primary {
-  width: 520px;
-  height: 520px;
-  top: -120px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: radial-gradient(circle, rgba(0, 99, 86, 0.38) 0%, rgba(0, 99, 86, 0) 70%);
-}
-
-.orb-secondary {
-  width: 440px;
-  height: 440px;
-  bottom: -100px;
-  right: 10%;
-  background: radial-gradient(circle, rgba(14, 135, 119, 0.25) 0%, rgba(14, 135, 119, 0) 70%);
-  animation-duration: 26s;
-  animation-direction: alternate-reverse;
-}
-
-.orb-tertiary {
-  width: 360px;
-  height: 360px;
-  top: 35%;
-  left: 5%;
-  background: radial-gradient(circle, rgba(15, 76, 92, 0.22) 0%, rgba(15, 76, 92, 0) 70%);
-  animation-duration: 22s;
-}
-
-[data-theme="light"] .glow-orb {
-  opacity: 0.3;
-}
-
-@keyframes orbDrift {
-  0% { transform: translate(0, 0) scale(1); }
-  50% { transform: translate(30px, 40px) scale(1.08); }
-  100% { transform: translate(-20px, 20px) scale(0.95); }
-}
-
-.noise-overlay {
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 0);
-  background-size: 24px 24px;
-  opacity: 0.6;
-}
-
-[data-theme="light"] .noise-overlay {
-  background-image: radial-gradient(rgba(0, 0, 0, 0.03) 1px, transparent 0);
-}
-
-/* --------------------------------------------------------------------------
-   4. Floating Top Navigation Bar
-   -------------------------------------------------------------------------- */
-.top-nav {
-  position: relative;
-  z-index: 10;
+/* Split Layout Container (50% Brand Panel, 50% Form Panel) */
+.split-layout-container {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 24px 28px 8px;
-}
-
-.brand-link {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-decoration: none;
-  color: var(--text-primary);
-  transition: transform var(--transition-fast);
-}
-
-.brand-link:hover {
-  transform: translateY(-1px);
-}
-
-.brand-mark-wrapper {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-.brand-avatar-img {
+  min-height: 100dvh;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
-
-.brand-title {
-  font-size: 1.18rem;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-}
-
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.quick-demo-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  border-radius: 9999px;
-  background: var(--brand-primary-light);
-  color: var(--brand-primary);
-  border: 1px solid rgba(0, 99, 86, 0.25);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.quick-demo-pill:hover {
-  background: rgba(0, 99, 86, 0.2);
-  transform: translateY(-1px);
-}
-
-.demo-icon {
-  fill: currentColor;
-}
-
-.theme-toggle-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--input-bg);
-  border: 1px solid var(--border-inner);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.theme-toggle-btn:hover {
-  color: var(--text-primary);
-  border-color: var(--border-input-hover);
-  transform: scale(1.05);
-}
-
-.theme-icon {
-  width: 18px;
-  height: 18px;
-}
-
-[data-theme="dark"] .sun-icon { display: block; }
-[data-theme="dark"] .moon-icon { display: none; }
-[data-theme="light"] .sun-icon { display: none; }
-[data-theme="light"] .moon-icon { display: block; }
 
 /* --------------------------------------------------------------------------
-   5. Authentication Viewport & Double-Bezel Card (Doppelrand)
+   3. LEFT 50%: BRAND PANEL (Teal Gradient + Ambient Floating Papers)
    -------------------------------------------------------------------------- */
-.auth-viewport {
+.brand-panel {
+  flex: 1;
   position: relative;
-  z-index: 5;
-  min-height: calc(100dvh - 80px);
+  background: var(--brand-gradient);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 20px 20px 40px;
+  justify-content: space-between;
+  padding: 56px 48px;
+  overflow: hidden;
+  color: #ffffff;
 }
 
-/* Outer Shell: First Bezel */
-.auth-card-outer {
-  width: 100%;
-  max-width: 480px;
-  background: var(--bg-card-outer);
-  border: 1px solid var(--border-outer);
-  border-radius: 28px;
-  padding: 8px;
-  box-shadow: var(--shadow-card);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  animation: cardFadeIn 600ms var(--spring-ease) both;
-}
-
-@keyframes cardFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(24px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-/* Inner Core: Second Bezel (Nested Machined Architecture) */
-.auth-card-inner {
-  background: var(--bg-card-inner);
-  border: 1px solid var(--border-inner);
-  border-radius: 20px;
-  padding: 36px 32px 32px;
-  box-shadow: var(--shadow-inner-rim);
-  position: relative;
-  transition: background var(--transition-smooth), border-color var(--transition-smooth);
-}
-
-/* Brand Header */
-.card-brand-header {
-  text-align: center;
-  margin-bottom: 26px;
-}
-
-.logo-hero-badge {
-  width: 58px;
-  height: 58px;
-  margin: 0 auto 16px;
-  border-radius: 16px;
-  padding: 3px;
-  background: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 8px 24px -4px rgba(0, 99, 86, 0.25);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform var(--transition-smooth);
-}
-
-.logo-hero-badge:hover {
-  transform: rotate(-3deg) scale(1.05);
-}
-
-.logo-hero-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 12px;
-}
-
-.card-title {
-  font-size: 1.55rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
-  color: var(--text-primary);
-  margin-bottom: 6px;
-}
-
-.card-subtitle {
-  font-size: 0.88rem;
-  color: var(--text-secondary);
-  line-height: 1.45;
-}
-
-/* --------------------------------------------------------------------------
-   6. Segmented Switcher (Sign In vs Create Account)
-   -------------------------------------------------------------------------- */
-.tab-switcher-wrapper {
-  position: relative;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  background: var(--input-bg);
-  border: 1px solid var(--border-inner);
-  border-radius: 14px;
-  padding: 4px;
-  margin-bottom: 24px;
-}
-
-.tab-indicator {
+/* Floating Paper Sheets (20-30s ambient drift) */
+.floating-papers-container {
   position: absolute;
-  top: 4px;
-  bottom: 4px;
-  left: 4px;
-  width: calc(50% - 4px);
-  background: var(--bg-card-inner);
-  border: 1px solid var(--border-inner);
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  transition: transform var(--transition-spring);
+  inset: 0;
   pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
 }
 
-[data-mode="signup"] .tab-indicator {
-  transform: translateX(100%);
+.paper-sheet {
+  position: absolute;
+  color: #ffffff;
+  will-change: transform;
 }
 
-.tab-btn {
+.paper-1 {
+  width: 95px;
+  top: 12%;
+  left: 10%;
+  opacity: 0.07;
+  animation: floatDrift1 26s infinite alternate ease-in-out;
+}
+
+.paper-2 {
+  width: 80px;
+  bottom: 22%;
+  left: 18%;
+  opacity: 0.06;
+  animation: floatDrift2 32s infinite alternate-reverse ease-in-out;
+}
+
+.paper-3 {
+  width: 110px;
+  top: 24%;
+  right: 12%;
+  opacity: 0.08;
+  animation: floatDrift3 28s infinite alternate ease-in-out;
+}
+
+.paper-4 {
+  width: 75px;
+  bottom: 14%;
+  right: 20%;
+  opacity: 0.05;
+  animation: floatDrift1 22s infinite alternate-reverse ease-in-out;
+}
+
+@keyframes floatDrift1 {
+  0% { transform: translate(0, 0) rotate(-6deg); }
+  50% { transform: translate(25px, -35px) rotate(4deg); }
+  100% { transform: translate(-20px, -60px) rotate(-12deg); }
+}
+
+@keyframes floatDrift2 {
+  0% { transform: translate(0, 0) rotate(14deg); }
+  50% { transform: translate(-30px, 30px) rotate(2deg); }
+  100% { transform: translate(20px, 50px) rotate(18deg); }
+}
+
+@keyframes floatDrift3 {
+  0% { transform: translate(0, 0) rotate(-18deg); }
+  50% { transform: translate(35px, 25px) rotate(-4deg); }
+  100% { transform: translate(-25px, 45px) rotate(-22deg); }
+}
+
+/* Brand Core Block */
+.brand-content-core {
   position: relative;
   z-index: 2;
-  background: transparent;
-  border: none;
-  padding: 10px 14px;
-  font-family: var(--font-sans);
-  font-size: 0.86rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 10px;
-  transition: color var(--transition-fast);
+  margin: auto 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-}
-
-.tab-btn:hover {
-  color: var(--text-primary);
-}
-
-.tab-btn.active {
-  color: var(--text-primary);
-}
-
-/* --------------------------------------------------------------------------
-   7. Single Sign-On (Google Authentication)
-   -------------------------------------------------------------------------- */
-.social-auth-section {
-  margin-bottom: 20px;
-}
-
-.btn-google-sso {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 11px 16px;
-  background: var(--google-btn-bg);
-  border: 1px solid var(--google-btn-border);
-  border-radius: 14px;
-  font-family: var(--font-sans);
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-}
-
-.btn-google-sso:hover {
-  background: var(--google-btn-hover);
-  border-color: var(--border-input-hover);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.btn-google-sso:active {
-  transform: translateY(0);
-}
-
-.google-icon-wrapper {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-}
-
-.btn-label {
-  flex: 1;
   text-align: center;
-  letter-spacing: -0.01em;
-}
-
-.sso-trailing-badge {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.06);
-  color: var(--text-muted);
-  transition: transform var(--transition-fast), color var(--transition-fast);
-}
-
-[data-theme="light"] .sso-trailing-badge {
-  background: rgba(0, 0, 0, 0.05);
-}
-
-.btn-google-sso:hover .sso-trailing-badge {
-  transform: translateX(2px);
-  color: var(--text-primary);
-}
-
-/* Divider Hairline */
-.divider-line-box {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 22px;
-}
-
-.divider-hairline {
-  flex: 1;
-  height: 1px;
-  background: var(--border-inner);
-}
-
-.divider-text {
-  font-size: 0.76rem;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-muted);
+  max-width: 500px;
+  align-self: center;
 }
 
 /* --------------------------------------------------------------------------
-   8. Main Authentication Form Controls
+   4. LOGO INTRO ANIMATION (~1.6s orchestrated sequence)
    -------------------------------------------------------------------------- */
-.auth-form {
+.logo-hero-container {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-}
-
-.input-field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-  position: relative;
-  transition: all var(--transition-smooth);
-}
-
-/* Conditionally hidden fields during Sign In */
-:not([data-mode="signup"]) .signup-only,
-html:not([data-mode="signup"]) .signup-only {
-  display: none !important;
-}
-
-[data-mode="signup"] .signup-only {
-  display: flex !important;
-}
-
-[data-mode="signup"] label.signup-only {
-  display: inline-flex !important;
-}
-
-[data-mode="signup"] .signin-only,
-html[data-mode="signup"] .signin-only {
-  display: none !important;
-}
-
-/* Label */
-.field-label {
-  font-size: 0.83rem;
-  font-weight: 600;
-  color: var(--text-secondary);
-  display: flex;
   align-items: center;
-  gap: 4px;
-}
-
-.required-indicator {
-  color: var(--brand-primary);
-  font-weight: 700;
-}
-
-.label-with-action {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.text-link-action {
-  background: none;
-  border: none;
-  font-family: var(--font-sans);
-  font-size: 0.81rem;
-  font-weight: 600;
-  color: var(--brand-primary);
-  cursor: pointer;
-  padding: 0;
-  transition: color var(--transition-fast);
-}
-
-.text-link-action:hover {
-  color: var(--brand-primary-hover);
-  text-decoration: underline;
-}
-
-/* Input Control Shell */
-.input-control-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.field-leading-icon {
-  position: absolute;
-  left: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  pointer-events: none;
-  transition: color var(--transition-fast);
-}
-
-.form-text-input {
-  width: 100%;
-  padding: 12px 42px 12px 42px;
-  font-family: var(--font-sans);
-  font-size: 0.92rem;
-  color: var(--text-primary);
-  background: var(--input-bg);
-  border: 1px solid var(--border-input);
-  border-radius: 12px;
-  outline: none;
-  transition: all var(--transition-fast);
-}
-
-.form-text-input::placeholder {
-  color: var(--text-muted);
-  opacity: 0.75;
-}
-
-.form-text-input:hover {
-  border-color: var(--border-input-hover);
-}
-
-.form-text-input:focus {
-  background: var(--input-bg-focus);
-  border-color: var(--border-input-focus);
-  box-shadow: 0 0 0 3.5px var(--brand-primary-light);
-}
-
-.input-control-box:focus-within .field-leading-icon {
-  color: var(--brand-primary);
-}
-
-/* Field with error */
-.input-field-group.has-error .form-text-input {
-  border-color: var(--status-error);
-  box-shadow: 0 0 0 3.5px var(--status-error-bg);
-}
-
-.field-helper-error {
-  font-size: 0.76rem;
-  color: var(--status-error);
-  min-height: 16px;
-  line-height: 1.3;
-  padding-left: 2px;
-}
-
-/* Validation Checkmark Icon */
-.field-validation-icon {
-  position: absolute;
-  right: 14px;
-  width: 16px;
-  height: 16px;
-  display: none;
-  align-items: center;
-  justify-content: center;
-}
-
-.field-validation-icon.valid {
-  display: flex;
-  color: var(--status-success);
-}
-
-/* Password Toggle Icon Button */
-.password-toggle-btn {
-  position: absolute;
-  right: 10px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  border-radius: 8px;
-  transition: all var(--transition-fast);
-}
-
-.password-toggle-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.05);
-}
-
-/* --------------------------------------------------------------------------
-   9. Dynamic Password Strength Meter
-   -------------------------------------------------------------------------- */
-.password-strength-widget {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.strength-track {
-  width: 100%;
-  height: 4px;
-  background: var(--border-inner);
-  border-radius: 9999px;
-  overflow: hidden;
-}
-
-.strength-fill {
-  height: 100%;
-  width: 0%;
-  border-radius: 9999px;
-  transition: width 300ms var(--spring-ease), background-color 300ms var(--spring-ease);
-}
-
-.strength-meta {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 0.74rem;
-}
-
-.strength-label {
-  font-weight: 600;
-  color: var(--text-muted);
-}
-
-.strength-hint {
-  color: var(--text-muted);
-  font-size: 0.7rem;
-}
-
-/* --------------------------------------------------------------------------
-   10. Auxiliary Options Row (Remember Me / Terms)
-   -------------------------------------------------------------------------- */
-.auxiliary-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.custom-checkbox-wrapper {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.custom-checkbox-wrapper input[type="checkbox"] {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.checkbox-box {
-  width: 18px;
-  height: 18px;
-  border-radius: 6px;
-  border: 1.5px solid var(--border-input);
-  background: var(--input-bg);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  transition: all var(--transition-fast);
-}
-
-.checkbox-box svg {
-  width: 12px;
-  height: 12px;
-  opacity: 0;
-  transform: scale(0.6);
-  transition: all var(--transition-fast);
-}
-
-.custom-checkbox-wrapper input[type="checkbox"]:checked + .checkbox-box {
-  background: var(--brand-primary);
-  border-color: var(--brand-primary);
-}
-
-.custom-checkbox-wrapper input[type="checkbox"]:checked + .checkbox-box svg {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.custom-checkbox-wrapper input[type="checkbox"]:focus-visible + .checkbox-box {
-  box-shadow: 0 0 0 3px var(--brand-primary-light);
-}
-
-.checkbox-label {
-  font-size: 0.83rem;
-  color: var(--text-secondary);
-}
-
-.inline-text-link {
-  color: var(--brand-primary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.inline-text-link:hover {
-  color: var(--brand-primary-hover);
-}
-
-/* --------------------------------------------------------------------------
-   11. Primary CTA: Button-in-Button Architecture
-   -------------------------------------------------------------------------- */
-.submit-action-box {
-  margin-top: 6px;
-}
-
-.btn-primary-auth {
-  position: relative;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  padding: 8px 10px 8px 24px;
-  background: linear-gradient(135deg, var(--brand-primary) 0%, #087f6e 100%);
-  color: var(--text-contrast);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 9999px; /* Pill */
-  font-family: var(--font-sans);
-  font-size: 0.94rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  box-shadow: 0 8px 20px -4px var(--brand-glow), inset 0 1px 1px 0 rgba(255, 255, 255, 0.25);
-  transition: all var(--transition-smooth);
-}
-
-.btn-primary-auth:hover {
-  background: linear-gradient(135deg, var(--brand-primary-hover) 0%, #0a8e7b 100%);
-  transform: translateY(-1.5px);
-  box-shadow: 0 12px 28px -6px var(--brand-glow), inset 0 1px 1px 0 rgba(255, 255, 255, 0.35);
-}
-
-.btn-primary-auth:active {
-  transform: translateY(0.5px) scale(0.99);
-}
-
-/* Nested Trailing Icon Circle (The "Button-in-Button" Trailing Anchor) */
-.btn-trailing-icon-circle {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform var(--transition-smooth), background-color var(--transition-fast);
-}
-
-.btn-primary-auth:hover .btn-trailing-icon-circle {
-  transform: translateX(3px);
-  background: rgba(255, 255, 255, 0.28);
-}
-
-/* Spinner during submit */
-.btn-spinner {
-  display: none;
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #ffffff;
-  border-radius: 50%;
-  animation: spin 700ms linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.btn-primary-auth.is-loading .btn-spinner {
-  display: block;
-}
-
-.btn-primary-auth.is-loading .btn-trailing-icon-circle {
-  display: none;
-}
-
-/* --------------------------------------------------------------------------
-   12. Card Footer & Security Badges
-   -------------------------------------------------------------------------- */
-.card-footer-box {
-  margin-top: 24px;
-  text-align: center;
-  border-top: 1px solid var(--border-inner);
-  padding-top: 20px;
-}
-
-.footer-switch-text {
-  font-size: 0.84rem;
-  color: var(--text-secondary);
-}
-
-.switch-mode-action {
-  background: none;
-  border: none;
-  font-family: var(--font-sans);
-  font-size: 0.84rem;
-  font-weight: 700;
-  color: var(--brand-primary);
-  cursor: pointer;
-  margin-left: 4px;
-  text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-.switch-mode-action:hover {
-  color: var(--brand-primary-hover);
-  text-decoration: underline;
-}
-
-/* Security Footer */
-.auth-security-footer {
-  margin-top: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  flex-wrap: wrap;
-}
-
-.security-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.bullet-dot {
-  opacity: 0.5;
-}
-
-.security-link {
-  color: var(--text-muted);
-  text-decoration: none;
-  transition: color var(--transition-fast);
-}
-
-.security-link:hover {
-  color: var(--text-primary);
-}
-
-/* --------------------------------------------------------------------------
-   13. Forgot Password Modal
-   -------------------------------------------------------------------------- */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  animation: modalFadeIn 250ms var(--standard-ease);
-}
-
-@keyframes modalFadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.modal-card {
-  width: 100%;
-  max-width: 420px;
-  background: var(--bg-card-inner);
-  border: 1px solid var(--border-outer);
-  border-radius: 24px;
-  padding: 28px;
-  box-shadow: 0 32px 64px -16px rgba(0, 0, 0, 0.5);
-  animation: modalScaleUp 300ms var(--spring-ease);
-}
-
-@keyframes modalScaleUp {
-  from { transform: scale(0.95) translateY(10px); }
-  to { transform: scale(1) translateY(0); }
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: 18px;
 }
 
-.modal-icon-badge {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  background: var(--brand-primary-light);
-  color: var(--brand-primary);
+.syllora-hero-svg {
+  overflow: visible;
+  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.25));
+}
+
+/* Book Pages: start closed (scaleX: 0 from spine) and unfold outward */
+.book-page.page-left {
+  transform-origin: 130px 92px;
+  transform: scaleX(0);
+  animation: openLeftPage 800ms var(--ease-bounce) forwards;
+  animation-delay: 180ms;
+}
+
+.book-page.page-right {
+  transform-origin: 130px 92px;
+  transform: scaleX(0);
+  animation: openRightPage 800ms var(--ease-bounce) forwards;
+  animation-delay: 180ms;
+}
+
+@keyframes openLeftPage {
+  0% { transform: scaleX(0); }
+  75% { transform: scaleX(1.06); }
+  100% { transform: scaleX(1); }
+}
+
+@keyframes openRightPage {
+  0% { transform: scaleX(0); }
+  75% { transform: scaleX(1.06); }
+  100% { transform: scaleX(1); }
+}
+
+/* White Checkmark / Sprout: self-drawing stroke animation */
+.book-checkmark {
+  stroke-dasharray: 240;
+  stroke-dashoffset: 240;
+  animation: drawCheckmarkStroke 650ms var(--ease-spring) forwards;
+  animation-delay: 720ms;
+}
+
+@keyframes drawCheckmarkStroke {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+/* Wordmark: letter by letter fade in + slide up 8px with 40ms stagger */
+.brand-wordmark {
+  font-family: var(--font-heading);
+  font-size: 3.2rem;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  color: #ffffff;
+  margin-top: 12px;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.modal-close-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
+.wm-letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(8px);
+  animation: letterFadeUp 420ms var(--ease-spring) forwards;
+  animation-delay: calc(1050ms + (var(--i) * 45ms));
+}
+
+@keyframes letterFadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tagline */
+.brand-tagline {
+  font-family: var(--font-body);
+  font-size: 1.25rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.88);
+  letter-spacing: -0.01em;
+  margin-bottom: 32px;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: taglineFadeIn 500ms var(--ease-spring) forwards;
+  animation-delay: 1400ms;
+}
+
+@keyframes taglineFadeIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Brand Value Pillars */
+.brand-pillars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: taglineFadeIn 500ms var(--ease-spring) forwards;
+  animation-delay: 1550ms;
+}
+
+.pillar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #ffffff;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.brand-panel-footer {
+  position: relative;
+  z-index: 2;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: center;
+}
+
+/* --------------------------------------------------------------------------
+   5. RIGHT 50%: FORM PANEL & 400px CARD
+   -------------------------------------------------------------------------- */
+.form-panel {
+  flex: 1;
+  background-color: var(--color-canvas-bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 24px;
+  position: relative;
+  overflow-y: auto;
+}
+
+/* Mobile compact bar (hidden on desktop) */
+.mobile-brand-bar {
+  display: none;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.mobile-brand-title {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  font-weight: 800;
+  color: var(--color-charcoal-text);
+  letter-spacing: -0.03em;
+}
+
+/* Quick Demo Fill Button (top right) */
+.quick-demo-wrapper {
+  position: absolute;
+  top: 24px;
+  right: 28px;
+}
+
+.btn-demo-fill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 9999px;
+  border: 1px solid rgba(3, 96, 94, 0.25);
+  background: var(--color-teal-tint);
+  color: var(--color-primary-teal);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
   cursor: pointer;
-  padding: 6px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all var(--transition-fast);
+  transition: all 180ms ease;
 }
 
-.modal-close-btn:hover {
-  color: var(--text-primary);
-  background: var(--input-bg);
+.btn-demo-fill:hover {
+  background: rgba(3, 96, 94, 0.16);
+  transform: translateY(-1px);
 }
 
-.modal-title {
-  font-size: 1.3rem;
+/* --------------------------------------------------------------------------
+   6. FORM ENTRANCE & CARD STYLING
+   -------------------------------------------------------------------------- */
+.login-card {
+  width: 100%;
+  max-width: 400px;
+  background: #ffffff;
+  border-radius: 1.25rem; /* rounded-2xl */
+  padding: 38px 34px 34px;
+  box-shadow: var(--shadow-soft);
+  border: 1px solid rgba(229, 231, 235, 0.8);
+  
+  /* Entrance Animation: Fades in and slides up 20px after logo completes */
+  opacity: 0;
+  transform: translateY(20px);
+  animation: formCardEntrance 650ms var(--ease-spring) forwards;
+  animation-delay: 1450ms;
+}
+
+@keyframes formCardEntrance {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Error State: Gentle horizontal shake (3 cycles, 6px) */
+.login-card.has-error-shake {
+  animation: cardShake 450ms var(--ease-spring) forwards;
+}
+
+@keyframes cardShake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+/* Card Header */
+.card-header-block {
+  margin-bottom: 26px;
+  text-align: left;
+}
+
+.card-heading {
+  font-family: var(--font-heading);
+  font-size: 1.65rem;
   font-weight: 700;
-  color: var(--text-primary);
-  margin-bottom: 8px;
+  color: var(--color-charcoal-text);
+  letter-spacing: -0.025em;
+  margin-bottom: 5px;
 }
 
-.modal-desc {
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
-  margin-bottom: 20px;
+.card-subtext {
+  font-size: 0.9rem;
+  color: var(--color-muted-text);
+  line-height: 1.4;
 }
 
-.reset-form {
+/* --------------------------------------------------------------------------
+   7. INPUTS WITH FLOATING LABELS & FIELD STAGGER
+   -------------------------------------------------------------------------- */
+.login-form-element {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.modal-action-btn {
+/* Form fields staggered entrance (60ms apart) */
+.form-field-wrapper {
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  transform: translateY(12px);
+  animation: fieldStaggerIn 450ms var(--ease-spring) forwards;
+}
+
+.form-field-wrapper:nth-child(1) { animation-delay: 1550ms; }
+.form-field-wrapper:nth-child(2) { animation-delay: 1610ms; }
+.form-field-wrapper:nth-child(3) { animation-delay: 1670ms; }
+.aux-options-row { animation-delay: 1730ms; }
+.submit-button-container { animation-delay: 1790ms; }
+.divider-box { animation-delay: 1850ms; }
+.social-login-box { animation-delay: 1910ms; }
+.card-footer { animation-delay: 1970ms; }
+
+.aux-options-row,
+.submit-button-container,
+.divider-box,
+.social-login-box,
+.card-footer {
+  opacity: 0;
+  transform: translateY(12px);
+  animation: fieldStaggerIn 450ms var(--ease-spring) forwards;
+}
+
+@keyframes fieldStaggerIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Floating Input Box */
+.floating-input-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.floating-text-input {
+  width: 100%;
+  height: 52px;
+  padding: 18px 44px 6px 14px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  color: var(--color-charcoal-text);
+  background: #ffffff;
+  border: 1.5px solid var(--border-field);
+  border-radius: 12px;
+  outline: none;
+  transition: border-color 220ms ease, box-shadow 220ms ease;
+}
+
+.floating-text-input::placeholder {
+  opacity: 0; /* Important for :placeholder-shown floating label pattern */
+}
+
+/* Floating Label */
+.floating-field-label {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.92rem;
+  color: var(--color-muted-text);
+  pointer-events: none;
+  transition: transform 200ms var(--ease-spring), font-size 200ms var(--ease-spring), color 200ms var(--ease-spring);
+  transform-origin: left top;
+}
+
+/* Floating Label on Focus or Filled */
+.floating-text-input:focus ~ .floating-field-label,
+.floating-text-input:not(:placeholder-shown) ~ .floating-field-label {
+  transform: translateY(-24px) scale(0.82);
+  color: var(--color-primary-teal);
+  font-weight: 500;
+}
+
+/* Input Focus Glow Ring */
+.floating-text-input:focus {
+  border-color: var(--border-field-focus);
+  box-shadow: var(--teal-glow);
+}
+
+/* Leading or Trailing Icon */
+.field-icon {
+  position: absolute;
+  right: 14px;
+  color: var(--color-muted-text);
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  transition: color 200ms ease;
+}
+
+.floating-text-input:focus ~ .field-icon {
+  color: var(--color-primary-teal);
+}
+
+/* Eye Toggle Button */
+.btn-eye-toggle {
+  position: absolute;
+  right: 8px;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  border: none;
+  color: var(--color-muted-text);
+  cursor: pointer;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 180ms ease, background-color 180ms ease;
+}
+
+.btn-eye-toggle:hover {
+  color: var(--color-charcoal-text);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* Error States */
+.form-field-wrapper.is-invalid .floating-text-input {
+  border-color: var(--color-error);
+  box-shadow: 0 0 0 3.5px var(--color-error-bg);
+}
+
+.form-field-wrapper.is-invalid .floating-field-label {
+  color: var(--color-error);
+}
+
+.field-error-msg {
+  font-size: 0.78rem;
+  color: var(--color-error);
   margin-top: 4px;
+  padding-left: 2px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 260ms var(--ease-spring), opacity 260ms ease, margin-top 260ms ease;
+}
+
+.form-field-wrapper.is-invalid .field-error-msg {
+  max-height: 40px;
+  opacity: 1;
 }
 
 /* --------------------------------------------------------------------------
-   14. Toast Notification Center
+   8. REMEMBER ME & FORGOT PASSWORD ROW
    -------------------------------------------------------------------------- */
-.toast-container {
+.aux-options-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: -2px;
+}
+
+.custom-checkbox-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.custom-checkbox-container input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.custom-check-box {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-field);
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  transition: all 180ms ease;
+}
+
+.custom-check-box svg {
+  width: 12px;
+  height: 12px;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: all 180ms var(--ease-spring);
+}
+
+.custom-checkbox-container input:checked + .custom-check-box {
+  background: var(--color-primary-teal);
+  border-color: var(--color-primary-teal);
+}
+
+.custom-checkbox-container input:checked + .custom-check-box svg {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.custom-checkbox-container input:focus-visible + .custom-check-box {
+  box-shadow: var(--teal-glow);
+}
+
+.checkbox-text-label {
+  font-size: 0.84rem;
+  color: var(--color-charcoal-text);
+  font-weight: 500;
+}
+
+.forgot-password-link {
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--color-primary-teal);
+  text-decoration: none;
+  transition: color 180ms ease;
+}
+
+.forgot-password-link:hover {
+  color: var(--color-teal-hover);
+  text-decoration: underline;
+}
+
+/* --------------------------------------------------------------------------
+   9. PRIMARY LOGIN BUTTON (Hover lift, spinner morph, success check)
+   -------------------------------------------------------------------------- */
+.submit-button-container {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.btn-primary-login {
+  position: relative;
+  width: 100%;
+  height: 48px;
+  background: var(--color-primary-teal);
+  color: #ffffff;
+  border: none;
+  border-radius: 12px;
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(3, 96, 94, 0.22);
+  transition: background-color 220ms ease, transform 220ms var(--ease-spring), box-shadow 220ms ease, width 320ms var(--ease-spring), border-radius 320ms var(--ease-spring);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Hover: translateY -2px & darker teal */
+.btn-primary-login:hover:not(:disabled) {
+  background: var(--color-teal-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-float);
+}
+
+.btn-primary-login:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-caption {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+/* Loading State: Shrinks into a circular spinner */
+.btn-primary-login.is-loading {
+  width: 48px;
+  border-radius: 50%;
+  cursor: default;
+  pointer-events: none;
+}
+
+.btn-primary-login.is-loading .btn-caption {
+  opacity: 0;
+  transform: scale(0.6);
+  position: absolute;
+}
+
+.btn-spinner-icon {
+  display: none;
+  animation: spinnerRotate 700ms linear infinite;
+  color: #ffffff;
+}
+
+.btn-primary-login.is-loading .btn-spinner-icon {
+  display: flex;
+}
+
+@keyframes spinnerRotate {
+  to { transform: rotate(360deg); }
+}
+
+/* Success State: Morph spinner to self-drawing white checkmark */
+.btn-primary-login.is-success {
+  width: 48px;
+  border-radius: 50%;
+  background: #02807D !important;
+  pointer-events: none;
+}
+
+.btn-primary-login.is-success .btn-caption,
+.btn-primary-login.is-success .btn-spinner-icon {
+  display: none;
+}
+
+.btn-success-check {
+  display: none;
+}
+
+.btn-primary-login.is-success .btn-success-check {
+  display: flex;
+}
+
+#btnSuccessCheckPath {
+  stroke-dasharray: 40;
+  stroke-dashoffset: 40;
+  animation: drawBtnCheck 420ms var(--ease-spring) forwards;
+}
+
+@keyframes drawBtnCheck {
+  to { stroke-dashoffset: 0; }
+}
+
+/* --------------------------------------------------------------------------
+   10. DIVIDER & GOOGLE SSO BUTTON
+   -------------------------------------------------------------------------- */
+.divider-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0;
+}
+
+.divider-line {
+  flex: 1;
+  height: 1px;
+  background: #E5E7EB;
+}
+
+.divider-label {
+  font-size: 0.78rem;
+  color: var(--color-muted-text);
+  font-weight: 500;
+  text-transform: lowercase;
+}
+
+.btn-google-auth {
+  width: 100%;
+  height: 46px;
+  background: #ffffff;
+  border: 1.5px solid var(--border-field);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-charcoal-text);
+  cursor: pointer;
+  transition: all 180ms ease;
+}
+
+.btn-google-auth:hover {
+  background: #F9FAFB;
+  border-color: #D1D5DB;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.btn-google-auth:active {
+  transform: translateY(0);
+}
+
+.google-svg-box {
+  display: flex;
+  align-items: center;
+}
+
+/* --------------------------------------------------------------------------
+   11. FOOTER & SWITCH TO SIGN UP
+   -------------------------------------------------------------------------- */
+.card-footer {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid #F3F4F6;
+  text-align: center;
+}
+
+.footer-account-text {
+  font-size: 0.88rem;
+  color: var(--color-muted-text);
+}
+
+.footer-action-link {
+  background: none;
+  border: none;
+  color: var(--color-primary-teal);
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 4px;
+  transition: color 180ms ease;
+}
+
+.footer-action-link:hover {
+  color: var(--color-teal-hover);
+  text-decoration: underline;
+}
+
+/* Trust caption beneath card */
+.security-caption {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 24px;
+  font-size: 0.76rem;
+  color: var(--color-muted-text);
+}
+
+/* --------------------------------------------------------------------------
+   12. RECOVERY MODAL & TOAST SHELF
+   -------------------------------------------------------------------------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(34, 39, 43, 0.65);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: fadeInModal 200ms ease;
+}
+
+@keyframes fadeInModal {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-card-box {
+  width: 100%;
+  max-width: 380px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 28px 24px;
+  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.35);
+  animation: scaleUpModal 250ms var(--ease-spring);
+}
+
+@keyframes scaleUpModal {
+  from { transform: scale(0.95) translateY(8px); }
+  to { transform: scale(1) translateY(0); }
+}
+
+.modal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.modal-heading {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--color-charcoal-text);
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  color: var(--color-muted-text);
+  cursor: pointer;
+}
+
+.modal-text {
+  font-size: 0.86rem;
+  color: var(--color-muted-text);
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+/* Toast Shelf */
+.toast-shelf {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 1000;
+  z-index: 200;
   display: flex;
   flex-direction: column;
   gap: 10px;
   pointer-events: none;
 }
 
-.toast-item {
+.toast-bubble {
   pointer-events: auto;
+  min-width: 280px;
+  max-width: 380px;
+  padding: 13px 18px;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.22);
+  border-left: 4px solid var(--color-primary-teal);
+  font-size: 0.86rem;
+  color: var(--color-charcoal-text);
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 300px;
-  max-width: 400px;
-  padding: 14px 18px;
-  background: var(--bg-card-inner);
-  border: 1px solid var(--border-inner);
-  border-radius: 14px;
-  box-shadow: 0 16px 36px -8px rgba(0, 0, 0, 0.4), 0 0 1px 1px rgba(255, 255, 255, 0.08);
-  color: var(--text-primary);
-  font-size: 0.86rem;
-  animation: toastSlideUp 350ms var(--spring-ease) both;
-  transition: all var(--transition-fast);
+  gap: 10px;
+  animation: toastEntrance 300ms var(--ease-spring);
+  transition: opacity 250ms ease, transform 250ms ease;
 }
 
-@keyframes toastSlideUp {
+@keyframes toastEntrance {
   from {
     opacity: 0;
-    transform: translateY(20px) scale(0.96);
+    transform: translateY(18px) scale(0.96);
   }
   to {
     opacity: 1;
@@ -1113,82 +968,92 @@ html[data-mode="signup"] .signin-only {
   }
 }
 
-.toast-item.toast-success {
-  border-left: 4px solid var(--status-success);
+.toast-bubble.toast-success {
+  border-left-color: #059669;
 }
 
-.toast-item.toast-error {
-  border-left: 4px solid var(--status-error);
-}
-
-.toast-item.toast-info {
-  border-left: 4px solid var(--brand-primary);
-}
-
-.toast-item-icon {
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-}
-
-.toast-item-content {
-  flex: 1;
-  line-height: 1.4;
+.toast-bubble.toast-error {
+  border-left-color: var(--color-error);
 }
 
 /* --------------------------------------------------------------------------
-   15. Responsive Adaptations & Accessibility
+   13. MOBILE RESPONSIVE ADAPTATIONS (Single Column)
    -------------------------------------------------------------------------- */
-@media (max-width: 520px) {
-  .top-nav {
-    padding: 16px 16px 8px;
+@media (max-width: 900px) {
+  .split-layout-container {
+    flex-direction: column;
+    min-height: 100dvh;
   }
 
-  .auth-viewport {
-    padding: 12px 12px 32px;
+  .brand-panel {
+    display: none; /* Hide large desktop brand panel on small mobile viewports */
+  }
+
+  .mobile-brand-bar {
+    display: flex; /* Display compact top brand bar */
+  }
+
+  .form-panel {
+    padding: 36px 18px 48px;
     justify-content: flex-start;
   }
 
-  .auth-card-outer {
-    border-radius: 22px;
-    padding: 5px;
+  .quick-demo-wrapper {
+    top: 18px;
+    right: 18px;
   }
 
-  .auth-card-inner {
-    border-radius: 17px;
-    padding: 26px 20px 24px;
+  .login-card {
+    border-radius: 16px;
+    padding: 32px 24px 28px;
+    margin-top: 12px;
   }
 
-  .card-title {
-    font-size: 1.35rem;
+  .card-heading {
+    font-size: 1.5rem;
   }
 
-  .auth-security-footer {
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .bullet-dot {
-    display: none;
-  }
-
-  .toast-container {
+  .toast-shelf {
     left: 16px;
     right: 16px;
     bottom: 16px;
   }
 
-  .toast-item {
-    min-width: auto;
+  .toast-bubble {
     width: 100%;
+    min-width: auto;
   }
 }
 
-/* Respect Reduced Motion */
+/* --------------------------------------------------------------------------
+   14. ACCESSIBILITY: PREFERS-REDUCED-MOTION
+   -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+  .book-page.page-left,
+  .book-page.page-right,
+  .book-checkmark,
+  .wm-letter,
+  .brand-tagline,
+  .brand-pillars,
+  .paper-sheet,
+  .login-card,
+  .form-field-wrapper,
+  .aux-options-row,
+  .submit-button-container,
+  .divider-box,
+  .social-login-box,
+  .card-footer {
+    animation: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    stroke-dashoffset: 0 !important;
+  }
+
+  .login-card.has-error-shake {
+    animation: none !important;
+  }
+
+  .btn-primary-login {
+    transition: none !important;
   }
 }
