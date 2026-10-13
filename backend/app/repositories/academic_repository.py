@@ -898,43 +898,79 @@ class AcademicRepository:
 
     def get_profile(self, user_id: str) -> dict[str, Any]:
         uid = _to_uuid_str(user_id)
-        pg_sql = "SELECT user_id, display_name, avatar_path, created_at, updated_at FROM public.profiles WHERE user_id = %s;"
-        sqlite_sql = "SELECT user_id, display_name, avatar_path, created_at, updated_at FROM profiles WHERE user_id = ?;"
-        row = self._execute_single(pg_sql, sqlite_sql, (uid,), user_id=uid)
+        pg_sql = "SELECT user_id, display_name, phone_number, avatar_path, created_at, updated_at FROM public.profiles WHERE user_id = %s;"
+        sqlite_sql = "SELECT user_id, display_name, phone_number, avatar_path, created_at, updated_at FROM profiles WHERE user_id = ?;"
+        try:
+            row = self._execute_single(pg_sql, sqlite_sql, (uid,), user_id=uid)
+        except Exception:
+            pg_fallback = "SELECT user_id, display_name, avatar_path, created_at, updated_at FROM public.profiles WHERE user_id = %s;"
+            sqlite_fallback = "SELECT user_id, display_name, avatar_path, created_at, updated_at FROM profiles WHERE user_id = ?;"
+            row = self._execute_single(pg_fallback, sqlite_fallback, (uid,), user_id=uid)
         if not row:
             return {
                 "user_id": uid,
                 "display_name": "Student",
+                "phone_number": None,
                 "avatar_path": None,
                 "created_at": _now_iso(),
                 "updated_at": _now_iso(),
             }
+        if "phone_number" not in row:
+            row["phone_number"] = None
         return row
 
-    def update_profile(self, user_id: str, display_name: str | None = None, avatar_path: str | None = None) -> dict[str, Any]:
+    def update_profile(
+        self,
+        user_id: str,
+        display_name: str | None = None,
+        phone_number: str | None = None,
+        avatar_path: str | None = None,
+    ) -> dict[str, Any]:
         uid = _to_uuid_str(user_id)
         curr = self.get_profile(uid)
         dname = display_name if display_name is not None else curr["display_name"]
+        phone = phone_number if phone_number is not None else curr.get("phone_number")
         avatar = avatar_path if avatar_path is not None else curr["avatar_path"]
         now = _now_iso()
 
         pg_sql = """
-            INSERT INTO public.profiles (user_id, display_name, avatar_path, created_at, updated_at)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO public.profiles (user_id, display_name, phone_number, avatar_path, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (user_id) DO UPDATE
             SET display_name = EXCLUDED.display_name,
+                phone_number = COALESCE(EXCLUDED.phone_number, public.profiles.phone_number),
                 avatar_path = EXCLUDED.avatar_path,
                 updated_at = EXCLUDED.updated_at;
         """
         sqlite_sql = """
-            INSERT INTO profiles (user_id, display_name, avatar_path, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO profiles (user_id, display_name, phone_number, avatar_path, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT (user_id) DO UPDATE
             SET display_name = excluded.display_name,
+                phone_number = COALESCE(excluded.phone_number, profiles.phone_number),
                 avatar_path = excluded.avatar_path,
                 updated_at = excluded.updated_at;
         """
-        self._execute_mutate(pg_sql, sqlite_sql, (uid, dname, avatar, now, now), user_id=uid)
+        try:
+            self._execute_mutate(pg_sql, sqlite_sql, (uid, dname, phone, avatar, now, now), user_id=uid)
+        except Exception:
+            pg_fallback = """
+                INSERT INTO public.profiles (user_id, display_name, avatar_path, created_at, updated_at)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT (user_id) DO UPDATE
+                SET display_name = EXCLUDED.display_name,
+                    avatar_path = EXCLUDED.avatar_path,
+                    updated_at = EXCLUDED.updated_at;
+            """
+            sqlite_fallback = """
+                INSERT INTO profiles (user_id, display_name, avatar_path, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (user_id) DO UPDATE
+                SET display_name = excluded.display_name,
+                    avatar_path = excluded.avatar_path,
+                    updated_at = excluded.updated_at;
+            """
+            self._execute_mutate(pg_fallback, sqlite_fallback, (uid, dname, avatar, now, now), user_id=uid)
         return self.get_profile(uid)
 
     # -----------------------------------------------------------------------

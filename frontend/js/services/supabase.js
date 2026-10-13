@@ -209,6 +209,166 @@ export async function signInWithPassword(email, password) {
 }
 
 /**
+ * Sign in with OAuth provider (e.g. 'google') using Supabase Auth
+ * @param {string} provider
+ * @param {object} options
+ */
+export async function signInWithOAuth(provider = "google", options = {}) {
+  const client = await getSupabase();
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const defaultRedirect = `${origin}/`;
+  const mergedOptions = {
+    redirectTo: options.redirectTo || defaultRedirect,
+    queryParams: { access_type: "offline", prompt: "consent", ...(options.queryParams || {}) },
+    ...options,
+  };
+
+  if (client && client.auth && typeof client.auth.signInWithOAuth === "function") {
+    return await client.auth.signInWithOAuth({
+      provider,
+      options: mergedOptions,
+    });
+  }
+
+  // Resilient REST fallback
+  const authUrl = `${SUPABASE_CONFIG.url}/auth/v1/authorize?provider=${provider}&redirect_to=${encodeURIComponent(mergedOptions.redirectTo)}`;
+  if (typeof window !== "undefined") {
+    window.location.href = authUrl;
+  }
+  return { data: { provider, url: authUrl }, error: null };
+}
+
+/**
+ * Send password recovery instructions to email
+ * @param {string} email
+ * @param {object} options
+ */
+export async function resetPasswordForEmail(email, options = {}) {
+  const client = await getSupabase();
+  const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  const defaultRedirect = `${origin}/#/reset-password`;
+  const mergedOptions = {
+    redirectTo: options.redirectTo || defaultRedirect,
+    ...options,
+  };
+
+  if (client && client.auth && typeof client.auth.resetPasswordForEmail === "function") {
+    return await client.auth.resetPasswordForEmail(email, mergedOptions);
+  }
+  return await client.auth.resetPasswordForEmail(email, mergedOptions);
+}
+
+/**
+ * Update authenticated user attributes (e.g. password, metadata)
+ * @param {object} attributes
+ */
+export async function updateUser(attributes = {}) {
+  const client = await getSupabase();
+  return await client.auth.updateUser(attributes);
+}
+
+/**
+ * Detect, parse, and process OAuth or password recovery callback from URL hash/search params.
+ * Prevents router hash collisions and cleans URL history.
+ * @returns {Promise<{isOAuthCallback: boolean, success?: boolean, isRecovery?: boolean, error?: string, session?: object}>}
+ */
+export async function handleOAuthCallback() {
+  if (typeof window === "undefined") return { isOAuthCallback: false };
+
+  const hash = window.location.hash || "";
+  const search = window.location.search || "";
+
+  // Check for error in hash or search
+  const hashParams = new URLSearchParams(hash.replace(/^#\/?/, ""));
+  const searchParams = new URLSearchParams(search);
+
+  const errorDesc = hashParams.get("error_description") || searchParams.get("error_description");
+  const error = hashParams.get("error") || searchParams.get("error");
+
+  if (error || errorDesc) {
+    console.warn("[Syllora Auth] OAuth callback reported error:", error, errorDesc);
+    window.history.replaceState(null, "", `${window.location.pathname}#/login`);
+    return {
+      isOAuthCallback: true,
+      success: false,
+      error: errorDesc ? decodeURIComponent(errorDesc.replace(/\+/g, " ")) : "Authentication canceled or failed.",
+    };
+  }
+
+  const hasAccessToken = hash.includes("access_token=") || hashParams.has("access_token");
+  const hasCode = searchParams.has("code");
+  const isRecovery = hash.includes("type=recovery") || hashParams.get("type") === "recovery";
+
+  if (hasAccessToken || hasCode) {
+    console.log("[Syllora Auth] Processing OAuth / recovery callback parameters...");
+    const client = await getSupabase();
+
+    let session = null;
+    try {
+      const { data, error: sessionErr } = await client.auth.getSession();
+      if (!sessionErr && data?.session) {
+        session = data.session;
+      }
+    } catch (e) {
+      console.warn("[Syllora Auth] getSession error during callback:", e);
+    }
+
+    if (!session && hasAccessToken) {
+      const accessToken = hashParams.get("access_token");
+      const refreshToken = hashParams.get("refresh_token");
+      const expiresIn = hashParams.get("expires_in");
+      const tokenType = hashParams.get("token_type") || "bearer";
+
+      if (accessToken) {
+        const payload = parseJwtPayload(accessToken);
+        const user = payload
+          ? { id: payload.sub, email: payload.email, user_metadata: payload.user_metadata || {} }
+          : null;
+        session = {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          expires_in: expiresIn ? parseInt(expiresIn, 10) : 3600,
+          token_type: tokenType,
+          user,
+        };
+        localStorage.setItem(SUPABASE_CONFIG.sessionStorageKey, JSON.stringify(session));
+      }
+    }
+
+    if (isRecovery) {
+      // User arrived from password reset recovery email
+      window.history.replaceState(null, "", `${window.location.pathname}#/reset-password`);
+      _notifyAuthListeners("PASSWORD_RECOVERY", session);
+      return {
+        isOAuthCallback: true,
+        isRecovery: true,
+        success: true,
+        session,
+      };
+    }
+
+    if (session && session.access_token) {
+      window.history.replaceState(null, "", `${window.location.pathname}#/app/overview`);
+      _notifyAuthListeners("SIGNED_IN", session);
+      return {
+        isOAuthCallback: true,
+        success: true,
+        session,
+      };
+    } else {
+      window.history.replaceState(null, "", `${window.location.pathname}#/login`);
+      return {
+        isOAuthCallback: true,
+        success: false,
+        error: "Unable to establish authenticated session from OAuth provider.",
+      };
+    }
+  }
+
+  return { isOAuthCallback: false };
+}
+
+/**
  * Sign up a new user using Supabase Auth
  */
 export async function signUp(email, password, options = {}) {
@@ -371,6 +531,58 @@ function createNativeSupabaseRestClient() {
             localStorage.setItem(SUPABASE_CONFIG.sessionStorageKey, JSON.stringify(data));
           }
           return { data, error: null };
+        } catch (err) {
+          return { data: null, error: err };
+        }
+      },
+      async signInWithOAuth({ provider = "google", options = {} }) {
+        const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+        const redirectTo = encodeURIComponent(options.redirectTo || `${origin}/`);
+        const authUrl = `${baseUrl}/auth/v1/authorize?provider=${provider}&redirect_to=${redirectTo}`;
+        if (typeof window !== "undefined") {
+          window.location.href = authUrl;
+        }
+        return { data: { provider, url: authUrl }, error: null };
+      },
+      async resetPasswordForEmail(email, options = {}) {
+        try {
+          const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+          const redirectTo = options.redirectTo || `${origin}/#/reset-password`;
+          const res = await fetch(`${baseUrl}/auth/v1/recover`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: key,
+            },
+            body: JSON.stringify({ email, redirect_to: redirectTo }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            return { data: null, error: new Error(data.error_description || data.msg || "Password reset request failed") };
+          }
+          return { data, error: null };
+        } catch (err) {
+          return { data: null, error: err };
+        }
+      },
+      async updateUser(attributes = {}) {
+        try {
+          const token = getAuthToken();
+          if (!token) return { data: null, error: new Error("No active session") };
+          const res = await fetch(`${baseUrl}/auth/v1/user`, {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+              apikey: key,
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(attributes),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            return { data: null, error: new Error(data.error_description || data.msg || "Failed to update user") };
+          }
+          return { data: { user: data }, error: null };
         } catch (err) {
           return { data: null, error: err };
         }

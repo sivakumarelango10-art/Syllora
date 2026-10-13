@@ -938,11 +938,400 @@
     }, 1650);
   }
 
-  // Google SSO Click Action
-  googleBtn.addEventListener('click', () => {
-    setFieldError(emailGroup, emailError, 'Google Single Sign-On is not configured. Please sign in with your email and password.');
-    triggerErrorShake();
-  });
+  // --------------------------------------------------------------------------
+  // AUTH CARD SWITCHER & MULTI-CARD LOGIC
+  // --------------------------------------------------------------------------
+  const signupCard = document.getElementById('signupCard');
+  const forgotCard = document.getElementById('forgotCard');
+  const resetCard = document.getElementById('resetCard');
+  const authGlobalMsg = document.getElementById('authGlobalMsg');
+
+  // Signup DOM
+  const signupForm = document.getElementById('signupForm');
+  const signupNameGroup = document.getElementById('signupNameGroup');
+  const signupNameInput = document.getElementById('signupNameInput');
+  const signupNameError = document.getElementById('signupNameError');
+  const signupEmailGroup = document.getElementById('signupEmailGroup');
+  const signupEmailInput = document.getElementById('signupEmailInput');
+  const signupEmailError = document.getElementById('signupEmailError');
+  const signupPhoneGroup = document.getElementById('signupPhoneGroup');
+  const signupPhoneInput = document.getElementById('signupPhoneInput');
+  const signupPhoneError = document.getElementById('signupPhoneError');
+  const signupPasswordGroup = document.getElementById('signupPasswordGroup');
+  const signupPasswordInput = document.getElementById('signupPasswordInput');
+  const signupPasswordError = document.getElementById('signupPasswordError');
+  const signupConfirmGroup = document.getElementById('signupConfirmGroup');
+  const signupConfirmInput = document.getElementById('signupConfirmInput');
+  const signupConfirmError = document.getElementById('signupConfirmError');
+  const signupSubmitBtn = document.getElementById('signupSubmitBtn');
+  const signupBtnLabel = document.getElementById('signupBtnLabel');
+  const signupBtnSpinner = document.getElementById('signupBtnSpinner');
+  const signupGoogleBtn = document.getElementById('signupGoogleBtn');
+  const signupGlobalMsg = document.getElementById('signupGlobalMsg');
+  const signupTogglePasswordBtn = document.getElementById('signupTogglePasswordBtn');
+  const signupToggleConfirmBtn = document.getElementById('signupToggleConfirmBtn');
+
+  // Forgot DOM
+  const forgotForm = document.getElementById('forgotForm');
+  const forgotEmailGroup = document.getElementById('forgotEmailGroup');
+  const forgotEmailInput = document.getElementById('forgotEmailInput');
+  const forgotEmailError = document.getElementById('forgotEmailError');
+  const forgotSubmitBtn = document.getElementById('forgotSubmitBtn');
+  const forgotBtnLabel = document.getElementById('forgotBtnLabel');
+  const forgotBtnSpinner = document.getElementById('forgotBtnSpinner');
+  const forgotGlobalMsg = document.getElementById('forgotGlobalMsg');
+
+  // Reset DOM
+  const resetForm = document.getElementById('resetForm');
+  const resetPasswordGroup = document.getElementById('resetPasswordGroup');
+  const resetPasswordInput = document.getElementById('resetPasswordInput');
+  const resetPasswordError = document.getElementById('resetPasswordError');
+  const resetConfirmGroup = document.getElementById('resetConfirmGroup');
+  const resetConfirmInput = document.getElementById('resetConfirmInput');
+  const resetConfirmError = document.getElementById('resetConfirmError');
+  const resetSubmitBtn = document.getElementById('resetSubmitBtn');
+  const resetBtnLabel = document.getElementById('resetBtnLabel');
+  const resetBtnSpinner = document.getElementById('resetBtnSpinner');
+  const resetGlobalMsg = document.getElementById('resetGlobalMsg');
+  const resetTogglePasswordBtn = document.getElementById('resetTogglePasswordBtn');
+  const resetToggleConfirmBtn = document.getElementById('resetToggleConfirmBtn');
+
+  function showBanner(bannerEl, type, message) {
+    if (!bannerEl) return;
+    bannerEl.className = `auth-global-msg ${type}`;
+    bannerEl.textContent = message;
+    bannerEl.style.display = 'flex';
+  }
+
+  function hideBanner(bannerEl) {
+    if (!bannerEl) return;
+    bannerEl.textContent = '';
+    bannerEl.style.display = 'none';
+  }
+
+  function setupPasswordToggle(btn, input) {
+    if (!btn || !input) return;
+    const showIcon = btn.querySelector('.eye-icon-show');
+    const hideIcon = btn.querySelector('.eye-icon-hide');
+    btn.addEventListener('click', () => {
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+      if (showIcon) showIcon.style.display = isPassword ? 'none' : 'block';
+      if (hideIcon) hideIcon.style.display = isPassword ? 'block' : 'none';
+      btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    });
+  }
+
+  setupPasswordToggle(signupTogglePasswordBtn, signupPasswordInput);
+  setupPasswordToggle(signupToggleConfirmBtn, signupConfirmInput);
+  setupPasswordToggle(resetTogglePasswordBtn, resetPasswordInput);
+  setupPasswordToggle(resetToggleConfirmBtn, resetConfirmInput);
+
+  function switchAuthCard(rawPath) {
+    const raw = (rawPath || window.location.hash || '').replace(/^#\/?/, '/');
+    const [path] = raw.split('?');
+
+    // Make sure intro finishes if navigating directly to another auth card
+    if (introActive && (path === '/signup' || path === '/forgot' || path === '/reset-password' || path === 'signup' || path === 'forgot' || path === 'reset-password')) {
+      completeIntro();
+    }
+
+    // Reset card active displays
+    if (loginCard) loginCard.style.display = 'none';
+    if (signupCard) signupCard.classList.remove('active');
+    if (forgotCard) forgotCard.classList.remove('active');
+    if (resetCard) resetCard.classList.remove('active');
+
+    if (path === '/signup' || path === 'signup') {
+      if (signupCard) {
+        signupCard.classList.add('active');
+        signupCard.style.display = 'block';
+      }
+      setTimeout(() => signupNameInput && signupNameInput.focus(), 60);
+    } else if (path === '/forgot' || path === 'forgot') {
+      if (forgotCard) {
+        forgotCard.classList.add('active');
+        forgotCard.style.display = 'block';
+      }
+      setTimeout(() => forgotEmailInput && forgotEmailInput.focus(), 60);
+    } else if (path === '/reset-password' || path === 'reset-password') {
+      if (resetCard) {
+        resetCard.classList.add('active');
+        resetCard.style.display = 'block';
+      }
+      setTimeout(() => resetPasswordInput && resetPasswordInput.focus(), 60);
+    } else {
+      if (loginCard) {
+        loginCard.style.display = 'block';
+      }
+      setTimeout(() => emailInput && emailInput.focus(), 60);
+    }
+  }
+
+  window.addEventListener('hashchange', () => switchAuthCard(window.location.hash));
+  window.sylloraSwitchAuthCard = switchAuthCard;
+
+  // Google SSO Click Action (Issue 1)
+  async function triggerGoogleOAuth(btnEl, bannerEl) {
+    if (isSubmitting) return;
+    isSubmitting = true;
+    hideBanner(bannerEl);
+    const originalText = btnEl.innerHTML;
+    btnEl.disabled = true;
+    btnEl.setAttribute('aria-busy', 'true');
+    btnEl.innerHTML = `
+      <div class="btn-spinner" style="display:inline-block; width:18px; height:18px; border:2px solid rgba(3,96,94,0.25); border-top-color:#03605E; border-radius:50%; animation:spinnerRotate 0.8s linear infinite;"></div>
+      <span>Connecting to Google...</span>
+    `;
+
+    try {
+      if (typeof window.sylloraGoogleAuth === 'function') {
+        const res = await window.sylloraGoogleAuth();
+        if (res && res.error) {
+          showBanner(bannerEl, 'error', res.error.message || 'Google sign-in could not be initiated.');
+          triggerErrorShake();
+          btnEl.disabled = false;
+          btnEl.innerHTML = originalText;
+          btnEl.setAttribute('aria-busy', 'false');
+          isSubmitting = false;
+        }
+      } else {
+        showBanner(bannerEl, 'error', 'Authentication service not initialized.');
+        btnEl.disabled = false;
+        btnEl.innerHTML = originalText;
+        btnEl.setAttribute('aria-busy', 'false');
+        isSubmitting = false;
+      }
+    } catch (err) {
+      showBanner(bannerEl, 'error', err.message || 'Google sign-in failed.');
+      triggerErrorShake();
+      btnEl.disabled = false;
+      btnEl.innerHTML = originalText;
+      btnEl.setAttribute('aria-busy', 'false');
+      isSubmitting = false;
+    }
+  }
+
+  googleBtn.addEventListener('click', () => triggerGoogleOAuth(googleBtn, authGlobalMsg));
+  if (signupGoogleBtn) {
+    signupGoogleBtn.addEventListener('click', () => triggerGoogleOAuth(signupGoogleBtn, signupGlobalMsg));
+  }
+
+  // Sign Up Form Submission (Issue 2 & Issue 3)
+  if (signupForm) {
+    signupForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (isSubmitting) return;
+
+      clearFieldError(signupNameGroup, signupNameError);
+      clearFieldError(signupEmailGroup, signupEmailError);
+      clearFieldError(signupPhoneGroup, signupPhoneError);
+      clearFieldError(signupPasswordGroup, signupPasswordError);
+      clearFieldError(signupConfirmGroup, signupConfirmError);
+      hideBanner(signupGlobalMsg);
+
+      const fullName = (signupNameInput.value || '').trim();
+      const email = (signupEmailInput.value || '').trim();
+      const phone = (signupPhoneInput.value || '').trim();
+      const password = signupPasswordInput.value || '';
+      const confirmPassword = signupConfirmInput.value || '';
+
+      let hasError = false;
+
+      // Validate Full Name: cannot be blank or only whitespace
+      if (!fullName) {
+        setFieldError(signupNameGroup, signupNameError, 'Full name cannot be blank.');
+        hasError = true;
+      }
+
+      // Validate Email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!email || !emailRegex.test(email)) {
+        setFieldError(signupEmailGroup, signupEmailError, 'Please enter a valid email address.');
+        hasError = true;
+      }
+
+      // Validate optional Phone: if provided, validate reasonable international format
+      if (phone) {
+        const phoneRegex = /^\+?[0-9\s\-()]{7,20}$/;
+        if (!phoneRegex.test(phone)) {
+          setFieldError(signupPhoneGroup, signupPhoneError, 'Please enter a valid phone number (e.g. +1 555 123 4567).');
+          hasError = true;
+        }
+      }
+
+      // Validate Password policy: minimum 8 characters
+      if (!password || password.length < 8) {
+        setFieldError(signupPasswordGroup, signupPasswordError, 'Password must be at least 8 characters long.');
+        hasError = true;
+      }
+
+      // Validate Confirm Password matches Create Password exactly
+      if (password !== confirmPassword) {
+        setFieldError(signupConfirmGroup, signupConfirmError, 'Passwords do not match.');
+        hasError = true;
+      }
+
+      if (hasError) {
+        if (signupCard) signupCard.classList.add('shake');
+        setTimeout(() => signupCard && signupCard.classList.remove('shake'), 450);
+        return;
+      }
+
+      // Submit Registration
+      isSubmitting = true;
+      signupSubmitBtn.disabled = true;
+      signupSubmitBtn.setAttribute('aria-busy', 'true');
+      if (signupBtnSpinner) signupBtnSpinner.style.display = 'inline-block';
+      if (signupBtnLabel) signupBtnLabel.textContent = 'Creating account...';
+
+      try {
+        if (typeof window.sylloraRegister === 'function') {
+          const res = await window.sylloraRegister({
+            fullName,
+            email,
+            phone: phone || null,
+            password
+          });
+
+          if (res.error) {
+            showBanner(signupGlobalMsg, 'error', res.error.message || res.error || 'Failed to create account.');
+            if (signupCard) signupCard.classList.add('shake');
+            setTimeout(() => signupCard && signupCard.classList.remove('shake'), 450);
+          } else if (res.needsEmailConfirmation) {
+            // Email confirmation enabled: display required message
+            showBanner(
+              signupGlobalMsg,
+              'info',
+              'Account created. Please check your email to verify your account before logging in.'
+            );
+            signupForm.reset();
+          } else if (res.session) {
+            // Immediate active session
+            showBanner(signupGlobalMsg, 'success', 'Account created successfully! Redirecting...');
+            handleAuthSuccess(res);
+          } else {
+            showBanner(
+              signupGlobalMsg,
+              'info',
+              'Account created. Please check your email to verify your account before logging in.'
+            );
+            signupForm.reset();
+          }
+        } else {
+          showBanner(signupGlobalMsg, 'error', 'Registration service not available.');
+        }
+      } catch (err) {
+        showBanner(signupGlobalMsg, 'error', err.message || 'An unexpected error occurred during registration.');
+      } finally {
+        isSubmitting = false;
+        signupSubmitBtn.disabled = false;
+        signupSubmitBtn.setAttribute('aria-busy', 'false');
+        if (signupBtnSpinner) signupBtnSpinner.style.display = 'none';
+        if (signupBtnLabel) signupBtnLabel.textContent = 'Create account';
+      }
+    });
+  }
+
+  // Forgot Password Form Submission (Issue 6)
+  if (forgotForm) {
+    forgotForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (isSubmitting) return;
+
+      clearFieldError(forgotEmailGroup, forgotEmailError);
+      hideBanner(forgotGlobalMsg);
+
+      const email = (forgotEmailInput.value || '').trim();
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!email || !emailRegex.test(email)) {
+        setFieldError(forgotEmailGroup, forgotEmailError, 'Please enter a valid email address.');
+        return;
+      }
+
+      isSubmitting = true;
+      forgotSubmitBtn.disabled = true;
+      forgotSubmitBtn.setAttribute('aria-busy', 'true');
+      if (forgotBtnSpinner) forgotBtnSpinner.style.display = 'inline-block';
+      if (forgotBtnLabel) forgotBtnLabel.textContent = 'Sending link...';
+
+      try {
+        if (typeof window.sylloraForgotPassword === 'function') {
+          const res = await window.sylloraForgotPassword(email);
+          if (res.error) {
+            showBanner(forgotGlobalMsg, 'error', res.error.message || 'Unable to send recovery email.');
+          } else {
+            showBanner(forgotGlobalMsg, 'success', 'Recovery link sent! Please check your email inbox.');
+            forgotForm.reset();
+          }
+        }
+      } catch (err) {
+        showBanner(forgotGlobalMsg, 'error', err.message || 'Request failed.');
+      } finally {
+        isSubmitting = false;
+        forgotSubmitBtn.disabled = false;
+        forgotSubmitBtn.setAttribute('aria-busy', 'false');
+        if (forgotBtnSpinner) forgotBtnSpinner.style.display = 'none';
+        if (forgotBtnLabel) forgotBtnLabel.textContent = 'Send recovery link';
+      }
+    });
+  }
+
+  // Reset Password Form Submission (Issue 6)
+  if (resetForm) {
+    resetForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (isSubmitting) return;
+
+      clearFieldError(resetPasswordGroup, resetPasswordError);
+      clearFieldError(resetConfirmGroup, resetConfirmError);
+      hideBanner(resetGlobalMsg);
+
+      const password = resetPasswordInput.value || '';
+      const confirmPassword = resetConfirmInput.value || '';
+
+      let hasError = false;
+      if (!password || password.length < 8) {
+        setFieldError(resetPasswordGroup, resetPasswordError, 'Password must be at least 8 characters long.');
+        hasError = true;
+      }
+      if (password !== confirmPassword) {
+        setFieldError(resetConfirmGroup, resetConfirmError, 'Passwords do not match.');
+        hasError = true;
+      }
+
+      if (hasError) return;
+
+      isSubmitting = true;
+      resetSubmitBtn.disabled = true;
+      resetSubmitBtn.setAttribute('aria-busy', 'true');
+      if (resetBtnSpinner) resetBtnSpinner.style.display = 'inline-block';
+      if (resetBtnLabel) resetBtnLabel.textContent = 'Updating password...';
+
+      try {
+        if (typeof window.sylloraUpdatePassword === 'function') {
+          const res = await window.sylloraUpdatePassword(password);
+          if (res.error) {
+            showBanner(resetGlobalMsg, 'error', res.error.message || 'Failed to update password.');
+          } else {
+            showBanner(resetGlobalMsg, 'success', 'Password updated successfully! Redirecting to login...');
+            resetForm.reset();
+            setTimeout(() => {
+              window.location.hash = '#/login';
+            }, 1800);
+          }
+        }
+      } catch (err) {
+        showBanner(resetGlobalMsg, 'error', err.message || 'Update failed.');
+      } finally {
+        isSubmitting = false;
+        resetSubmitBtn.disabled = false;
+        resetSubmitBtn.setAttribute('aria-busy', 'false');
+        if (resetBtnSpinner) resetBtnSpinner.style.display = 'none';
+        if (resetBtnLabel) resetBtnLabel.textContent = 'Update password';
+      }
+    });
+  }
 
   // Global Skip Listeners (Click, Tap or Keydown)
   ['click', 'keydown', 'touchstart'].forEach((evt) => {
@@ -971,14 +1360,23 @@
   // 9. BOOTSTRAP INITIALIZATION
   // --------------------------------------------------------------------------
   applyGeometricSetup();
+  switchAuthCard(window.location.hash);
+
+  const isDirectAuthVisit = window.location.hash.startsWith('#/signup') ||
+    window.location.hash.startsWith('#/forgot') ||
+    window.location.hash.startsWith('#/reset-password') ||
+    window.location.hash.startsWith('#signup') ||
+    window.location.hash.startsWith('#forgot') ||
+    window.location.hash.startsWith('#reset-password');
 
   // Pre-load font readiness race condition (Promise.race)
   Promise.race([
     document.fonts ? document.fonts.ready : Promise.resolve(),
     new Promise((resolve) => setTimeout(resolve, 300))
   ]).then(() => {
-    if (isDirectWorkspaceVisit) {
+    if (isDirectWorkspaceVisit || isDirectAuthVisit) {
       completeIntro();
+      switchAuthCard(window.location.hash);
     } else if (prefersReducedMotion) {
       completeIntro();
     } else if (introSeenThisSession) {

@@ -12,6 +12,7 @@ class UserProfileResponse(BaseModel):
     user_id: str
     display_name: str
     email: str | None = None
+    phone_number: str | None = None
     avatar_path: str | None = None
     created_at: str | None = None
     updated_at: str | None = None
@@ -19,6 +20,7 @@ class UserProfileResponse(BaseModel):
 
 class UserProfileUpdateRequest(BaseModel):
     display_name: str | None = Field(default=None, max_length=100)
+    phone_number: str | None = Field(default=None, max_length=30)
     avatar_path: str | None = Field(default=None, max_length=500)
 
 

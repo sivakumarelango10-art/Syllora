@@ -61,6 +61,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 CREATE TABLE IF NOT EXISTS profiles (
                     user_id TEXT PRIMARY KEY,
                     display_name TEXT NOT NULL DEFAULT '',
+                    phone_number TEXT,
                     avatar_path TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
@@ -343,6 +344,11 @@ class SQLiteAdapter(DatabaseAdapter):
                 CREATE INDEX IF NOT EXISTS idx_faculty_q_user ON faculty_questions(user_id, course_id);
                 """
             )
+            # Idempotently ensure phone_number column exists if table was created previously
+            try:
+                connection.execute("ALTER TABLE profiles ADD COLUMN phone_number TEXT;")
+            except Exception:
+                pass
 
     def document_hash_exists(self, sha256: str, user_id: str | None = None) -> bool:
         with self._connect() as connection:

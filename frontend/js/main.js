@@ -11,8 +11,17 @@ import { router } from './router.js';
 import { sessionAdapter } from './session.js';
 import { workspaceStore } from './state.js';
 import { AppShell } from './components/shell.js';
-import { Toast } from './components/modal.js';
-import { signInWithPassword, signOut, getAuthToken, getCurrentUser } from './services/supabase.js';
+import {
+  signInWithPassword,
+  signInWithOAuth,
+  signUp,
+  resetPasswordForEmail,
+  updateUser,
+  handleOAuthCallback,
+  signOut,
+  getAuthToken,
+  getCurrentUser
+} from './services/supabase.js';
 
 // Import Views
 import { renderOverview } from './views/overview.js';
@@ -170,6 +179,11 @@ router.subscribe((path, params, viewHandler) => {
     if (isReturningFromWorkspace && typeof window.sylloraResetLogin === 'function') {
       window.sylloraResetLogin();
     }
+
+    // Switch active auth card according to current path
+    if (typeof window.sylloraSwitchAuthCard === 'function') {
+      window.sylloraSwitchAuthCard(path);
+    }
   }
 });
 
@@ -253,6 +267,100 @@ window.sylloraAuthenticate = async function (email, password) {
   }
 };
 
+// Global Google OAuth helper
+window.sylloraGoogleAuth = async function () {
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  return await signInWithOAuth('google', {
+    redirectTo: `${origin}/`,
+    queryParams: {
+      access_type: 'offline',
+      prompt: 'consent'
+    }
+  });
+};
+
+// Global account registration helper (Issue 2 & 3)
+window.sylloraRegister = async function ({ fullName, email, phone, password }) {
+  const cleanEmail = (email || '').trim();
+  const cleanFullName = (fullName || '').trim();
+  const cleanPhone = (phone || '').trim() || null;
+  const cleanPassword = password || '';
+
+  const options = {
+    data: {
+      full_name: cleanFullName,
+      name: cleanFullName,
+      ...(cleanPhone ? { phone_number: cleanPhone } : {})
+    }
+  };
+
+  try {
+    const { data, error } = await signUp(cleanEmail, cleanPassword, options);
+    if (error) {
+      return {
+        success: false,
+        error
+      };
+    }
+
+    const session = data?.session || null;
+    const user = data?.user || (session ? session.user : null);
+
+    if (!session) {
+      // Email confirmation is required by Supabase settings
+      return {
+        success: true,
+        needsEmailConfirmation: true,
+        user
+      };
+    }
+
+    const initials = cleanFullName
+      .split(' ')
+      .filter(Boolean)
+      .map(p => p[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'ST';
+
+    return {
+      success: true,
+      isDemo: false,
+      session,
+      user: {
+        id: user.id,
+        name: cleanFullName,
+        email: cleanEmail,
+        phone: cleanPhone,
+        role: 'Student',
+        program: 'Academic Studies',
+        avatarText: initials,
+        activeCourseId: null
+      }
+    };
+  } catch (err) {
+    console.error('[Syllora Auth] Sign up error:', err);
+    return {
+      success: false,
+      error: err
+    };
+  }
+};
+
+// Global forgot password helper (Issue 6)
+window.sylloraForgotPassword = async function (email) {
+  const cleanEmail = (email || '').trim();
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+  return await resetPasswordForEmail(cleanEmail, {
+    redirectTo: `${origin}/#/reset-password`
+  });
+};
+
+// Global reset password update helper (Issue 6)
+window.sylloraUpdatePassword = async function (newPassword) {
+  return await updateUser({ password: newPassword });
+};
+
 // Global hook to transition from login into workspace
 window.sylloraEnterWorkspace = function (authResult) {
   if ((authResult && authResult.success) || sessionAdapter.isAuthenticated()) {
@@ -299,5 +407,23 @@ window.__sylloraDev = {
   }
 };
 
-// Initial routing evaluation after all routes are registered
-router.handleRouting();
+// Initial routing evaluation after all routes are registered, with OAuth callback check
+async function initApp() {
+  try {
+    const callbackResult = await handleOAuthCallback();
+    if (callbackResult && callbackResult.isOAuthCallback && callbackResult.error) {
+      const banner = document.getElementById('authGlobalMsg');
+      if (banner) {
+        banner.className = 'auth-global-msg error';
+        banner.textContent = callbackResult.error;
+        banner.style.display = 'flex';
+      }
+    }
+  } catch (err) {
+    console.warn('[Syllora Auth] Callback check exception:', err);
+  }
+
+  router.handleRouting();
+}
+
+initApp();

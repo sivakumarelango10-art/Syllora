@@ -299,3 +299,56 @@ def test_inference_concurrency_guard():
 
     asyncio.run(_run())
 
+
+def test_profile_endpoint_reads_and_updates_phone_number(client, monkeypatch):
+    """Verify profile persistence with optional phone_number for registered users."""
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_JWT_SECRET)
+    user_id = str(uuid.uuid4())
+    token = _generate_test_token(user_id)
+
+    # 1. Read default profile
+    res = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 200
+    data = res.json()
+    assert data["user_id"] == user_id
+    assert data["display_name"] == "Student"
+
+    # 2. Update profile with phone number and display name
+    update_res = client.put(
+        "/api/v1/auth/profile",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "display_name": "Jordan Lee",
+            "phone_number": "+1 555 987 6543",
+        },
+    )
+    assert update_res.status_code == 200
+    updated_data = update_res.json()
+    assert updated_data["display_name"] == "Jordan Lee"
+    assert updated_data["phone_number"] == "+1 555 987 6543"
+
+    # 3. Read back updated profile
+    verify_res = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert verify_res.status_code == 200
+    assert verify_res.json()["phone_number"] == "+1 555 987 6543"
+    assert verify_res.json()["display_name"] == "Jordan Lee"
+
+
+def test_profile_endpoint_rejects_unauthorized_requests(client, monkeypatch):
+    """Verify protected profile endpoint returns 401 on missing or invalid Bearer token."""
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", TEST_JWT_SECRET)
+
+    # Missing token from non-loopback
+    res = client.get(
+        "/api/v1/auth/me",
+        headers={"cf-connecting-ip": "198.51.100.1"},
+    )
+    assert res.status_code == 401
+
+    # Malformed token
+    res_bad = client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": "Bearer not-a-valid-jwt-token"},
+    )
+    assert res_bad.status_code == 401
+

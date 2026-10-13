@@ -17,6 +17,7 @@ async def get_my_profile(request: Request) -> UserProfileResponse:
     return UserProfileResponse(
         user_id=user_id,
         display_name=profile.get("display_name", "Student"),
+        phone_number=profile.get("phone_number"),
         avatar_path=profile.get("avatar_path"),
         created_at=profile.get("created_at"),
         updated_at=profile.get("updated_at"),
@@ -32,11 +33,13 @@ async def update_my_profile(
     updated = repo.update_profile(
         user_id=user_id,
         display_name=body.display_name,
+        phone_number=body.phone_number,
         avatar_path=body.avatar_path,
     )
     return UserProfileResponse(
         user_id=user_id,
         display_name=updated.get("display_name", "Student"),
+        phone_number=updated.get("phone_number"),
         avatar_path=updated.get("avatar_path"),
         created_at=updated.get("created_at"),
         updated_at=updated.get("updated_at"),
