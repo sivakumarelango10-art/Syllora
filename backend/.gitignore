@@ -5,9 +5,12 @@ __pycache__/
 .env
 .env.*
 !.env.example
+!.env.database.example
 data/uploads/*
 !data/uploads/.gitkeep
 data/indexes/*
 !data/indexes/.gitkeep
+data/backup*/
 *.sqlite3
 *.db
+

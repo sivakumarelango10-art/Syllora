@@ -1,144 +1,75 @@
-"""SQLite persistence for documents, page-aware chunks and their embeddings."""
+"""Persistence facade for documents, page-aware chunks and embeddings.
+
+Delegates to the active DatabaseAdapter (SQLite or PostgreSQL / Supabase)
+while maintaining backward-compatible module-level functions and paths.
+"""
 from __future__ import annotations
 
 import os
-import sqlite3
 from pathlib import Path
 from typing import Any
 
-import numpy as np
+from app.db import get_db_adapter
+from app.db.base import DatabaseAdapter
+from app.db.sqlite_adapter import SQLiteAdapter
 
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 DB_PATH = Path(os.getenv("SYLLORA_DB_PATH", str(BACKEND_DIR / "data" / "indexes" / "syllora.sqlite3")))
 UPLOAD_DIR = Path(os.getenv("SYLLORA_UPLOAD_DIR", str(BACKEND_DIR / "data" / "uploads")))
 
 
-def _connect() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    connection = sqlite3.connect(str(DB_PATH), timeout=30)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    connection.execute("PRAGMA journal_mode = WAL")
-    return connection
+def _get_adapter() -> DatabaseAdapter:
+    """Retrieve active persistence adapter, synchronizing monkeypatched test paths if applicable."""
+    adapter = get_db_adapter()
+    if isinstance(adapter, SQLiteAdapter) and adapter.db_path != DB_PATH:
+        adapter.db_path = DB_PATH
+    return adapter
 
 
 def init_db() -> None:
-    with _connect() as connection:
-        connection.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS documents (
-                id TEXT PRIMARY KEY,
-                filename TEXT NOT NULL,
-                title TEXT NOT NULL,
-                storage_filename TEXT NOT NULL,
-                sha256 TEXT NOT NULL UNIQUE,
-                size_bytes INTEGER NOT NULL,
-                page_count INTEGER NOT NULL,
-                chunk_count INTEGER NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            CREATE TABLE IF NOT EXISTS chunks (
-                id TEXT PRIMARY KEY,
-                document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-                page_number INTEGER NOT NULL,
-                chunk_index INTEGER NOT NULL,
-                text TEXT NOT NULL,
-                embedding BLOB NOT NULL,
-                embedding_dim INTEGER NOT NULL,
-                embedding_model TEXT NOT NULL,
-                created_at TEXT NOT NULL
-            );
-            CREATE INDEX IF NOT EXISTS idx_chunks_document_id ON chunks(document_id);
-            CREATE INDEX IF NOT EXISTS idx_chunks_embedding_model ON chunks(embedding_model);
-            CREATE INDEX IF NOT EXISTS idx_documents_created_at ON documents(created_at);
-            """
-        )
+    """Initialize active database schema."""
+    _get_adapter().init_db()
 
 
-def document_hash_exists(sha256: str) -> bool:
-    with _connect() as connection:
-        row = connection.execute("SELECT 1 FROM documents WHERE sha256 = ?", (sha256,)).fetchone()
-        return row is not None
+def document_hash_exists(sha256: str, user_id: str | None = None) -> bool:
+    """Check if document with matching SHA-256 hash exists in active database."""
+    return _get_adapter().document_hash_exists(sha256, user_id=user_id)
 
 
-def insert_document(document: dict[str, Any], chunks: list[dict[str, Any]]) -> None:
-    """Insert document metadata and all already-computed embeddings atomically."""
-    with _connect() as connection:
-        connection.execute(
-            """INSERT INTO documents
-               (id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (
-                document["id"], document["filename"], document["title"], document["storage_filename"],
-                document["sha256"], document["size_bytes"], document["page_count"],
-                len(chunks), document["created_at"],
-            ),
-        )
-        connection.executemany(
-            """INSERT INTO chunks
-               (id, document_id, page_number, chunk_index, text, embedding, embedding_dim, embedding_model, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            [
-                (
-                    chunk["id"], document["id"], chunk["page_number"], chunk["chunk_index"], chunk["text"],
-                    np.asarray(chunk["embedding"], dtype=np.float32).tobytes(),
-                    len(chunk["embedding"]), chunk["embedding_model"], document["created_at"],
-                )
-                for chunk in chunks
-            ],
-        )
+def insert_document(document: dict[str, Any], chunks: list[dict[str, Any]], user_id: str | None = None) -> None:
+    """Insert document metadata and precomputed embeddings atomically."""
+    _get_adapter().insert_document(document, chunks, user_id=user_id)
 
 
-def list_documents() -> list[dict[str, Any]]:
-    with _connect() as connection:
-        rows = connection.execute(
-            """SELECT id, filename, title, size_bytes, page_count, chunk_count, created_at
-               FROM documents ORDER BY created_at DESC"""
-        ).fetchall()
-    return [dict(row) for row in rows]
+def list_documents(user_id: str | None = None) -> list[dict[str, Any]]:
+    """List study documents ordered by creation timestamp descending."""
+    return _get_adapter().list_documents(user_id=user_id)
 
 
-def get_document(document_id: str) -> dict[str, Any] | None:
-    with _connect() as connection:
-        row = connection.execute(
-            """SELECT id, filename, title, storage_filename, size_bytes, page_count, chunk_count, created_at
-               FROM documents WHERE id = ?""",
-            (document_id,),
-        ).fetchone()
-    return dict(row) if row else None
+def get_document(document_id: str, user_id: str | None = None) -> dict[str, Any] | None:
+    """Retrieve a single document by its ID."""
+    return _get_adapter().get_document(document_id, user_id=user_id)
 
 
-def delete_document(document_id: str) -> dict[str, Any] | None:
-    with _connect() as connection:
-        row = connection.execute(
-            "SELECT id, storage_filename FROM documents WHERE id = ?", (document_id,)
-        ).fetchone()
-        if row is None:
-            return None
-        storage_filename = row["storage_filename"]
-        connection.execute("DELETE FROM documents WHERE id = ?", (document_id,))
-    return {"id": document_id, "storage_filename": storage_filename}
+def delete_document(document_id: str, user_id: str | None = None) -> dict[str, Any] | None:
+    """Delete a document and return its storage reference for filesystem cleanup."""
+    return _get_adapter().delete_document(document_id, user_id=user_id)
 
 
-def load_search_chunks(embedding_model: str) -> list[dict[str, Any]]:
-    with _connect() as connection:
-        rows = connection.execute(
-            """SELECT c.id, c.document_id, c.page_number, c.chunk_index, c.text,
-                      c.embedding, c.embedding_dim, c.embedding_model,
-                      d.filename, d.title
-               FROM chunks c JOIN documents d ON d.id = c.document_id
-               WHERE c.embedding_model = ?
-               ORDER BY d.created_at, c.page_number, c.chunk_index""",
-            (embedding_model,),
-        ).fetchall()
-    return [dict(row) for row in rows]
+def load_search_chunks(embedding_model: str, user_id: str | None = None) -> list[dict[str, Any]]:
+    """Load all search chunk records for the in-memory hybrid search index."""
+    return _get_adapter().load_search_chunks(embedding_model, user_id=user_id)
 
 
-def count_chunks() -> int:
-    with _connect() as connection:
-        row = connection.execute("SELECT COUNT(*) AS count FROM chunks").fetchone()
-    return int(row["count"])
+def count_chunks(user_id: str | None = None) -> int:
+    """Count the total number of chunks stored in the active database."""
+    return _get_adapter().count_chunks(user_id=user_id)
 
 
-# Create the schema as soon as the backend package is imported.
-init_db()
+
+# Initialize database schema upon module import
+try:
+    init_db()
+except Exception:
+    # In test or misconfigured environment, initialization errors are reported on demand
+    pass

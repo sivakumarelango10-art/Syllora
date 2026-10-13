@@ -25,9 +25,7 @@ STOPWORDS = {
     "upload", "use", "using", "year", "sentences", "sentence", "compare", "comparison",
 }
 _CACHE_LOCK = threading.Lock()
-_CACHED_MODEL: str | None = None
-_CACHED_RECORDS: list[dict[str, Any]] | None = None
-_CACHED_MATRIX: np.ndarray | None = None
+_INDEX_CACHE: dict[tuple[str, str | None], tuple[list[dict[str, Any]], np.ndarray]] = {}
 
 
 def tokenize(text: str) -> list[str]:
@@ -43,21 +41,22 @@ def keyword_score(query_terms: set[str], chunk_terms: set[str], query: str, chun
     return float(min(1.0, matched + exact_phrase))
 
 
-def invalidate_index_cache() -> None:
-    global _CACHED_MODEL, _CACHED_RECORDS, _CACHED_MATRIX
+def invalidate_index_cache(user_id: str | None = None) -> None:
+    global _INDEX_CACHE
     with _CACHE_LOCK:
-        _CACHED_MODEL = None
-        _CACHED_RECORDS = None
-        _CACHED_MATRIX = None
+        if user_id is None:
+            _INDEX_CACHE.clear()
+        else:
+            _INDEX_CACHE = {k: v for k, v in _INDEX_CACHE.items() if k[1] != user_id}
 
 
-def _get_index(embedding_model: str) -> tuple[list[dict[str, Any]], np.ndarray]:
-    global _CACHED_MODEL, _CACHED_RECORDS, _CACHED_MATRIX
+def _get_index(embedding_model: str, user_id: str | None = None) -> tuple[list[dict[str, Any]], np.ndarray]:
+    cache_key = (embedding_model, user_id)
     with _CACHE_LOCK:
-        if _CACHED_MODEL == embedding_model and _CACHED_RECORDS is not None and _CACHED_MATRIX is not None:
-            return _CACHED_RECORDS, _CACHED_MATRIX
+        if cache_key in _INDEX_CACHE:
+            return _INDEX_CACHE[cache_key]
 
-        raw_rows = load_search_chunks(embedding_model)
+        raw_rows = load_search_chunks(embedding_model, user_id=user_id)
         records: list[dict[str, Any]] = []
         vectors: list[np.ndarray] = []
         expected_dim: int | None = None
@@ -79,9 +78,7 @@ def _get_index(embedding_model: str) -> tuple[list[dict[str, Any]], np.ndarray]:
             vectors.append(vector)
 
         matrix = np.vstack(vectors).astype(np.float32, copy=False) if vectors else np.empty((0, 0), dtype=np.float32)
-        _CACHED_MODEL = embedding_model
-        _CACHED_RECORDS = records
-        _CACHED_MATRIX = matrix
+        _INDEX_CACHE[cache_key] = (records, matrix)
         return records, matrix
 
 
@@ -92,9 +89,11 @@ async def search_passages(
     document_ids: list[str] | None = None,
     limit: int = 5,
     embedding_model: str = "nomic-embed-text",
+    user_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """Search pre-indexed passage vectors and metadata; no PDFs are re-parsed here."""
-    records, matrix = _get_index(embedding_model)
+    records, matrix = _get_index(embedding_model, user_id=user_id)
+
     if not records:
         return []
 

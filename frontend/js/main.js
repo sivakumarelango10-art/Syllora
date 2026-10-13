@@ -11,6 +11,7 @@ import { router } from './router.js';
 import { sessionAdapter } from './session.js';
 import { AppShell } from './components/shell.js';
 import { Toast } from './components/modal.js';
+import { signInWithPassword, signOut, getAuthToken, getCurrentUser } from './services/supabase.js';
 
 // Import Views
 import { renderOverview } from './views/overview.js';
@@ -182,11 +183,119 @@ window.addEventListener('syllora_state_updated', () => {
   }
 });
 
-// Global hook to transition from login into workspace
-window.sylloraEnterWorkspace = function () {
-  sessionAdapter.loginDemoUser({ name: 'Prajith P', email: 'demo@syllora.com' });
-  router.navigate('/app/overview');
+// Expose global authentication function for app.js login flow
+window.sylloraAuthenticate = async function (email, password) {
+  const cleanEmail = (email || '').trim();
+  const cleanPassword = password || '';
+
+  // 1. Explicit demo account check
+  // Permitted ONLY in explicit local development or local file environments
+  const isLocalDev = (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.hostname === '' ||
+    window.location.protocol === 'file:'
+  );
+
+  if (cleanEmail.toLowerCase() === 'demo@syllora.com' && (cleanPassword === 'password123' || cleanPassword === 'demo123')) {
+    if (isLocalDev) {
+      return {
+        success: true,
+        isDemo: true,
+        user: {
+          name: 'Prajith P',
+          email: 'demo@syllora.com',
+          role: 'CS Undergrad',
+          program: 'B.Tech Computer Science & Engineering',
+          graduationYear: '2027',
+          avatarText: 'PP',
+          activeCourseId: 'cs301'
+        }
+      };
+    } else {
+      return {
+        success: false,
+        error: 'Demo accounts are only permitted in local development mode.'
+      };
+    }
+  }
+
+  // 2. Real Supabase Auth via signInWithPassword
+  try {
+    const { data, error } = await signInWithPassword(cleanEmail, cleanPassword);
+    if (error || !data || !data.session) {
+      const rawMsg = error ? (error.message || error.error_description || '') : '';
+      let errorMsg = 'Incorrect email or password.';
+      if (rawMsg.includes('Invalid login credentials') || rawMsg.includes('invalid_grant')) {
+        errorMsg = 'Incorrect email or password.';
+      } else if (rawMsg.includes('Email not confirmed')) {
+        errorMsg = 'Please verify your email address before logging in.';
+      } else if (rawMsg) {
+        errorMsg = rawMsg;
+      }
+      return {
+        success: false,
+        error: errorMsg
+      };
+    }
+
+    const sbUser = data.user || (data.session && data.session.user) || {};
+    const meta = sbUser.user_metadata || {};
+    const fullName = meta.full_name || meta.name || cleanEmail.split('@')[0];
+    const initials = fullName
+      .split(' ')
+      .filter(Boolean)
+      .map(part => part[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'ST';
+
+    return {
+      success: true,
+      isDemo: false,
+      session: data.session,
+      user: {
+        id: sbUser.id,
+        name: fullName,
+        email: sbUser.email || cleanEmail,
+        role: meta.role || 'Student',
+        program: meta.program || 'Academic Studies',
+        avatarText: initials,
+        activeCourseId: 'cs301'
+      }
+    };
+  } catch (err) {
+    console.error('[Syllora Auth] Authentication failed:', err);
+    return {
+      success: false,
+      error: 'Authentication service unavailable. Please check your connection.'
+    };
+  }
 };
+
+// Global hook to transition from login into workspace
+window.sylloraEnterWorkspace = function (authResult) {
+  if (authResult && authResult.success) {
+    if (authResult.isDemo && authResult.user) {
+      sessionAdapter.loginDemoUser(authResult.user);
+    }
+    // For real Supabase user, session is already persisted in syllora_supabase_session
+    router.navigate('/app/overview');
+  } else if (sessionAdapter.isAuthenticated()) {
+    router.navigate('/app/overview');
+  } else {
+    router.navigate('/login');
+  }
+};
+
+// Multi-tab session synchronization: if session cleared in another tab, redirect to login
+window.addEventListener('storage', (event) => {
+  if (event.key === 'syllora_supabase_session' || event.key === 'syllora_demo_user') {
+    if (!sessionAdapter.isAuthenticated() && router.getCurrentPath().startsWith('/app')) {
+      router.navigate('/login');
+    }
+  }
+});
 
 // Initialize offline detection banner
 setupOfflineBanner();

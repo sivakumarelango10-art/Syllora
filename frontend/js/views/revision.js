@@ -12,6 +12,7 @@ import { workspaceStore } from '../state.js';
 import { router } from '../router.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Toast, Modal } from '../components/modal.js';
+import { sylloraApi } from '../services/aiApi.js';
 
 export function renderRevision(container) {
   let examDate = '2026-11-18';
@@ -189,6 +190,13 @@ export function renderRevision(container) {
       checkbox.addEventListener('change', () => {
         const taskId = checkbox.getAttribute('data-task-id');
         workspaceStore.toggleTaskCompleted(taskId);
+        try {
+          sylloraApi.updateRevisionTask(taskId, {
+            status: checkbox.checked ? 'completed' : 'pending'
+          }).catch(err => console.debug('[Revision] Task sync deferred or offline:', err));
+        } catch (err) {
+          // non-blocking
+        }
         Toast.show('Task status updated & overview stats refreshed!', 'success');
         renderView();
       });

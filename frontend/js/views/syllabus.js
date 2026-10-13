@@ -12,6 +12,7 @@ import { workspaceStore } from '../state.js';
 import { router } from '../router.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Modal, Toast } from '../components/modal.js';
+import { sylloraApi } from '../services/aiApi.js';
 
 export function renderSyllabus(container) {
   let searchQuery = '';
@@ -434,6 +435,15 @@ export function renderSyllabus(container) {
             matchedPassageIds: [],
             prerequisites: []
           });
+          try {
+            sylloraApi.createTopic({
+              title,
+              description: unit || 'Elective Module',
+              coverage_status: 'uncovered'
+            }).catch(err => console.debug('[Syllabus] Backend topic sync deferred or offline:', err));
+          } catch (err) {
+            // non-blocking
+          }
           Toast.show('Custom topic added to syllabus map.', 'success');
           renderView();
         }

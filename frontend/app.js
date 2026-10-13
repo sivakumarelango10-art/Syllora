@@ -754,30 +754,41 @@
       });
     }, 500);
 
-    // Fire Mock Auth Request in Parallel (accepts demo@syllora.com / password123 or any test credentials in prototype mode)
+    // Authenticate via Supabase Auth or explicit demo credentials
     const authStartTime = performance.now();
-    const isMockSuccess = (email === 'demo@syllora.com' || (email.includes('@') && password.length >= 4));
+    const authPromise = (typeof window.sylloraAuthenticate === 'function')
+      ? window.sylloraAuthenticate(email, password)
+      : Promise.resolve({
+          success: (email.toLowerCase() === 'demo@syllora.com' && (password === 'password123' || password === 'demo123')),
+          error: 'Incorrect email or password.'
+        });
 
-    setTrackedTimeout(() => {
+    authPromise.then((result) => {
       const elapsed = (performance.now() - authStartTime) / 1000;
       const remainingMinSpinner = Math.max(0, (TIMINGS.minSpinnerDuration - elapsed) * 1000);
 
       setTrackedTimeout(() => {
-        if (isMockSuccess) {
-          handleAuthSuccess();
+        if (result && result.success) {
+          handleAuthSuccess(result);
         } else {
-          handleAuthFailure();
+          handleAuthFailure(result ? result.error : 'Incorrect email or password.');
         }
       }, remainingMinSpinner);
-
-    }, TIMINGS.mockAuthDuration * 1000);
+    }).catch((err) => {
+      const elapsed = (performance.now() - authStartTime) / 1000;
+      const remainingMinSpinner = Math.max(0, (TIMINGS.minSpinnerDuration - elapsed) * 1000);
+      setTrackedTimeout(() => {
+        handleAuthFailure(err && err.message ? err.message : 'Authentication service unavailable.');
+      }, remainingMinSpinner);
+    });
   }
 
-  function handleAuthFailure() {
+  function handleAuthFailure(errorMessage) {
     isSubmitting = false;
     loginBtn.setAttribute('aria-busy', 'false');
     loginBtn.disabled = false;
-    a11yAnnouncer.textContent = 'Incorrect email or password.';
+    const msg = errorMessage || 'Incorrect email or password.';
+    a11yAnnouncer.textContent = msg;
 
     // Hide spinner
     btnSpinner.style.opacity = '0';
@@ -799,10 +810,12 @@
 
     // Shake card & show field error
     triggerErrorShake();
-    setFieldError(passwordGroup, passwordError, 'Incorrect email or password.');
+    setFieldError(passwordGroup, passwordError, msg);
   }
 
-  function handleAuthSuccess() {
+  let activeAuthResult = null;
+  function handleAuthSuccess(result) {
+    activeAuthResult = result || null;
     a11yAnnouncer.textContent = 'Login successful!';
 
     // 0 -> 0.15s: Spinner fades out
@@ -919,7 +932,7 @@
         a11yAnnouncer.textContent = 'Welcome to Syllora Dashboard!';
         console.log('[Syllora Auth] Transitioning to workspace...');
         if (typeof window.sylloraEnterWorkspace === 'function') {
-          window.sylloraEnterWorkspace();
+          window.sylloraEnterWorkspace(activeAuthResult);
         }
       }, 1450);
     }, 1650);

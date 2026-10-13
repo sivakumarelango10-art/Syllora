@@ -14,6 +14,7 @@
 import { workspaceStore } from '../state.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Toast } from '../components/modal.js';
+import { sylloraApi } from '../services/aiApi.js';
 
 export function renderUnderstanding(container, queryParams = {}) {
   const state = workspaceStore.getState();
@@ -406,7 +407,7 @@ export function renderUnderstanding(container, queryParams = {}) {
     // Save to misconception notebook
     const saveNotebookBtn = container.querySelector('#saveToNotebookBtn');
     if (saveNotebookBtn && activeEvaluation) {
-      saveNotebookBtn.addEventListener('click', () => {
+      saveNotebookBtn.addEventListener('click', async () => {
         const topic = state.topics.find(t => t.id === selectedTopicId) || state.topics[0];
         workspaceStore.saveAttempt({
           id: `att-${Date.now()}`,
@@ -420,6 +421,18 @@ export function renderUnderstanding(container, queryParams = {}) {
           possibleMisconceptions: activeEvaluation.possibleMisconceptions,
           revised: true
         });
+
+        // Also persist to backend asynchronously if online
+        try {
+          await sylloraApi.createMisconception({
+            topic_id: topic.id,
+            student_misunderstanding: explanationInputText,
+            corrected_concept: activeEvaluation.rubric?.conceptualAccuracy || 'See rubric evaluation',
+            status: 'open'
+          });
+        } catch (apiErr) {
+          console.debug('[Understanding] Backend misconception sync deferred or offline:', apiErr);
+        }
 
         Toast.show('Assessment attempt saved to notebook & practice stats updated!', 'success');
       });

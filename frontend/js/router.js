@@ -89,10 +89,11 @@ class Router {
       }
     }
 
-    // Workspace Route Guard: auto-initialize demo user if visiting /app directly
+    // Workspace Route Guard: redirect unauthenticated access to login
     if (path.startsWith('/app')) {
       if (!sessionAdapter.isAuthenticated()) {
-        sessionAdapter.loginDemoUser({ name: 'Prajith P', email: 'demo@syllora.com' });
+        this.navigate('/login');
+        return;
       }
     }
 

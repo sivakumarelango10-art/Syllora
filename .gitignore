@@ -20,3 +20,9 @@ yarn-error.log*
 dist/
 build/
 *.log
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+

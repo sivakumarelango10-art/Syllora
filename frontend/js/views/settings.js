@@ -11,6 +11,7 @@
 import { sessionAdapter } from '../session.js';
 import { workspaceStore } from '../state.js';
 import { Toast, Modal } from '../components/modal.js';
+import { sylloraApi } from '../services/aiApi.js';
 
 export function renderSettings(container) {
   const user = sessionAdapter.getDemoUser() || {
@@ -152,6 +153,22 @@ export function renderSettings(container) {
         dailyGoalMinutes,
         avatarText: name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
       });
+
+      // Also persist to backend asynchronously if online
+      try {
+        sylloraApi.updateProfile({
+          full_name: name,
+          academic_program: program,
+          graduation_year: graduationYear,
+          daily_goal_minutes: dailyGoalMinutes
+        }).catch(err => console.debug('[Settings] Profile sync deferred or offline:', err));
+
+        sylloraApi.updateSettings({
+          daily_study_goal_minutes: dailyGoalMinutes
+        }).catch(err => console.debug('[Settings] Settings sync deferred or offline:', err));
+      } catch (err) {
+        // non-blocking
+      }
 
       Toast.show('Profile information saved.', 'success');
       // Refresh topbar/shell user display

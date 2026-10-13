@@ -18,5 +18,15 @@
     "evidence-inspection"
   ],
   "author": "Prajith P",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "@supabase/server": "^0.1.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.4.0"
+  }
 }
+
+
+

@@ -17,6 +17,7 @@ import { router } from '../router.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Toast } from '../components/modal.js';
 import { openUploadModal } from './materials.js';
+import { sylloraApi } from '../services/aiApi.js';
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -514,5 +515,26 @@ export function renderOverview(container) {
         }
       });
     }
+
+    // Hydrate live backend metrics asynchronously without blocking UI render
+    sylloraApi.getDashboardSummary()
+      .then(summary => {
+        if (!container.isConnected) return;
+        const matNum = container.querySelector('#cardStudyMaterials .stat-card-number');
+        const evNum = container.querySelector('#cardTopicsEvidence .stat-card-number');
+        const miscNum = container.querySelector('#cardOpenMisconceptions .stat-card-number');
+        if (matNum && typeof summary.total_documents === 'number') {
+          matNum.textContent = String(summary.total_documents);
+        }
+        if (evNum && typeof summary.topics_with_evidence === 'number' && typeof summary.total_topics === 'number') {
+          evNum.textContent = `${summary.topics_with_evidence} / ${summary.total_topics}`;
+        }
+        if (miscNum && typeof summary.open_misconceptions === 'number') {
+          miscNum.textContent = String(summary.open_misconceptions);
+        }
+      })
+      .catch(err => {
+        console.debug('[Overview] Live dashboard summary fallback to local fixtures:', err);
+      });
   }
 }

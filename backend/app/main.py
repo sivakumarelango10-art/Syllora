@@ -9,15 +9,27 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
+try:
+    from dotenv import load_dotenv
+    _backend_dir = Path(__file__).resolve().parent.parent
+    load_dotenv(_backend_dir / ".env")
+    load_dotenv(_backend_dir.parent / ".env.local")
+except Exception:
+    pass
+
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from app.auth import get_current_user_id
+from app.rate_limiter import ai_rate_limiter, standard_rate_limiter
 from app.rag.pdf_processing import PdfProcessingError, extract_pdf_chunks
 from app.rag.search import SearchMode, has_sufficient_evidence, invalidate_index_cache, search_passages
 from app.rag.store import UPLOAD_DIR, count_chunks, delete_document as delete_document_record
 from app.rag.store import document_hash_exists, get_document, insert_document, list_documents
+from app.storage import get_storage_adapter
+from app.storage.local_storage import LocalStorageAdapter
 from app.services.ollama_client import (
     OLLAMA_BASE_URL,
     OLLAMA_EMBED_MODEL,
@@ -27,6 +39,18 @@ from app.services.ollama_client import (
     chat_completion,
     embed_texts,
     get_tags,
+)
+from app.repositories.academic_repository import get_academic_repository
+from app.api.v1 import (
+    auth_router,
+    dashboard_router,
+    courses_router,
+    syllabus_router,
+    chat_router,
+    understanding_router,
+    misconceptions_router,
+    revision_router,
+    settings_router,
 )
 
 APP_NAME = "Syllora AI Backend"
@@ -55,11 +79,23 @@ app.add_middleware(
         "http://localhost:3000", "http://127.0.0.1:3000",
         "http://localhost:5173", "http://127.0.0.1:5173",
         "http://localhost:8080", "http://127.0.0.1:8080",
+        "https://syllora-seven.vercel.app",
     ],
     allow_credentials=False,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
 )
+
+# Register Platform Academic Routers
+app.include_router(auth_router)
+app.include_router(dashboard_router)
+app.include_router(courses_router)
+app.include_router(syllabus_router)
+app.include_router(chat_router)
+app.include_router(understanding_router)
+app.include_router(misconceptions_router)
+app.include_router(revision_router)
+app.include_router(settings_router)
 
 
 class ModelTestRequest(BaseModel):
@@ -83,6 +119,7 @@ class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000)
     document_ids: list[str] | None = None
     top_k: int = Field(default=5, ge=1, le=8)
+    session_id: str | None = None
 
 
 def _now_iso() -> str:
@@ -131,14 +168,23 @@ async def _ollama_get(path: str) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail=f"Ollama returned HTTP {exc.response.status_code}.") from exc
 
 
+def _get_storage():
+    adapter = get_storage_adapter()
+    if isinstance(adapter, LocalStorageAdapter) and adapter.upload_dir != UPLOAD_DIR:
+        adapter.upload_dir = UPLOAD_DIR
+    return adapter
+
+
 @app.get("/health", tags=["health"])
 async def health() -> dict[str, str]:
     return {"status": "ok", "service": APP_NAME, "version": app.version}
 
 
 @app.get("/api/v1/llm/status", tags=["llm"])
-async def llm_status() -> dict[str, Any]:
+async def llm_status(request: Request) -> dict[str, Any]:
     """Check configured chat model availability."""
+    user_id = get_current_user_id(request)
+    standard_rate_limiter.check(user_id)
     try:
         payload = await _ollama_get("/api/tags")
     except HTTPException as exc:
@@ -155,8 +201,11 @@ async def llm_status() -> dict[str, Any]:
 
 
 @app.get("/api/v1/rag/status", tags=["rag"])
-async def rag_status() -> dict[str, Any]:
+async def rag_status(request: Request) -> dict[str, Any]:
     """Report required models and local index size before attempting an upload."""
+    user_id = get_current_user_id(request)
+    docs = list_documents(user_id=user_id)
+    chunks_count = count_chunks(user_id=user_id)
     try:
         payload = await _ollama_get("/api/tags")
         names = [item.get("name", "") for item in payload.get("models", [])]
@@ -170,18 +219,20 @@ async def rag_status() -> dict[str, Any]:
             "chat_model_installed": chat_installed,
             "embedding_model": OLLAMA_EMBED_MODEL,
             "embedding_model_installed": embed_installed,
-            "documents": len(list_documents()),
-            "chunks": count_chunks(),
+            "documents": len(docs),
+            "chunks": chunks_count,
             "message": "Ready for document ingestion." if chat_installed and embed_installed
                        else f"Install missing model(s). For embeddings run: ollama pull {OLLAMA_EMBED_MODEL}",
         }
     except HTTPException as exc:
-        return {"available": False, "message": exc.detail, "documents": len(list_documents()), "chunks": count_chunks()}
+        return {"available": False, "message": exc.detail, "documents": len(docs), "chunks": chunks_count}
 
 
 @app.post("/api/v1/llm/test", response_model=ModelTestResponse, tags=["llm"])
-async def test_llm(request: ModelTestRequest) -> ModelTestResponse:
+async def test_llm(request: ModelTestRequest, http_request: Request) -> ModelTestResponse:
     """Connectivity test only; this endpoint does not retrieve study documents."""
+    user_id = get_current_user_id(http_request)
+    ai_rate_limiter.check(user_id)
     try:
         answer = await chat_completion(
             OLLAMA_MODEL,
@@ -202,16 +253,21 @@ async def test_llm(request: ModelTestRequest) -> ModelTestResponse:
 
 
 @app.get("/api/v1/documents", tags=["documents"])
-async def get_documents() -> dict[str, Any]:
-    return {"documents": list_documents(), "count": len(list_documents())}
+async def get_documents(request: Request) -> dict[str, Any]:
+    user_id = get_current_user_id(request)
+    docs = list_documents(user_id=user_id)
+    return {"documents": docs, "count": len(docs)}
 
 
 @app.post("/api/v1/documents", status_code=201, tags=["documents"])
 async def upload_document(
+    request: Request,
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
 ) -> dict[str, Any]:
     """Upload a text-based PDF and complete extraction + embedding before returning."""
+    user_id = get_current_user_id(request)
+    ai_rate_limiter.check(user_id)
     display_filename = _safe_filename(file.filename)
     if Path(display_filename).suffix.casefold() != ".pdf":
         raise HTTPException(status_code=415, detail="Only PDF files are supported in this phase.")
@@ -223,7 +279,7 @@ async def upload_document(
             detail=f"File is too large. The current upload limit is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
         )
     file_hash = hashlib.sha256(pdf_bytes).hexdigest()
-    if document_hash_exists(file_hash):
+    if document_hash_exists(file_hash, user_id=user_id):
         raise HTTPException(status_code=409, detail="This exact PDF has already been uploaded.")
 
     try:
@@ -250,21 +306,22 @@ async def upload_document(
         raise HTTPException(status_code=502, detail="The embedding model returned inconsistent vector dimensions.")
 
     document_id = str(uuid.uuid4())
-    storage_filename = f"{document_id}.pdf"
-    target = UPLOAD_DIR / storage_filename
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    storage_adapter = _get_storage()
+    storage_path = storage_adapter.build_path(user_id, document_id)
     try:
-        target.write_bytes(pdf_bytes)
+        storage_filename = storage_adapter.save_file(storage_path, pdf_bytes)
         timestamp = _now_iso()
         document = {
             "id": document_id,
             "filename": display_filename,
             "title": (title or Path(display_filename).stem).strip()[:240] or Path(display_filename).stem,
             "storage_filename": storage_filename,
+            "storage_path": storage_path,
             "sha256": file_hash,
             "size_bytes": len(pdf_bytes),
             "page_count": page_count,
             "created_at": timestamp,
+            "user_id": user_id,
         }
         chunks = [
             {
@@ -277,16 +334,16 @@ async def upload_document(
             }
             for index, chunk in enumerate(pdf_chunks)
         ]
-        insert_document(document, chunks)
+        insert_document(document, chunks, user_id=user_id)
     except Exception as exc:
-        target.unlink(missing_ok=True)
+        storage_adapter.delete_file(storage_path)
         raise HTTPException(status_code=500, detail=f"Could not store the indexed PDF: {exc}") from exc
 
     # Warm the in-memory vector index now, as part of upload completion, not the first question.
     invalidate_index_cache()
     try:
         from app.rag.search import _get_index
-        _get_index(embedding_model)
+        _get_index(embedding_model, user_id=user_id)
     except Exception:
         # The SQLite index is committed. A later search can rebuild the cache if necessary.
         pass
@@ -304,12 +361,32 @@ async def upload_document(
     }
 
 
+@app.get("/api/v1/documents/{document_id}/download", tags=["documents"])
+async def download_document(document_id: str, request: Request):
+    """Securely stream or preview uploaded PDF document."""
+    user_id = get_current_user_id(request)
+    doc = get_document(document_id, user_id=user_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    storage_adapter = _get_storage()
+    file_bytes = storage_adapter.get_file_bytes(doc["storage_filename"])
+    if not file_bytes:
+        raise HTTPException(status_code=404, detail="File content not found in storage.")
+    from fastapi.responses import Response
+    return Response(
+        content=file_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{doc["filename"]}"'},
+    )
+
+
 @app.delete("/api/v1/documents/{document_id}", tags=["documents"])
-async def remove_document(document_id: str) -> dict[str, str]:
-    result = delete_document_record(document_id)
+async def remove_document(document_id: str, request: Request) -> dict[str, str]:
+    user_id = get_current_user_id(request)
+    result = delete_document_record(document_id, user_id=user_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Document not found.")
-    (UPLOAD_DIR / result["storage_filename"]).unlink(missing_ok=True)
+    _get_storage().delete_file(result["storage_filename"])
     invalidate_index_cache()
     return {"status": "deleted", "document_id": document_id}
 
@@ -329,8 +406,10 @@ def _public_search_result(item: dict[str, Any]) -> dict[str, Any]:
 
 
 @app.post("/api/v1/search", tags=["search"])
-async def search_documents(request: SearchRequest) -> dict[str, Any]:
+async def search_documents(request: SearchRequest, http_request: Request) -> dict[str, Any]:
     """Search pre-indexed passage metadata using keyword, semantic, or combined retrieval."""
+    user_id = get_current_user_id(http_request)
+    ai_rate_limiter.check(user_id)
     try:
         results = await search_passages(
             request.query,
@@ -338,6 +417,7 @@ async def search_documents(request: SearchRequest) -> dict[str, Any]:
             document_ids=request.document_ids,
             limit=request.limit,
             embedding_model=OLLAMA_EMBED_MODEL,
+            user_id=user_id,
         )
     except OllamaServiceError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -350,8 +430,10 @@ async def search_documents(request: SearchRequest) -> dict[str, Any]:
 
 
 @app.post("/api/v1/ask", tags=["rag"])
-async def ask_from_documents(request: AskRequest) -> dict[str, Any]:
+async def ask_from_documents(request: AskRequest, http_request: Request) -> dict[str, Any]:
     """Answer a question from retrieved study passages and return document/page sources."""
+    user_id = get_current_user_id(http_request)
+    ai_rate_limiter.check(user_id)
     try:
         results = await search_passages(
             request.question,
@@ -359,6 +441,7 @@ async def ask_from_documents(request: AskRequest) -> dict[str, Any]:
             document_ids=request.document_ids,
             limit=request.top_k,
             embedding_model=OLLAMA_EMBED_MODEL,
+            user_id=user_id,
         )
     except OllamaServiceError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
@@ -372,6 +455,8 @@ async def ask_from_documents(request: AskRequest) -> dict[str, Any]:
             "retrieved_count": len(results),
             "model": OLLAMA_MODEL,
         }
+
+
 
     # Use stable source labels so the answer can cite only passages actually retrieved.
     context_parts: list[str] = []
@@ -427,12 +512,40 @@ async def ask_from_documents(request: AskRequest) -> dict[str, Any]:
             "excerpt": item["text"][:500],
             "relevance_score": round(float(item["score"]), 4),
         })
-    return {
-        "status": "answered",
+    final_status = "answered"
+    res_payload = {
+        "status": final_status,
         "question": request.question,
         "answer": answer,
         "citations": citations,
         "retrieved_count": len(results),
         "model": OLLAMA_MODEL,
         "embedding_model": OLLAMA_EMBED_MODEL,
+        "session_id": request.session_id,
     }
+
+    # Persist in conversation session if requested
+    if request.session_id:
+        try:
+            repo = get_academic_repository()
+            # Record user question
+            repo.add_chat_message(
+                user_id=user_id,
+                session_id=request.session_id,
+                role="user",
+                content=request.question,
+            )
+            # Record assistant response with citations
+            repo.add_chat_message(
+                user_id=user_id,
+                session_id=request.session_id,
+                role="assistant",
+                content=answer,
+                model=OLLAMA_MODEL,
+                evidence_status=final_status,
+                citations=citations,
+            )
+        except Exception:
+            pass
+
+    return res_payload
