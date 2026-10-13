@@ -27,6 +27,11 @@ class BlueprintRequest(BaseModel):
     units_count: int = Field(default=5, ge=1, le=10)
 
 
+class EnrollUserRequest(BaseModel):
+    user_id: str
+    role: str = Field(default="student", pattern="^(student|faculty|ta)$")
+
+
 @router.get("/questions")
 async def list_faculty_questions(
     request: Request,
@@ -35,7 +40,21 @@ async def list_faculty_questions(
     """Lists faculty question bank with Bloom's taxonomy tags and unit classifications (F14)."""
     user_id = get_current_user_id(request)
     repo = get_academic_repository()
-    questions = repo.list_faculty_questions(user_id=user_id, course_id=course_id)
+    if course_id:
+        if not repo.is_course_faculty(user_id=user_id, course_id=course_id):
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: User is not authorized as faculty or instructor for this course.",
+            )
+        questions = repo.list_faculty_questions(user_id=user_id, course_id=course_id)
+    else:
+        faculty_courses = repo.list_user_faculty_courses(user_id=user_id)
+        if not faculty_courses:
+            raise HTTPException(
+                status_code=403,
+                detail="Forbidden: User does not hold a faculty or instructor role in any course.",
+            )
+        questions = repo.list_faculty_questions(user_id=user_id)
     return {"questions": questions, "count": len(questions)}
 
 
@@ -47,6 +66,11 @@ async def create_faculty_question(
     """Adds a verified question to the faculty question bank."""
     user_id = get_current_user_id(request)
     repo = get_academic_repository()
+    if not repo.is_course_faculty(user_id=user_id, course_id=body.course_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: User is not authorized as faculty or instructor for this course.",
+        )
     created = repo.create_faculty_question(
         user_id=user_id,
         course_id=body.course_id,
@@ -67,6 +91,11 @@ async def get_course_faculty_analytics(
     """Provides aggregate struggle topic analytics for faculty without exposing individual student records (F14)."""
     user_id = get_current_user_id(request)
     repo = get_academic_repository()
+    if not repo.is_course_faculty(user_id=user_id, course_id=course_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: User is not authorized as faculty or instructor for this course.",
+        )
     analytics = repo.get_faculty_course_analytics(user_id=user_id, course_id=course_id)
     return analytics
 
@@ -79,6 +108,12 @@ async def generate_exam_blueprint(
 ) -> dict[str, Any]:
     """Generates an academic question paper blueprint matching university distributions (F14)."""
     user_id = get_current_user_id(request)
+    repo = get_academic_repository()
+    if not repo.is_course_faculty(user_id=user_id, course_id=course_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: User is not authorized as faculty or instructor for this course.",
+        )
     fac_svc = get_faculty_service()
     blueprint = fac_svc.generate_exam_blueprint(
         user_id=user_id,
@@ -89,6 +124,23 @@ async def generate_exam_blueprint(
     return blueprint
 
 
+@router.post("/courses/{course_id}/enroll", status_code=201)
+async def enroll_course_member(
+    course_id: str,
+    body: EnrollUserRequest,
+    request: Request,
+) -> dict[str, Any]:
+    """Assigns or updates role for a user in a course. Only verified faculty/owner can manage enrollments."""
+    user_id = get_current_user_id(request)
+    repo = get_academic_repository()
+    if not repo.is_course_faculty(user_id=user_id, course_id=course_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: Only verified faculty or course owners can manage enrollments.",
+        )
+    return repo.enroll_user(user_id=body.user_id, course_id=course_id, role=body.role)
+
+
 @router.post("/generate-blueprint")
 async def generate_exam_blueprint_generic(
     body: BlueprintRequest,
@@ -97,10 +149,17 @@ async def generate_exam_blueprint_generic(
 ) -> dict[str, Any]:
     """Generates an academic question paper blueprint for the current course context."""
     user_id = get_current_user_id(request)
+    repo = get_academic_repository()
+    target_course_id = course_id or "default-course"
+    if not repo.is_course_faculty(user_id=user_id, course_id=target_course_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: User is not authorized as faculty or instructor for this course.",
+        )
     fac_svc = get_faculty_service()
     return fac_svc.generate_exam_blueprint(
         user_id=user_id,
-        course_id=course_id or "default-course",
+        course_id=target_course_id,
         total_marks=body.total_marks,
         units_count=body.units_count,
     )
@@ -114,5 +173,11 @@ async def get_weak_topics_generic(
     """Returns anonymized cohort weak topics for educator view."""
     user_id = get_current_user_id(request)
     repo = get_academic_repository()
-    return repo.get_faculty_course_analytics(user_id=user_id, course_id=course_id or "default-course")
+    target_course_id = course_id or "default-course"
+    if not repo.is_course_faculty(user_id=user_id, course_id=target_course_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Forbidden: User is not authorized as faculty or instructor for this course.",
+        )
+    return repo.get_faculty_course_analytics(user_id=user_id, course_id=target_course_id)
 

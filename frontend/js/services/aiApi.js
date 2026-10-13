@@ -9,8 +9,7 @@ export const APPROVED_API_ORIGINS = [
   "http://127.0.0.1:8000",
   "http://localhost:8000",
   "http://127.0.0.1:3000",
-  "http://localhost:3000",
-  "https://syllora-seven.vercel.app"
+  "http://localhost:3000"
 ];
 
 /**
@@ -33,20 +32,25 @@ export function isApprovedOrigin(urlString) {
       return true;
     }
     
-    // Allow configured runtime PUBLIC_API_BASE_URL if it is HTTPS or local
+    // Allow configured runtime PUBLIC_API_BASE_URL if it is HTTPS, not a static host, and not localhost
     if (typeof window !== "undefined" && window.__SYLLORA_CONFIG__?.PUBLIC_API_BASE_URL) {
       try {
-        const configuredOrigin = new URL(window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL).origin.toLowerCase();
-        if (configuredOrigin === origin) {
+        const configuredUrl = new URL(window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL);
+        const configuredOrigin = configuredUrl.origin.toLowerCase();
+        // Do not allow static frontend host (.vercel.app) to be treated as backend API
+        if (configuredUrl.hostname.endsWith(".vercel.app")) {
+          return false;
+        }
+        if (configuredOrigin === origin && configuredUrl.protocol === "https:") {
           return true;
         }
       } catch {}
     }
 
-    // Allow same-origin if window is defined and origin matches current page on trusted domain
+    // Allow same-origin only in local development where Node dev server proxies to backend
     if (typeof window !== "undefined" && window.location.origin.toLowerCase() === origin) {
       const hostname = window.location.hostname.toLowerCase();
-      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".vercel.app")) {
+      if (hostname === "localhost" || hostname === "127.0.0.1") {
         return true;
       }
     }
@@ -100,13 +104,14 @@ export function getApiBase() {
       return "http://127.0.0.1:8000";
     }
 
-    // 4. Hosted production default
-    if (hostname.endsWith(".vercel.app") || isApprovedOrigin(window.location.origin)) {
-      return window.location.origin;
-    }
+    // 4. In hosted production (e.g. .vercel.app), do NOT route API calls to the static frontend origin!
+    throw new Error(
+      "[Syllora Configuration Error] Backend API endpoint is not configured for production. " +
+      "Set PUBLIC_API_BASE_URL to your deployed HTTPS FastAPI host in your deployment settings."
+    );
   }
 
-  // Fallback for Node/SSR environments or default local dev
+  // Fallback for Node/SSR/test environments
   return "http://127.0.0.1:8000";
 }
 

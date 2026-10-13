@@ -1,6 +1,7 @@
 """PDF text extraction and page-aware chunking for Syllora."""
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 
@@ -92,6 +93,31 @@ def extract_pdf_chunks(
             has_text = False
             for page_number, page in enumerate(document, start=1):
                 page_text = _normalise_text(page.get_text("text"))
+
+                # Automatically use OCR for scanned pages.
+                if not page_text and page.get_images(full=True):
+                    tessdata_dir = os.getenv(
+                        "TESSDATA_PREFIX",
+                        r"C:\Program Files\Tesseract-OCR\tessdata"
+                    )
+
+                    try:
+                        textpage = page.get_textpage_ocr(
+                            language="eng",
+                            dpi=160,
+                            full=True,
+                            tessdata=tessdata_dir
+                        )
+
+                        page_text = _normalise_text(
+                            page.get_text("text", textpage=textpage)
+                        )
+
+                    except Exception as exc:
+                        raise PdfProcessingError(
+                            f"OCR failed on page {page_number}: {exc}"
+                        ) from exc
+
                 if page_text:
                     has_text = True
                     chunks.extend(chunk_page_text(page_text, page_number))
@@ -107,6 +133,6 @@ def extract_pdf_chunks(
 
     if not has_text or not chunks:
         raise PdfProcessingError(
-            "No selectable text was found. This may be a scanned PDF; OCR support is not enabled yet."
+            "No readable text was found in this PDF."
         )
     return page_count, chunks

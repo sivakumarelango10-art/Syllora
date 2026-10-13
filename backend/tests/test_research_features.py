@@ -288,7 +288,26 @@ def test_f13_viva_simulator(client):
 
 def test_f14_faculty_question_bank_and_blueprint(client):
     """Test F14: Faculty question bank insertion, listing, and exam paper blueprint synthesis."""
-    # Insert question
+    repo = get_academic_repository()
+
+    # 1. Negative test: Unauthorized student attempt must be strictly rejected with 403 Forbidden
+    unauth_res = client.post(
+        "/api/v1/faculty/questions",
+        json={
+            "course_id": "unauthorized-course-xyz",
+            "question_text": "Student attempting to add unverified questions.",
+            "marks": 5,
+            "bloom_level": "Remember",
+            "unit_number": 1,
+            "difficulty": "Easy"
+        }
+    )
+    assert unauth_res.status_code == 403
+
+    # 2. Authorize user as faculty for test-course-f14
+    repo.enroll_user(user_id=DEFAULT_DEMO_USER_ID, course_id="test-course-f14", role="faculty")
+
+    # 3. Insert question as authorized faculty
     add_res = client.post(
         "/api/v1/faculty/questions",
         json={
@@ -304,14 +323,14 @@ def test_f14_faculty_question_bank_and_blueprint(client):
     q_data = add_res.json()
     assert "id" in q_data
 
-    # List questions
-    list_res = client.get("/api/v1/faculty/questions")
+    # 4. List questions for authorized course
+    list_res = client.get("/api/v1/faculty/questions?course_id=test-course-f14")
     assert list_res.status_code == 200
     assert len(list_res.json()["questions"]) >= 1
 
-    # Generate balanced blueprint
+    # 5. Generate balanced blueprint
     bp_res = client.post(
-        "/api/v1/faculty/generate-blueprint",
+        "/api/v1/faculty/courses/test-course-f14/blueprint",
         json={
             "total_marks": 50,
             "units_count": 5

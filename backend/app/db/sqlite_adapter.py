@@ -316,6 +316,18 @@ class SQLiteAdapter(DatabaseAdapter):
                 );
                 CREATE INDEX IF NOT EXISTS idx_viva_sessions_user ON viva_sessions(user_id);
 
+                CREATE TABLE IF NOT EXISTS course_enrollments (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    course_id TEXT NOT NULL,
+                    role TEXT NOT NULL DEFAULT 'student',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE (user_id, course_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_course_enrollments_user ON course_enrollments(user_id);
+                CREATE INDEX IF NOT EXISTS idx_course_enrollments_course ON course_enrollments(course_id, role);
+
                 CREATE TABLE IF NOT EXISTS faculty_questions (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,

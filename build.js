@@ -68,41 +68,77 @@ const isProductionBuild = process.env.VERCEL === '1' ||
   process.argv.includes('--production') ||
   process.argv.includes('--verify-production');
 
-const publicApiBase = getEnv('PUBLIC_API_BASE_URL', getEnv('API_BASE_URL', isProductionBuild ? '' : 'http://127.0.0.1:8000'));
-const publicSupabaseUrl = getEnv('PUBLIC_SUPABASE_URL', getEnv('SUPABASE_URL', 'https://lgiarosqejiaejizrxdu.supabase.co'));
+let rawApiBase = getEnv('PUBLIC_API_BASE_URL', getEnv('API_BASE_URL', isProductionBuild ? '' : 'http://127.0.0.1:8000'));
+let normalizedApiBase = rawApiBase ? rawApiBase.trim().replace(/\/+$/, '') : '';
+
+let rawSupabaseUrl = getEnv('PUBLIC_SUPABASE_URL', getEnv('SUPABASE_URL', 'https://lgiarosqejiaejizrxdu.supabase.co'));
+let normalizedSupabaseUrl = rawSupabaseUrl ? rawSupabaseUrl.trim().replace(/\/+$/, '') : '';
+
 const publicSupabaseKey = getEnv('PUBLIC_SUPABASE_PUBLISHABLE_KEY', getEnv('SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_AasSK22U-NcZhWk4e-7VAA_FFAUyQIU'));
 const publicStorageBucket = getEnv('SUPABASE_STORAGE_BUCKET', 'syllora-study-pdfs');
 
-// Production Validation: enforce secure HTTPS API endpoint; reject localhost, 127.0.0.1, or temporary tunnels
+// Production Validation: enforce secure HTTPS API endpoint; reject localhost, 127.0.0.1, private IPs, tunnels, and static frontend origins
 if (isProductionBuild) {
   console.log('[Syllora Build] 🔒 Mode: PRODUCTION / DEPLOYMENT BUILD');
-  if (!publicApiBase || !publicApiBase.startsWith('https://')) {
+  
+  if (!normalizedApiBase) {
     console.error('[Syllora Build] ❌ Production build requires an explicitly configured, secure HTTPS API URL (PUBLIC_API_BASE_URL).');
-    console.error('  Received:', publicApiBase || '(empty)');
-    console.error('  Configure PUBLIC_API_BASE_URL in your Vercel Project Settings or server environment.');
+    console.error('  Received: (empty / unconfigured)');
+    console.error('  Remediation: In your Vercel Project Settings > Environment Variables, configure PUBLIC_API_BASE_URL with your deployed HTTPS FastAPI host.');
     process.exit(1);
   }
-  if (publicApiBase.includes('localhost') || publicApiBase.includes('127.0.0.1')) {
-    console.error('[Syllora Build] ❌ Production build cannot use localhost or loopback address for PUBLIC_API_BASE_URL.');
+
+  if (!normalizedApiBase.startsWith('https://')) {
+    console.error('[Syllora Build] ❌ Production build requires an HTTPS API URL (PUBLIC_API_BASE_URL).');
+    console.error(`  Received: ${normalizedApiBase}`);
+    console.error('  Remediation: The API endpoint must use the https:// protocol.');
     process.exit(1);
   }
-  if (publicApiBase.includes('trycloudflare.com')) {
+
+  const loopbackOrPrivatePatterns = [
+    /localhost/i,
+    /127\.\d+\.\d+\.\d+/,
+    /0\.0\.0\.0/,
+    /::1/,
+    /192\.168\.\d+\.\d+/,
+    /10\.\d+\.\d+\.\d+/,
+    /172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+/
+  ];
+
+  if (loopbackOrPrivatePatterns.some(re => re.test(normalizedApiBase))) {
+    console.error('[Syllora Build] ❌ Production build cannot use localhost, loopback, or private network address for PUBLIC_API_BASE_URL.');
+    console.error(`  Received: ${normalizedApiBase}`);
+    console.error('  Remediation: Update PUBLIC_API_BASE_URL in Vercel to your publicly accessible, secure HTTPS FastAPI origin.');
+    process.exit(1);
+  }
+
+  if (normalizedApiBase.includes('trycloudflare.com')) {
     console.error('[Syllora Build] ❌ Temporary Cloudflare tunnel URLs (trycloudflare.com) are strictly rejected for production builds.');
+    process.exit(1);
+  }
+
+  if (normalizedApiBase.includes('.vercel.app')) {
+    console.error('[Syllora Build] ❌ Vercel domain (.vercel.app) cannot be used as PUBLIC_API_BASE_URL.');
+    console.error(`  Received: ${normalizedApiBase}`);
+    console.error('  Explanation: Vercel hosts the static frontend. Syllora requires a separate deployed FastAPI backend.');
     process.exit(1);
   }
 } else {
   console.log('[Syllora Build] 🛠️ Mode: LOCAL DEVELOPMENT BUILD');
+  if (!normalizedApiBase) {
+    normalizedApiBase = 'http://127.0.0.1:8000';
+  }
 }
 
 // Validate public Supabase URL
-if (!publicSupabaseUrl || !publicSupabaseUrl.startsWith('https://')) {
+if (!normalizedSupabaseUrl || !normalizedSupabaseUrl.startsWith('https://')) {
   console.error('[Syllora Build] ❌ Invalid or missing PUBLIC_SUPABASE_URL. Must be a valid HTTPS URL.');
   process.exit(1);
 }
 
 const publicConfig = {
-  PUBLIC_API_BASE_URL: publicApiBase,
-  PUBLIC_SUPABASE_URL: publicSupabaseUrl,
+  PUBLIC_API_BASE_URL: normalizedApiBase,
+  PUBLIC_SUPABASE_URL: normalizedSupabaseUrl,
   PUBLIC_SUPABASE_PUBLISHABLE_KEY: publicSupabaseKey,
   SUPABASE_STORAGE_BUCKET: publicStorageBucket
 };

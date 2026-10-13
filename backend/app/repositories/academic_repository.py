@@ -1668,6 +1668,81 @@ class AcademicRepository:
             "high_struggle_topics": [t for t in topics_data if t.get("misconception_count", 0) > 0],
         }
 
+    # -----------------------------------------------------------------------
+    # F14: Role-Based Access Control & Course Enrollments
+    # -----------------------------------------------------------------------
+    def is_course_faculty(self, user_id: str, course_id: str) -> bool:
+        """Determines whether a user is an authorized faculty/instructor or TA for a course."""
+        uid = _to_uuid_str(user_id)
+        cid = _to_uuid_str(course_id)
+        # 1. Check if user is the course owner/creator
+        pg_owner = "SELECT 1 FROM public.courses WHERE id = %s AND user_id = %s LIMIT 1;"
+        sqlite_owner = "SELECT 1 FROM courses WHERE id = ? AND user_id = ? LIMIT 1;"
+        owner_rows = self._execute_query(pg_owner, sqlite_owner, (cid, uid), user_id=uid)
+        if owner_rows:
+            return True
+        # 2. Check if user has explicit faculty or ta role in course_enrollments
+        pg_enroll = "SELECT 1 FROM public.course_enrollments WHERE course_id = %s AND user_id = %s AND role IN ('faculty', 'ta') LIMIT 1;"
+        sqlite_enroll = "SELECT 1 FROM course_enrollments WHERE course_id = ? AND user_id = ? AND role IN ('faculty', 'ta') LIMIT 1;"
+        enroll_rows = self._execute_query(pg_enroll, sqlite_enroll, (cid, uid), user_id=uid)
+        return bool(enroll_rows)
+
+    def enroll_user(self, user_id: str, course_id: str, role: str = "student") -> dict[str, Any]:
+        """Enrolls a user in a course with a role ('student', 'faculty', 'ta')."""
+        uid = _to_uuid_str(user_id)
+        cid = _to_uuid_str(course_id)
+        eid = str(uuid.uuid4())
+        now = _now_iso()
+        pg_sql = """
+            INSERT INTO public.course_enrollments (id, user_id, course_id, role, created_at, updated_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (user_id, course_id) DO UPDATE SET role = EXCLUDED.role, updated_at = EXCLUDED.updated_at;
+        """
+        sqlite_sql = """
+            INSERT INTO course_enrollments (id, user_id, course_id, role, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT (user_id, course_id) DO UPDATE SET role = excluded.role, updated_at = excluded.updated_at;
+        """
+        self._execute_mutate(pg_sql, sqlite_sql, (eid, uid, cid, role, now, now), user_id=uid)
+        return {
+            "id": eid,
+            "user_id": uid,
+            "course_id": cid,
+            "role": role,
+            "created_at": now,
+        }
+
+    def get_user_course_role(self, user_id: str, course_id: str) -> str | None:
+        """Retrieves the effective role ('faculty', 'ta', 'student', or None) of a user in a course."""
+        uid = _to_uuid_str(user_id)
+        cid = _to_uuid_str(course_id)
+        pg_owner = "SELECT 1 FROM public.courses WHERE id = %s AND user_id = %s LIMIT 1;"
+        sqlite_owner = "SELECT 1 FROM courses WHERE id = ? AND user_id = ? LIMIT 1;"
+        if self._execute_query(pg_owner, sqlite_owner, (cid, uid), user_id=uid):
+            return "faculty"
+        pg_sql = "SELECT role FROM public.course_enrollments WHERE course_id = %s AND user_id = %s LIMIT 1;"
+        sqlite_sql = "SELECT role FROM course_enrollments WHERE course_id = ? AND user_id = ? LIMIT 1;"
+        rows = self._execute_query(pg_sql, sqlite_sql, (cid, uid), user_id=uid)
+        if rows:
+            return rows[0].get("role")
+        return None
+
+    def list_user_faculty_courses(self, user_id: str) -> list[str]:
+        """Lists course IDs where the user is an authorized faculty member or owner."""
+        uid = _to_uuid_str(user_id)
+        pg_sql = """
+            SELECT id FROM public.courses WHERE user_id = %s
+            UNION
+            SELECT course_id as id FROM public.course_enrollments WHERE user_id = %s AND role IN ('faculty', 'ta');
+        """
+        sqlite_sql = """
+            SELECT id FROM courses WHERE user_id = ?
+            UNION
+            SELECT course_id as id FROM course_enrollments WHERE user_id = ? AND role IN ('faculty', 'ta');
+        """
+        rows = self._execute_query(pg_sql, sqlite_sql, (uid, uid), user_id=uid)
+        return [r["id"] for r in rows if "id" in r]
+
 
 _ACADEMIC_REPO = None
 
