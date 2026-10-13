@@ -1,17 +1,25 @@
 /**
  * ============================================================================
- * SYLLORA AUTHENTICATION ENGINE
+ * SYLLORA AUTHENTICATION ENGINE (FRONTEND MODULE)
  * Exact Timings, Easings, Geometry & 60fps GPU Orchestration
  * ============================================================================
+ * 
+ * Features:
+ * - Precise mathematical cubic-bezier curves matching design specs
+ * - 60fps RequestAnimationFrame intro orchestration with zero layout thrash
+ * - CPU/Battery optimization: pauses ambient loops when tab is hidden
+ * - RAF cancellation on intro skip or unmount
+ * - Throttled resize calculations via requestAnimationFrame
+ * - Accessible live regions and ARIA state updates
  */
 
 (function () {
   'use strict';
 
   // --------------------------------------------------------------------------
-  // 1. Exact Timings & Easings Specification
+  // 1. Exact Timings & Easings Configuration
   // --------------------------------------------------------------------------
-  const TIMINGS = {
+  const TIMINGS = Object.freeze({
     // Intro Timeline (seconds from load)
     spineGrow: [0.15, 0.55],
     spineFade: [0.60, 1.00],
@@ -57,7 +65,7 @@
     welcomeTitle: [1.30, 1.80],
     welcomeSub: [1.45, 1.95],
     progressBarFill: [1.65, 3.05]
-  };
+  });
 
   // Exact Mathematical Easing Curves
   function easeOutCubic(p) {
@@ -72,10 +80,6 @@
     const c1 = 1.70158 * 1.5; // Overshoot 1.5
     const c3 = c1 + 1;
     return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
-  }
-
-  function easeInFlood(p) {
-    return Math.pow(p, 2.2); // p^2.2 acceleration
   }
 
   function linear(p) {
@@ -102,6 +106,23 @@
     const g = Math.round(interpolate(p, g1, g2));
     const b = Math.round(interpolate(p, b1, b2));
     return `rgb(${r},${g},${b})`;
+  }
+
+  // Safe SessionStorage Access
+  function getSessionStorage(key) {
+    try {
+      return sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function setSessionStorage(key, value) {
+    try {
+      sessionStorage.setItem(key, value);
+    } catch {
+      // Ignore private mode quota error
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -156,14 +177,17 @@
   const welcomeProgressFill = document.getElementById('welcomeProgressFill');
   const a11yAnnouncer = document.getElementById('a11yAnnouncer');
 
-  // State
+  // State & Animation Frame Handles
   let introActive = true;
   let introStartTime = null;
+  let introRafId = null;
   let ambientActive = false;
+  let ambientRafId = null;
   let isSubmitting = false;
+  let resizeRafId = null;
 
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const hasVisitedSession = sessionStorage.getItem('syllora_intro_played') === 'true';
+  const hasVisitedSession = getSessionStorage('syllora_intro_played') === 'true';
 
   // --------------------------------------------------------------------------
   // 3. Decorative Paper Shapes Positioning
@@ -186,9 +210,6 @@
       el.style.top = `${top}px`;
       el.style.width = `${w}px`;
       el.style.height = `${h}px`;
-      el.dataset.currentRot = rot;
-      el.dataset.currentLeft = left;
-      el.dataset.currentTop = top;
       el.style.transform = `rotate(${rot}deg)`;
     });
   }
@@ -320,7 +341,6 @@
     }
 
     // 3.95 -> 4.35s: Logo colors invert
-    // pages #03605E -> #FFFFFF; checkmark fill #FAFAF8 -> #03605E; wordmark #22272B -> #FFFFFF
     if (elapsed >= TIMINGS.colorInvert[0] && elapsed <= TIMINGS.colorInvert[1]) {
       const p = easeInOutCubic((elapsed - TIMINGS.colorInvert[0]) / (TIMINGS.colorInvert[1] - TIMINGS.colorInvert[0]));
       const pageColor = lerpColor('#03605E', '#FFFFFF', p);
@@ -404,13 +424,14 @@
       return;
     }
 
-    requestAnimationFrame(runIntroTimeline);
+    introRafId = requestAnimationFrame(runIntroTimeline);
   }
 
   // Finalize Intro State
   function finishIntro() {
     introActive = false;
-    sessionStorage.setItem('syllora_intro_played', 'true');
+    if (introRafId) cancelAnimationFrame(introRafId);
+    setSessionStorage('syllora_intro_played', 'true');
     introSkipHint.classList.remove('visible');
 
     // Force final positions and properties
@@ -451,7 +472,7 @@
 
     // Start ambient papers drift loop
     ambientActive = true;
-    requestAnimationFrame(runAmbientPapersLoop);
+    ambientRafId = requestAnimationFrame(runAmbientPapersLoop);
 
     // Focus email input automatically
     setTimeout(() => emailInput.focus(), 80);
@@ -461,9 +482,9 @@
   function skipIntro() {
     if (!introActive) return;
     introActive = false;
+    if (introRafId) cancelAnimationFrame(introRafId);
     introSkipHint.classList.remove('visible');
 
-    // Smooth 300ms transition to final state
     document.body.style.transition = 'opacity 300ms var(--ease-out-cubic)';
     document.body.style.opacity = '0.9';
 
@@ -480,7 +501,7 @@
   // translateY = 14px * sin(time*0.6 + i)
   // --------------------------------------------------------------------------
   function runAmbientPapersLoop(now) {
-    if (!ambientActive || prefersReducedMotion) return;
+    if (!ambientActive || prefersReducedMotion || document.hidden) return;
     const time = now / 1000;
 
     paperItems.forEach((el, i) => {
@@ -490,8 +511,19 @@
       el.style.transform = `translateY(${ty}px) rotate(${rot}deg)`;
     });
 
-    requestAnimationFrame(runAmbientPapersLoop);
+    ambientRafId = requestAnimationFrame(runAmbientPapersLoop);
   }
+
+  // Pause ambient loop when tab is backgrounded to save CPU/battery
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (ambientRafId) cancelAnimationFrame(ambientRafId);
+    } else {
+      if (ambientActive && !prefersReducedMotion) {
+        ambientRafId = requestAnimationFrame(runAmbientPapersLoop);
+      }
+    }
+  });
 
   // --------------------------------------------------------------------------
   // 6. User Interactions & Validation
@@ -521,26 +553,29 @@
   emailInput.addEventListener('input', () => clearFieldError(emailGroup, emailError));
   passwordInput.addEventListener('input', () => clearFieldError(passwordGroup, passwordError));
 
-  // Skip handlers (any click or keypress during intro)
+  // Skip handlers (passive listeners)
   window.addEventListener('click', () => {
     if (introActive) skipIntro();
-  });
+  }, { passive: true });
 
   window.addEventListener('keydown', (e) => {
     if (introActive && e.key !== 'Tab') {
       skipIntro();
     }
-  });
+  }, { passive: true });
 
-  // Window resize updater
+  // Throttled Window resize updater
   window.addEventListener('resize', () => {
-    layoutPaperShapes();
-    if (!introActive) {
-      const coords = getLogoCoordinates();
-      introLogoRig.style.transform = `translate(${coords.endX}px, ${coords.endY}px) scale(${coords.endScale})`;
-      brandPanel.style.clipPath = `circle(1250px at ${coords.panelCenterX}px ${coords.panelCenterY}px)`;
-    }
-  });
+    if (resizeRafId) cancelAnimationFrame(resizeRafId);
+    resizeRafId = requestAnimationFrame(() => {
+      layoutPaperShapes();
+      if (!introActive) {
+        const coords = getLogoCoordinates();
+        introLogoRig.style.transform = `translate(${coords.endX}px, ${coords.endY}px) scale(${coords.endScale})`;
+        brandPanel.style.clipPath = `circle(1250px at ${coords.panelCenterX}px ${coords.panelCenterY}px)`;
+      }
+    });
+  }, { passive: true });
 
   // --------------------------------------------------------------------------
   // 7. Form Submission: Loading, Error & Success Morph Sequence
@@ -749,10 +784,9 @@
       welcomeProgressFill.style.transition = 'width 1400ms var(--ease-in-out-cubic)';
       welcomeProgressFill.style.width = '100%';
 
-      // On completion -> simulated navigation
+      // On completion
       setTimeout(() => {
         a11yAnnouncer.textContent = 'Welcome to Syllora Dashboard!';
-        // Simulating navigation
         console.log('Navigating to /dashboard...');
       }, 1450);
     }, 1650);
@@ -782,7 +816,7 @@
     }, 1000);
 
     // Kick off exact timeline
-    requestAnimationFrame(runIntroTimeline);
+    introRafId = requestAnimationFrame(runIntroTimeline);
   }
 
 })();

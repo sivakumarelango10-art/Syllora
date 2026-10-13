@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Syllora — Log In | Your syllabus, simplified.</title>
+  <meta name="description" content="Sign in to Syllora, the education and learning platform. Your syllabus, simplified.">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="logo.svg">
+  
+  <!-- Google Fonts: Poppins (500, 600) & Inter (400, 600) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Poppins:wght@500;600&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Fullscreen Main Container -->
+  <div class="app-stage" id="appStage">
+
+    <!-- ======================================================================
+         LEFT HALF: BRAND PANEL
+         Revealed via clip-path circle expansion from the logo center
+         ====================================================================== -->
+    <section class="brand-panel" id="brandPanel" aria-label="Syllora Brand Panel">
+      
+      <!-- 6 Ambient Decorative Paper Shapes (Drifting via ambient loop) -->
+      <div class="paper-shapes-layer" id="paperShapesLayer" aria-hidden="true">
+        <!-- Paper 0: [90, 110, 170, 220, -14°] -->
+        <div class="paper-item" data-index="0" data-left="90" data-top="110" data-w="170" data-h="220" data-rot="-14"></div>
+        <!-- Paper 1: [700, 80, 150, 200, 12°] -->
+        <div class="paper-item" data-index="1" data-left="700" data-top="80" data-w="150" data-h="200" data-rot="12"></div>
+        <!-- Paper 2: [620, 860, 190, 150, -8°] -->
+        <div class="paper-item" data-index="2" data-left="620" data-top="860" data-w="190" data-h="150" data-rot="-8"></div>
+        <!-- Paper 3: [60, 800, 140, 190, 16°] -->
+        <div class="paper-item" data-index="3" data-left="60" data-top="800" data-w="140" data-h="190" data-rot="16"></div>
+        <!-- Paper 4: [780, 470, 120, 160, -20°] -->
+        <div class="paper-item" data-index="4" data-left="780" data-top="470" data-w="120" data-h="160" data-rot="-20"></div>
+        <!-- Paper 5: [160, 430, 90, 120, 8°] -->
+        <div class="paper-item" data-index="5" data-left="160" data-top="430" data-w="90" data-h="120" data-rot="8"></div>
+      </div>
+
+      <!-- Taglines inside the Brand Panel -->
+      <div class="brand-texts-anchor">
+        <h2 class="brand-tagline" id="brandTagline">Your syllabus, simplified.</h2>
+        <p class="brand-subtagline" id="brandSubtagline">Plan, learn and track progress in one place.</p>
+      </div>
+
+      <!-- Bottom-Left Copyright -->
+      <footer class="brand-copyright" id="brandCopyright">
+        &copy; 2026 Syllora
+      </footer>
+
+    </section>
+
+    <!-- ======================================================================
+         CENTER-TO-LEFT INTRO LOGO (Floats above both panels during intro)
+         Starts at 50% x, 48% y (scale 1.0x, 620px wide) then glides to 25% x, 38% y (scale 0.6x)
+         ====================================================================== -->
+    <div class="intro-logo-rig" id="introLogoRig" aria-hidden="true">
+      <svg id="sylloraLogoSvg" viewBox="150 250 960 840" width="620" height="542.5" style="overflow:visible">
+        <defs>
+          <mask id="checkMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1300" height="1200">
+            <!-- Thick stroke that draws to reveal the checkmark cut-out -->
+            <path id="checkReveal" d="M 425 492 Q 560 600 626 730 Q 720 520 900 365"
+                  fill="none" stroke="#fff" stroke-width="110" stroke-linecap="round"
+                  pathLength="1" stroke-dasharray="1.02" stroke-dashoffset="1.02"/>
+          </mask>
+        </defs>
+
+        <!-- Thin spine line shown only at the very start (y: 410 to 762, center y 586) -->
+        <rect id="spine" x="623" y="410" width="7" height="352" rx="3.5" fill="#03605E"/>
+
+        <!-- Left page: scales from its spine edge (x=615, y=586) -->
+        <path id="pageLeft" fill="#03605E"
+              d="M 615 410 Q 560 300 312 274 Q 300 274 300 286 L 300 664 Q 300 676 312 676 Q 500 680 615 762 Z"/>
+
+        <!-- Right page: scales from its spine edge (x=638, y=586) -->
+        <path id="pageRight" fill="#03605E"
+              d="M 638 410 Q 693 300 941 274 Q 953 274 953 286 L 953 664 Q 953 676 941 676 Q 753 680 638 762 Z"/>
+
+        <!-- Checkmark cut-out: filled with background color, revealed by mask -->
+        <path id="check" fill="#FAFAF8" mask="url(#checkMask)"
+              d="M 432 494 Q 520 540 615 586 L 637 556 Q 760 455 884 372 Q 897 366 893 381 Q 760 520 682 618 Q 641 676 628 742 Q 610 690 590 660 Q 512 572 434 503 Q 427 497 432 494 Z"/>
+
+        <!-- Wordmark: 7 separate letters staggered in, Poppins 600, font-size 300, y=1008, centered on x=626.5 -->
+        <g id="wordmark">
+          <text class="wm-letter" data-letter="0" x="250" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">S</text>
+          <text class="wm-letter" data-letter="1" x="415" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">y</text>
+          <text class="wm-letter" data-letter="2" x="545" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">l</text>
+          <text class="wm-letter" data-letter="3" x="615" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">l</text>
+          <text class="wm-letter" data-letter="4" x="685" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">o</text>
+          <text class="wm-letter" data-letter="5" x="830" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">r</text>
+          <text class="wm-letter" data-letter="6" x="935" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">a</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- ======================================================================
+         RIGHT HALF: LOGIN CARD
+         Centered both ways on off-white background
+         ====================================================================== -->
+    <main class="login-panel" id="loginPanel">
+      
+      <!-- 460px Login Card with 8 Stagger Items -->
+      <div class="login-card" id="loginCard">
+        
+        <!-- Stagger Item 0: Heading + Subtext -->
+        <div class="card-stagger-item item-header" data-stagger="0">
+          <h1 class="card-title">Welcome back</h1>
+          <p class="card-subtitle">Log in to continue learning</p>
+        </div>
+
+        <!-- Form Element -->
+        <form id="authForm" class="auth-form" novalidate autocomplete="on">
+          
+          <!-- Stagger Item 1: Email Input -->
+          <div class="card-stagger-item field-group" id="emailGroup" data-stagger="1">
+            <label for="emailInput" class="field-label">Email</label>
+            <input 
+              type="email" 
+              id="emailInput" 
+              name="email" 
+              class="form-input" 
+              placeholder="you@example.com" 
+              autocomplete="email" 
+              required>
+            <div class="field-error-text" id="emailError" role="alert" aria-live="polite"></div>
+          </div>
+
+          <!-- Stagger Item 2: Password Input with 22px Eye Icon 16px from Right -->
+          <div class="card-stagger-item field-group" id="passwordGroup" data-stagger="2">
+            <label for="passwordInput" class="field-label">Password</label>
+            <div class="input-relative-box">
+              <input 
+                type="password" 
+                id="passwordInput" 
+                name="password" 
+                class="form-input password-input" 
+                placeholder="••••••••" 
+                autocomplete="current-password" 
+                required>
+              <button 
+                type="button" 
+                class="password-eye-btn" 
+                id="togglePasswordBtn" 
+                aria-label="Toggle password visibility">
+                <!-- Eye Show Icon (22px, #9CA3AF) -->
+                <svg class="eye-icon-show" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#9CA3AF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                <!-- Eye Hide Icon -->
+                <svg class="eye-icon-hide" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#9CA3AF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
+                </svg>
+              </button>
+            </div>
+            <div class="field-error-text" id="passwordError" role="alert" aria-live="polite"></div>
+          </div>
+
+          <!-- Stagger Item 3: Remember me checkbox + Forgot password link -->
+          <div class="card-stagger-item aux-row" data-stagger="3">
+            <label class="checkbox-label-wrapper">
+              <input type="checkbox" id="rememberMe" name="remember" class="native-checkbox">
+              <span class="custom-check-box" aria-hidden="true">
+                <svg viewBox="0 0 12 10" width="10" height="9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="1.5 5 4.5 8 10.5 1.5"/>
+                </svg>
+              </span>
+              <span class="checkbox-caption">Remember me</span>
+            </label>
+            <a href="#forgot" class="forgot-link" id="forgotLink">Forgot password?</a>
+          </div>
+
+          <!-- Stagger Item 4: Primary "Log in" button (396px wide, centers in row to morph to 56px circle) -->
+          <div class="card-stagger-item button-row" data-stagger="4">
+            <button type="submit" class="btn-login" id="loginBtn" aria-busy="false">
+              <!-- Label "Log in" -->
+              <span class="btn-label-text" id="btnLabel">Log in</span>
+              
+              <!-- 28px Spinner: 3px track rgba(255,255,255,.3) + white 90° arc with round caps -->
+              <span class="btn-spinner" id="btnSpinner" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="28" height="28">
+                  <circle cx="16" cy="16" r="12.5" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
+                  <path d="M 16 3.5 A 12.5 12.5 0 0 1 28.5 16" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+              </span>
+
+              <!-- White checkmark that draws itself: viewBox -15 -15 30 30, path M-8 0.5 L-2.5 6 L8.5 -6 -->
+              <span class="btn-checkmark-morph" id="btnCheckmarkMorph" aria-hidden="true">
+                <svg viewBox="-15 -15 30 30" width="30" height="30">
+                  <path id="morphCheckPath" d="M -8 0.5 L -2.5 6 L 8.5 -6" 
+                        fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"
+                        pathLength="1" stroke-dasharray="1.02" stroke-dashoffset="1.02"/>
+                </svg>
+              </span>
+            </button>
+          </div>
+
+        </form>
+
+        <!-- Stagger Item 5: Divider "or continue with" -->
+        <div class="card-stagger-item divider-row" data-stagger="5">
+          <span class="divider-hairline"></span>
+          <span class="divider-text">or continue with</span>
+          <span class="divider-hairline"></span>
+        </div>
+
+        <!-- Stagger Item 6: "Continue with Google" outline button (54px tall) -->
+        <div class="card-stagger-item google-row" data-stagger="6">
+          <button type="button" class="btn-google" id="googleBtn">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+            </svg>
+            <span>Continue with Google</span>
+          </button>
+        </div>
+
+        <!-- Stagger Item 7: Footer "Don't have an account? Sign up" -->
+        <div class="card-stagger-item footer-row" data-stagger="7">
+          <p class="signup-prompt">
+            Don't have an account? <a href="#signup" class="signup-link" id="signUpLink">Sign up</a>
+          </p>
+        </div>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- ======================================================================
+       SUCCESS: TEAL FLOOD OVERLAY (Expands as a circle from login button)
+       Houses the Welcome Screen and Dashboard Progress Bar
+       ====================================================================== -->
+  <div class="teal-flood-overlay" id="tealFloodOverlay" aria-hidden="true">
+    
+    <div class="welcome-screen-inner" id="welcomeScreenInner">
+      
+      <!-- Welcome Screen Replay Logo (White pages, teal checkmark cut-out #03605E, white wordmark) -->
+      <div class="welcome-logo-container" id="welcomeLogoContainer">
+        <svg id="welcomeLogoSvg" viewBox="150 250 960 840" width="341" height="298" style="overflow:visible">
+          <defs>
+            <mask id="welcomeCheckMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1300" height="1200">
+              <path id="welcomeCheckReveal" d="M 425 492 Q 560 600 626 730 Q 720 520 900 365"
+                    fill="none" stroke="#fff" stroke-width="110" stroke-linecap="round"
+                    pathLength="1" stroke-dasharray="1.02" stroke-dashoffset="1.02"/>
+            </mask>
+          </defs>
+
+          <!-- Left page (White) -->
+          <path id="welcomePageLeft" fill="#FFFFFF"
+                d="M 615 410 Q 560 300 312 274 Q 300 274 300 286 L 300 664 Q 300 676 312 676 Q 500 680 615 762 Z"/>
+
+          <!-- Right page (White) -->
+          <path id="welcomePageRight" fill="#FFFFFF"
+                d="M 638 410 Q 693 300 941 274 Q 953 274 953 286 L 953 664 Q 953 676 941 676 Q 753 680 638 762 Z"/>
+
+          <!-- Checkmark cut-out (Filled with #03605E matching the teal panel) -->
+          <path id="welcomeCheck" fill="#03605E" mask="url(#welcomeCheckMask)"
+                d="M 432 494 Q 520 540 615 586 L 637 556 Q 760 455 884 372 Q 897 366 893 381 Q 760 520 682 618 Q 641 676 628 742 Q 610 690 590 660 Q 512 572 434 503 Q 427 497 432 494 Z"/>
+
+          <!-- Wordmark (White letters) -->
+          <g id="welcomeWordmark">
+            <text class="welcome-wm-letter" data-letter="0" x="250" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">S</text>
+            <text class="welcome-wm-letter" data-letter="1" x="415" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">y</text>
+            <text class="welcome-wm-letter" data-letter="2" x="545" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">l</text>
+            <text class="welcome-wm-letter" data-letter="3" x="615" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">l</text>
+            <text class="welcome-wm-letter" data-letter="4" x="685" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">o</text>
+            <text class="welcome-wm-letter" data-letter="5" x="830" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">r</text>
+            <text class="welcome-wm-letter" data-letter="6" x="935" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">a</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Heading & Subtext -->
+      <h2 class="welcome-title" id="welcomeTitle">Welcome back!</h2>
+      <p class="welcome-sub" id="welcomeSub">Taking you to your dashboard…</p>
+
+      <!-- Progress Bar (200x4px, track rgba(255,255,255,.2), white fill) -->
+      <div class="welcome-progress-track" id="welcomeProgressTrack">
+        <div class="welcome-progress-fill" id="welcomeProgressFill"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Discreet Intro Skip Hint (Visible only during intro) -->
+  <div class="intro-skip-hint" id="introSkipHint">
+    Press any key or click to skip
+  </div>
+
+  <!-- Client-side Audio / Interaction Notification -->
+  <div id="a11yAnnouncer" class="sr-only" aria-live="polite"></div>
+
+  <!-- Orchestration Script -->
+  <script src="app.js"></script>
+</body>
+</html>
