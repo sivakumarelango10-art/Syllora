@@ -1,0 +1,17 @@
+SYLLORA BACKEND PHASE 2.1 — RAG GUARDRAILS
+
+This patch overlays only the backend app and test files. It does not replace frontend files, uploaded PDFs, the SQLite database, or your custom Modelfile.
+
+1. Stop Uvicorn with Ctrl+C.
+2. Extract this ZIP into F:\Syllora (merge/overwrite the listed backend files).
+3. In PowerShell run:
+   cd F:\Syllora\backend
+   $env:OLLAMA_MODEL = "syllora-qwen"
+   $env:OLLAMA_EMBED_MODEL = "nomic-embed-text"
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   .\.venv\Scripts\python.exe -m pytest -q
+4. Start again:
+   .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+5. Retest POST /api/v1/ask with an in-scope question (deadlock) and an out-of-scope question (quantum entanglement). The latter should return status=insufficient_evidence and citations=[].
+
+Notes: These are conservative first-pass guardrails, not a substitute for evaluating retrieval thresholds on a representative set of real questions. The server's thinking-text filter removes Qwen-style text through a </think> delimiter when it leaks into the user-facing message.

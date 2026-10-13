@@ -21,11 +21,14 @@ export const PdfReader = {
 
     let effectivePdfSrc = null;
 
-    if (doc.status === 'indexed') {
-      // Bundled verified sample PDF
+    if (doc.backendDocument) {
+      // User-uploaded PDFs are indexed by the AI backend; open the browser-saved original.
+      effectivePdfSrc = await getManagedBlobUrl(doc.id, doc.blobFile || null);
+    } else if (doc.status === 'indexed') {
+      // Built-in verified sample PDF bundled with the frontend.
       effectivePdfSrc = `assets/docs/${doc.filename}`;
     } else {
-      // Local preview uploaded file — get managed blob URL from IndexedDB or memory
+      // Local preview uploaded file — get managed blob URL from IndexedDB or memory.
       effectivePdfSrc = await getManagedBlobUrl(doc.id, doc.blobFile || null);
     }
 
@@ -158,7 +161,7 @@ export const PdfReader = {
               </div>
               <div class="audit-row">
                 <span class="audit-label">Integrity Status:</span>
-                <span class="audit-val ${doc.status === 'indexed' ? 'audit-verified' : ''}">${doc.status === 'indexed' ? '✓ Bundled Verified Sample' : 'ℹ Local Student Preview (Unindexed)'}</span>
+                <span class="audit-val ${doc.status === 'indexed' ? 'audit-verified' : ''}">${doc.backendDocument ? '✓ Uploaded and indexed by Syllora AI' : doc.status === 'indexed' ? '✓ Bundled Verified Sample' : 'ℹ Local Student Preview (Unindexed)'}</span>
               </div>
               <div class="audit-row">
                 <span class="audit-label">Citation Key:</span>

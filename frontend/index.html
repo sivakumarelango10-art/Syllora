@@ -17,6 +17,19 @@
   
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="workspace.css">
+
+  <!-- Instant Direct-Workspace Navigation Guard (Zero Login Flash) -->
+  <script>
+    (function () {
+      try {
+        var hash = window.location.hash || '';
+        var isAuth = !!localStorage.getItem('syllora_demo_user');
+        if (hash.startsWith('#/app') || (isAuth && (hash === '' || hash === '#' || hash === '#/'))) {
+          document.documentElement.classList.add('direct-workspace');
+        }
+      } catch (e) {}
+    })();
+  </script>
 </head>
 <body>
 

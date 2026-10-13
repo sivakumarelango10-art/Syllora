@@ -1,0 +1,27 @@
+SYLLORA BACKEND PHASE 2 — RAG INSTALLATION
+
+This archive overlays files inside the existing F:\Syllora project. It does not include or replace the frontend.
+
+1. Extract this ZIP into F:\Syllora using PowerShell:
+   Expand-Archive -Force -LiteralPath "$HOME\Downloads\Syllora_backend_phase2_RAG.zip" -DestinationPath "F:\Syllora"
+
+2. In the terminal that will run the backend, configure models:
+   cd F:\Syllora\backend
+   $env:OLLAMA_MODEL = "syllora-qwen"
+   $env:OLLAMA_EMBED_MODEL = "nomic-embed-text"
+
+3. Pull the embedding model once (Ollama must be running and OLLAMA_MODELS should point at F:\OllamaModels):
+   ollama pull nomic-embed-text
+
+4. If dependencies were already installed, re-run to ensure requirements are current:
+   .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+
+5. Run tests:
+   .\.venv\Scripts\python.exe -m pytest -q
+
+6. Stop an older backend server with Ctrl+C, then start:
+   .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+
+7. Open http://127.0.0.1:8000/docs. First verify GET /api/v1/rag/status, then upload a small text-based PDF using POST /api/v1/documents. Only after upload has completed, test POST /api/v1/ask with a question answered by that PDF.
+
+The embedding model is separate from the chat model. A PDF is extracted and embedded during upload; subsequent searches use saved embeddings. The initial implementation uses SQLite and a cached NumPy vector matrix for a local prototype. It does not provide login, multi-user isolation, OCR for image-only scans, or public deployment security yet. Do not expose this API to the internet.

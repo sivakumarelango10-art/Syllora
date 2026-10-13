@@ -128,6 +128,14 @@ body.modal-open {
   overflow: hidden !important;
 }
 
+html.direct-workspace #loginStage {
+  display: none !important;
+}
+
+html.direct-workspace #workspaceContainer {
+  display: block !important;
+}
+
 .app-stage {
   position: relative;
   width: 100vw;

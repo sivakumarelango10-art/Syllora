@@ -96,8 +96,15 @@ function setupOfflineBanner() {
   updateStatus();
 }
 
+// Track previous path to identify when returning from workspace to login
+let previousRoutePath = null;
+
 // Route Change Listener
 router.subscribe((path, params, viewHandler) => {
+  const isReturningFromWorkspace = previousRoutePath && previousRoutePath.startsWith('/app');
+  previousRoutePath = path;
+  document.documentElement.classList.remove('direct-workspace');
+
   // Always clean up previous view work (timers, pending requests) before rendering new view
   if (currentViewCleanup && typeof currentViewCleanup === 'function') {
     try {
@@ -153,8 +160,8 @@ router.subscribe((path, params, viewHandler) => {
     if (workspaceContainer) workspaceContainer.style.display = 'none';
     if (loginStage) loginStage.style.display = 'flex';
 
-    // Reset login form and overlays if returning from workspace (e.g. logout)
-    if (typeof window.sylloraResetLogin === 'function') {
+    // Reset login form and overlays ONLY if returning from workspace (e.g. logout)
+    if (isReturningFromWorkspace && typeof window.sylloraResetLogin === 'function') {
       window.sylloraResetLogin();
     }
   }

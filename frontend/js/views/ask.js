@@ -14,6 +14,7 @@
 import { workspaceStore } from '../state.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Toast } from '../components/modal.js';
+import { sylloraApi } from '../services/aiApi.js';
 
 // Deterministic Academic Answer Fixtures
 const QUESTION_FIXTURES = {
@@ -97,7 +98,8 @@ export function renderAsk(container, queryParams = {}) {
   let showEvidenceInspector = false;
 
   const state = workspaceStore.getState();
-  const availableDocs = state.documents.filter(d => !d.isComparisonOnly);
+  // Only PDFs successfully indexed by the local AI backend are sent to RAG.
+  const availableDocs = state.documents.filter(d => d.backendDocument && !d.isComparisonOnly);
   let selectedDocIds = new Set(availableDocs.map(d => d.id));
 
   // Defect B: Truthful dynamic evidence support recalculation against selected/active sources
@@ -191,10 +193,10 @@ export function renderAsk(container, queryParams = {}) {
             <div class="source-list">
               <label class="source-checkbox-item">
                 <input type="checkbox" ${selectedDocIds.size === availableDocs.length ? 'checked' : ''} id="selectAllSourcesCheckbox">
-                <span class="source-label"><strong>All CS301 Sources (${availableDocs.length})</strong></span>
+                <span class="source-label"><strong>AI-indexed sources (${availableDocs.length})</strong></span>
               </label>
               <hr class="divider-sm">
-              ${availableDocs.map(doc => `
+              ${availableDocs.length ? availableDocs.map(doc => `
                 <label class="source-checkbox-item">
                   <input type="checkbox" ${selectedDocIds.has(doc.id) ? 'checked' : ''} class="source-doc-checkbox" value="${doc.id}">
                   <span class="source-label" title="${doc.title}">
@@ -202,11 +204,11 @@ export function renderAsk(container, queryParams = {}) {
                     ${doc.title.length > 28 ? doc.title.slice(0, 26) + '...' : doc.title}
                   </span>
                 </label>
-              `).join('')}
+              `).join('') : '<p class="text-xs text-muted">Upload and index a PDF in Study Materials to ask questions.</p>'}
             </div>
 
             <div class="sources-footer-notice">
-              <span class="text-xs text-muted">Citations resolve to verified page offsets in real bundled PDFs.</span>
+              <span class="text-xs text-muted">Only PDFs indexed by your local Syllora AI backend are used for answers.</span>
             </div>
           </aside>
 
@@ -220,15 +222,15 @@ export function renderAsk(container, queryParams = {}) {
                 <div class="radio-pill-group">
                   <label class="radio-pill ${searchMode === 'keyword' ? 'active' : ''}">
                     <input type="radio" name="searchMode" value="keyword" ${searchMode === 'keyword' ? 'checked' : ''}>
-                    Keyword (Live text filter)
+                    Keyword (Indexed passages)
                   </label>
                   <label class="radio-pill ${searchMode === 'semantic' ? 'active' : ''}">
                     <input type="radio" name="searchMode" value="semantic" ${searchMode === 'semantic' ? 'checked' : ''}>
-                    Semantic (Demo embeddings)
+                    Semantic (AI embeddings)
                   </label>
                   <label class="radio-pill ${searchMode === 'combined' ? 'active' : ''}">
                     <input type="radio" name="searchMode" value="combined" ${searchMode === 'combined' ? 'checked' : ''}>
-                    Combined (Hybrid match)
+                    Combined (Hybrid search)
                   </label>
                 </div>
               </div>
@@ -368,7 +370,7 @@ export function renderAsk(container, queryParams = {}) {
   function renderAnswerCard(data) {
     let statusPill = 'pill-green';
     if (data.status === 'partially_supported') statusPill = 'pill-amber';
-    if (data.status === 'insufficient_evidence') statusPill = 'pill-coral';
+    if (data.status === 'insufficient_evidence' || data.status === 'error') statusPill = 'pill-coral';
 
     return `
       <div class="card answer-card">
@@ -377,7 +379,7 @@ export function renderAsk(container, queryParams = {}) {
             <span class="pill-badge ${statusPill}">
               ${data.evidenceLabel}
             </span>
-            <span class="text-xs text-muted">Deterministic Fixture • 100% Academic Grounding</span>
+            <span class="text-xs text-muted">Live response from local Syllora AI</span>
           </div>
 
           <div class="answer-actions">
@@ -421,7 +423,11 @@ export function renderAsk(container, queryParams = {}) {
   }
 
   function formatMarkdown(text) {
-    return text
+    const safeText = String(text || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    return safeText
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*(.*?)\*/g, '<em>$1</em>')
       .replace(/\n\n/g, '</p><p>')
@@ -430,65 +436,105 @@ export function renderAsk(container, queryParams = {}) {
   }
 
   function escapeQuotes(str) {
-    return str.replace(/"/g, '&quot;');
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/"/g, '&quot;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
   }
 
-  function handleQueryExecution(queryText) {
-    if (!queryText.trim()) return;
-    currentQuery = queryText;
+  async function handleQueryExecution(queryText) {
+    const questionText = String(queryText || '').trim();
+    if (!questionText) return;
+    currentQuery = questionText;
+    workspaceStore.saveDraft('ask_query', questionText);
 
     const pendingCard = container.querySelector('#askPendingCard');
     const resultWrap = container.querySelector('#answerResultContainer');
-
     if (pendingCard) pendingCard.style.display = 'flex';
     if (resultWrap) resultWrap.style.display = 'none';
 
-    // Defect F: Bounded Async State with cancellation & request ID guard
     if (pendingRequestTimer) clearTimeout(pendingRequestTimer);
+    pendingRequestTimer = null;
     const thisRequestId = ++activeRequestId;
+    const documentIds = availableDocs
+      .filter(doc => selectedDocIds.has(doc.id))
+      .map(doc => doc.id);
 
-    pendingRequestTimer = setTimeout(() => {
-      pendingRequestTimer = null;
+    try {
+      if (!documentIds.length) {
+        throw new Error('No AI-indexed PDFs are selected. Open Study Materials and upload a PDF first.');
+      }
+
+      let apiResult;
+      if (activeTab === 'search') {
+        const searchResult = await sylloraApi.search(questionText, searchMode, documentIds, 5);
+        const rows = Array.isArray(searchResult.results) ? searchResult.results : [];
+        apiResult = {
+          status: rows.length ? 'answered' : 'insufficient_evidence',
+          question: questionText,
+          answer: rows.length
+            ? rows.map((item, index) => `${index + 1}. **${item.title || item.filename || 'Study material'} — Page ${item.page_number || '?'}**\n${item.excerpt || ''}`).join('\n\n')
+            : 'No matching passages were found in the selected, AI-indexed study materials.',
+          citations: rows.map(item => ({
+            document_id: item.document_id,
+            filename: item.filename,
+            title: item.title,
+            page_number: item.page_number,
+            excerpt: item.excerpt
+          })),
+          model: null
+        };
+      } else {
+        const questionForModel = activeTab === 'summarise'
+          ? `Summarise this topic using only the uploaded study materials: ${questionText}`
+          : questionText;
+        apiResult = await sylloraApi.ask(questionForModel, documentIds, 5);
+      }
+
       if (thisRequestId !== activeRequestId || !container.isConnected) return;
 
-      if (pendingCard) pendingCard.style.display = 'none';
-      if (resultWrap) resultWrap.style.display = 'block';
+      const citations = (Array.isArray(apiResult.citations) ? apiResult.citations : []).map(c => ({
+        docId: c.document_id,
+        docTitle: c.title || c.filename || 'Study material',
+        page: Number(c.page_number) || 1,
+        quote: c.excerpt || ''
+      }));
+      const status = apiResult.status || (citations.length ? 'answered' : 'insufficient_evidence');
+      const evidenceLabels = {
+        answered: 'Supported by uploaded materials',
+        partially_supported: 'Partially supported by uploaded materials',
+        insufficient_evidence: 'Insufficient evidence in uploaded materials',
+        error: 'AI request failed'
+      };
 
-      // Normalize key
-      const key = queryText.toLowerCase().replace(/[?.,!]/g, '').trim();
-
-      // Keyword filtering match check
-      let match = null;
-      for (const [k, v] of Object.entries(QUESTION_FIXTURES)) {
-        if (key.includes(k) || k.includes(key) || (key.includes('deadlock') && key.includes('starvation'))) {
-          match = JSON.parse(JSON.stringify(v));
-          match.originalStatus = match.status;
-          match.originalEvidenceLabel = match.evidenceLabel;
-          match.allCitations = [...match.citations];
-          break;
-        }
-      }
-
-      if (match) {
-        activeBaseAnswer = match;
-        activeAnswerData = evaluateAnswerSupport(match);
-      } else {
-        // Deliberately unsupported state
-        activeBaseAnswer = {
-          status: 'insufficient_evidence',
-          evidenceLabel: 'Insufficient Evidence in Loaded Materials',
-          answer: `No matching evidence was found in the current CS301 course materials for: **"${queryText}"**.
-
-Syllora strictly refuses to fabricate answers when citations are missing. The active course library focuses on Concurrency, Deadlocks (Coffman conditions, Banker's algorithm, and starvation).`,
-          citations: [],
-          allCitations: [],
-          claims: []
-        };
-        activeAnswerData = activeBaseAnswer;
-      }
-
+      activeBaseAnswer = {
+        status,
+        evidenceLabel: evidenceLabels[status] || 'AI-generated result',
+        answer: apiResult.answer || (status === 'insufficient_evidence'
+          ? 'The uploaded materials do not contain enough evidence to answer this reliably.'
+          : 'No answer was returned by the AI backend.'),
+        citations,
+        allCitations: citations,
+        claims: [],
+        insufficientReason: status === 'insufficient_evidence' ? 'Upload the relevant lecture notes or textbook section, then ask again.' : '',
+        model: apiResult.model || null
+      };
+      activeAnswerData = activeBaseAnswer;
       renderView();
-    }, 450); // fast bounded execution
+    } catch (err) {
+      if (thisRequestId !== activeRequestId || !container.isConnected) return;
+      activeBaseAnswer = {
+        status: 'error',
+        evidenceLabel: 'AI request failed',
+        answer: `Syllora could not complete this request. ${err && err.message ? err.message : 'Check that the local AI backend is running.'}`,
+        citations: [],
+        allCitations: [],
+        claims: []
+      };
+      activeAnswerData = activeBaseAnswer;
+      renderView();
+    }
   }
 
   function bindEvents() {

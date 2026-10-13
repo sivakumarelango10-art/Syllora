@@ -148,12 +148,27 @@
   const welcomeProgressFill = document.getElementById('welcomeProgressFill');
 
   // State Management
-  let introActive = true;
-  let activeAnimations = [];
-  let isSubmitting = false;
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const isDirectWorkspaceVisit = window.location.hash.startsWith('#/app');
   const introSeenThisSession = (getSessionStorage('syllora_intro_seen') === 'true') || isDirectWorkspaceVisit;
+  let introActive = !introSeenThisSession && !prefersReducedMotion;
+  let activeAnimations = [];
+  let isSubmitting = false;
+  let authTimers = [];
+
+  function setTrackedTimeout(fn, ms) {
+    const id = setTimeout(() => {
+      authTimers = authTimers.filter((t) => t !== id);
+      fn();
+    }, ms);
+    authTimers.push(id);
+    return id;
+  }
+
+  function clearAuthTimers() {
+    authTimers.forEach((id) => clearTimeout(id));
+    authTimers = [];
+  }
 
   // --------------------------------------------------------------------------
   // 3. LAYOUT & PROPORTIONAL GEOMETRY CALCULATIONS
@@ -453,7 +468,7 @@
   // --------------------------------------------------------------------------
   // 5. INTRO COMPLETION & SKIP ENGINE
   // --------------------------------------------------------------------------
-  function completeIntro() {
+  function completeIntro(options = {}) {
     introActive = false;
     setSessionStorage('syllora_intro_seen', 'true');
     introSkipHint.classList.remove('visible');
@@ -493,8 +508,18 @@
     brandCopyright.style.opacity = '1';
     brandCopyright.style.transform = 'translateY(0)';
 
-    loginCard.style.opacity = '1';
-    loginCard.style.transform = 'translateY(0)';
+    if (options.shortFade && !prefersReducedMotion) {
+      loginCard.style.transition = 'opacity 300ms ease, transform 300ms ease';
+      loginCard.style.opacity = '1';
+      loginCard.style.transform = 'translateY(0)';
+      setTimeout(() => {
+        loginCard.style.transition = '';
+      }, 320);
+    } else {
+      loginCard.style.opacity = '1';
+      loginCard.style.transform = 'translateY(0)';
+    }
+
     cardStaggerItems.forEach((item) => {
       item.style.opacity = '1';
       item.style.transform = 'translateY(0)';
@@ -510,9 +535,20 @@
 
   function resetLoginState() {
     isSubmitting = false;
+    clearAuthTimers();
+
+    // Cancel all active Web Animations API instances
+    activeAnimations.forEach((anim) => {
+      try {
+        anim.cancel();
+      } catch {}
+    });
+    activeAnimations = [];
+
     loginBtn.setAttribute('aria-busy', 'false');
     loginBtn.disabled = false;
     loginBtn.classList.remove('pressed');
+    loginBtn.style.transition = '';
     loginBtn.style.width = '';
     loginBtn.style.borderRadius = '';
     loginBtn.style.backgroundColor = '';
@@ -520,15 +556,45 @@
     btnSpinner.style.display = 'none';
     btnSpinner.style.opacity = '0';
     btnCheckmarkMorph.style.display = 'none';
+    btnCheckmarkMorph.style.transform = '';
+    morphCheckPath.style.transition = '';
     morphCheckPath.style.strokeDashoffset = '1.02';
+
     tealFloodOverlay.classList.remove('active');
+    floodCircle.style.transform = '';
+
     welcomeScreen.classList.remove('active');
+    welcomePageLeft.style.transition = '';
+    welcomePageLeft.style.transform = '';
+    welcomePageRight.style.transition = '';
+    welcomePageRight.style.transform = '';
+    welcomeCheckReveal.style.transition = '';
+    welcomeCheckReveal.style.strokeDashoffset = '1.02';
+    welcomeLtrs.forEach((ltr) => {
+      ltr.style.transition = '';
+      ltr.style.opacity = '';
+      ltr.style.transform = '';
+    });
+    welcomeTitle.style.transition = '';
+    welcomeTitle.style.opacity = '';
+    welcomeTitle.style.transform = '';
+    welcomeSub.style.transition = '';
+    welcomeSub.style.opacity = '';
+    welcomeSub.style.transform = '';
+    welcomeProgressTrack.style.transition = '';
+    welcomeProgressTrack.style.opacity = '';
+    welcomeProgressFill.style.transition = '';
     welcomeProgressFill.style.transform = 'scaleX(0)';
+
     emailInput.value = '';
     passwordInput.value = '';
     clearFieldError(emailGroup, emailError);
     clearFieldError(passwordGroup, passwordError);
-    completeIntro();
+
+    // Only settle the intro if it was already marked seen this session or already finished
+    if (getSessionStorage('syllora_intro_seen') === 'true' || !introActive) {
+      completeIntro();
+    }
   }
   window.sylloraResetLogin = resetLoginState;
 
@@ -668,12 +734,12 @@
     a11yAnnouncer.textContent = 'Logging in...';
 
     // 0.15 -> 0.35s: Label fades out
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       btnLabel.style.opacity = '0';
     }, 150);
 
     // 0.15 -> 0.60s: Button morphs into 56px circle inside fixed 396x56 contain: strict box
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       loginBtn.style.transition = 'width 450ms var(--ease-in-out), border-radius 450ms var(--ease-in-out), background-color 450ms var(--ease-in-out)';
       loginBtn.style.width = '56px';
       loginBtn.style.borderRadius = '28px';
@@ -681,7 +747,7 @@
     }, 150);
 
     // 0.50 -> 0.65s: 28px Spinner fades in
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       btnSpinner.style.display = 'flex';
       requestAnimationFrame(() => {
         btnSpinner.style.opacity = '1';
@@ -692,11 +758,11 @@
     const authStartTime = performance.now();
     const isMockSuccess = (email === 'demo@syllora.com' || (email.includes('@') && password.length >= 4));
 
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       const elapsed = (performance.now() - authStartTime) / 1000;
       const remainingMinSpinner = Math.max(0, (TIMINGS.minSpinnerDuration - elapsed) * 1000);
 
-      setTimeout(() => {
+      setTrackedTimeout(() => {
         if (isMockSuccess) {
           handleAuthSuccess();
         } else {
@@ -710,22 +776,24 @@
   function handleAuthFailure() {
     isSubmitting = false;
     loginBtn.setAttribute('aria-busy', 'false');
+    loginBtn.disabled = false;
     a11yAnnouncer.textContent = 'Incorrect email or password.';
 
     // Hide spinner
     btnSpinner.style.opacity = '0';
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       btnSpinner.style.display = 'none';
 
       // Morph button back to 396px
       loginBtn.style.transition = 'width 400ms var(--ease-in-out), border-radius 400ms var(--ease-in-out), background-color 400ms var(--ease-in-out)';
-      loginBtn.style.width = '396px';
+      loginBtn.style.width = window.innerWidth >= 900 ? '396px' : '100%';
       loginBtn.style.borderRadius = '14px';
       loginBtn.style.backgroundColor = '#03605E';
 
-      setTimeout(() => {
+      setTrackedTimeout(() => {
         btnLabel.style.opacity = '1';
         loginBtn.style.transition = '';
+        loginBtn.style.width = '';
       }, 350);
     }, 150);
 
@@ -739,22 +807,22 @@
 
     // 0 -> 0.15s: Spinner fades out
     btnSpinner.style.opacity = '0';
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       btnSpinner.style.display = 'none';
     }, 150);
 
     // 0.05 -> 0.40s: White checkmark draws in (path M-8 0.5 L-2.5 6 L8.5 -6)
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       btnCheckmarkMorph.style.display = 'block';
       morphCheckPath.style.transition = 'stroke-dashoffset 350ms var(--ease-out)';
       morphCheckPath.style.strokeDashoffset = '0';
     }, 50);
 
     // 0.05 -> 0.45s: Checkmark pop scale 1 -> 1.12 -> 1
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       btnCheckmarkMorph.style.transition = 'transform 200ms ease';
       btnCheckmarkMorph.style.transform = 'scale(1.12)';
-      setTimeout(() => {
+      setTrackedTimeout(() => {
         btnCheckmarkMorph.style.transform = 'scale(1)';
       }, 200);
     }, 50);
@@ -763,7 +831,7 @@
     loginBtn.style.backgroundColor = '#03605E';
 
     // 0.65 -> 1.45s: Teal flood: circle centered on button scales 0 -> 1 on GPU compositor
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       const btnRect = loginBtn.getBoundingClientRect();
       const btnCenterX = btnRect.left + btnRect.width / 2;
       const btnCenterY = btnRect.top + btnRect.height / 2;
@@ -788,7 +856,7 @@
       });
 
       // Start Welcome Screen after flood finishes
-      setTimeout(runWelcomeDashboardSequence, 800);
+      setTrackedTimeout(runWelcomeDashboardSequence, 800);
     }, 650);
   }
 
@@ -799,7 +867,7 @@
     welcomeScreen.classList.add('active');
 
     // 0.05 -> 0.75s: Pages open (ease-back)
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       welcomePageLeft.style.transition = 'transform 700ms var(--ease-back)';
       welcomePageRight.style.transition = 'transform 700ms var(--ease-back)';
       welcomePageLeft.style.transform = 'scaleX(1)';
@@ -807,14 +875,14 @@
     }, 50);
 
     // 0.60 -> 1.15s: Checkmark draws (ease-in-out)
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       welcomeCheckReveal.style.transition = 'stroke-dashoffset 550ms var(--ease-in-out)';
       welcomeCheckReveal.style.strokeDashoffset = '0';
     }, 600);
 
     // 0.95 + i*0.05s: Outlined letters rise (each 0.40s, ease-out)
     welcomeLtrs.forEach((ltr, index) => {
-      setTimeout(() => {
+      setTrackedTimeout(() => {
         ltr.style.transition = 'opacity 400ms var(--ease-out), transform 400ms var(--ease-out)';
         ltr.style.opacity = '1';
         ltr.style.transform = 'translateY(0px)';
@@ -822,32 +890,32 @@
     });
 
     // 1.30 -> 1.80s: "Welcome back!" fades in and rises 18px -> 0
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       welcomeTitle.style.transition = 'opacity 500ms var(--ease-out), transform 500ms var(--ease-out)';
       welcomeTitle.style.opacity = '1';
       welcomeTitle.style.transform = 'translate(-50%, 0px)';
     }, 1300);
 
     // 1.45 -> 1.95s: "Taking you to your dashboard…" fades in
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       welcomeSub.style.transition = 'opacity 500ms var(--ease-out), transform 500ms var(--ease-out)';
       welcomeSub.style.opacity = '1';
       welcomeSub.style.transform = 'translate(-50%, 0px)';
     }, 1450);
 
     // 1.45s: Progress track appears
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       welcomeProgressTrack.style.transition = 'opacity 300ms ease';
       welcomeProgressTrack.style.opacity = '1';
     }, 1450);
 
     // 1.65 -> 3.05s: Progress fill animates scaleX(0 -> 1) over 1.40s
-    setTimeout(() => {
+    setTrackedTimeout(() => {
       welcomeProgressFill.style.transition = 'transform 1400ms var(--ease-in-out)';
       welcomeProgressFill.style.transform = 'scaleX(1)';
 
       // On completion
-      setTimeout(() => {
+      setTrackedTimeout(() => {
         a11yAnnouncer.textContent = 'Welcome to Syllora Dashboard!';
         console.log('[Syllora Auth] Transitioning to workspace...');
         if (typeof window.sylloraEnterWorkspace === 'function') {
@@ -899,8 +967,12 @@
     document.fonts ? document.fonts.ready : Promise.resolve(),
     new Promise((resolve) => setTimeout(resolve, 300))
   ]).then(() => {
-    if (prefersReducedMotion || introSeenThisSession || isDirectWorkspaceVisit) {
+    if (isDirectWorkspaceVisit) {
       completeIntro();
+    } else if (prefersReducedMotion) {
+      completeIntro();
+    } else if (introSeenThisSession) {
+      completeIntro({ shortFade: true });
     } else {
       setTimeout(() => {
         if (introActive) introSkipHint.classList.add('visible');

@@ -15,6 +15,7 @@ import { workspaceStore } from '../state.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Modal, Toast } from '../components/modal.js';
 import { savePdfBlob } from '../storage.js';
+import { sylloraApi } from '../services/aiApi.js';
 
 export function renderMaterials(container, queryParams = {}) {
   let viewMode = 'list'; // 'list' | 'grid'
@@ -400,10 +401,18 @@ export function renderMaterials(container, queryParams = {}) {
             <p>Are you sure you want to delete <strong>${doc.title}</strong> (${doc.filename})?</p>
             <p class="text-muted text-sm mt-2">All associated passage citations and references will be safely disconnected to prevent dangling citations.</p>
           `,
-          () => {
-            workspaceStore.deleteDocument(docId);
-            Toast.show('Document removed from library.', 'info');
-            updateResultsMount();
+          async () => {
+            try {
+              if (doc.backendDocument) {
+                await sylloraApi.deleteDocument(docId);
+              }
+              workspaceStore.deleteDocument(docId);
+              Toast.show('Document removed from the library and AI index.', 'success');
+              updateResultsMount();
+            } catch (err) {
+              Toast.show(`Could not remove the AI-indexed document: ${err.message}`, 'error', 6000);
+              return false;
+            }
           },
           'Delete Document',
           'danger'
@@ -440,7 +449,7 @@ export function openUploadModal(onSuccess) {
       </div>
 
       <div class="upload-validation-banner pill-amber" id="uploadNoticeBanner">
-        <strong>Note:</strong> Uploaded files in this frontend demo are added as <em>LOCAL PREVIEWS</em> for page inspection. They are not indexed by backend AI services.
+        <strong>AI indexing:</strong> PDFs are uploaded to your local Syllora AI backend. Text extraction and indexing finish before the upload is marked complete.
       </div>
 
       <div class="upload-queue-container" id="uploadQueueContainer" style="display:none;">
@@ -460,45 +469,73 @@ export function openUploadModal(onSuccess) {
       }
 
       const results = [];
+      const failures = [];
 
       for (const file of uploadQueue) {
-        const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-        let saveResult = null;
         try {
-          saveResult = await savePdfBlob(docId, file);
+          const title = file.name.replace(/\.pdf$/i, '').replace(/_/g, ' ');
+          // The server extracts the PDF and computes embeddings before this resolves.
+          // If this exact PDF was already indexed through Swagger, reuse its existing record by filename.
+          let backendDoc;
+          try {
+            backendDoc = await sylloraApi.uploadDocument(file, title);
+          } catch (uploadError) {
+            const message = String(uploadError && uploadError.message || '');
+            if (!/already been uploaded|HTTP 409|409/i.test(message)) throw uploadError;
+            const listing = await sylloraApi.listDocuments();
+            const serverDocs = Array.isArray(listing.documents) ? listing.documents : [];
+            backendDoc = serverDocs.find(item =>
+              String(item.filename || '').toLowerCase() === file.name.toLowerCase()
+            );
+            if (!backendDoc) throw uploadError;
+          }
+
+          let saveResult;
+          try {
+            saveResult = await savePdfBlob(backendDoc.id, file);
+          } catch (storageError) {
+            console.warn('[Upload] Browser PDF persistence failed:', storageError);
+            saveResult = { success: false, persistent: false, memoryOnly: true };
+          }
+
+          const isPersistent = Boolean(saveResult && saveResult.persistent);
+          workspaceStore.addDocument({
+            id: backendDoc.id,
+            title: backendDoc.title || title,
+            filename: backendDoc.filename || file.name,
+            author: 'Uploaded to Syllora AI',
+            pageCount: Number(backendDoc.page_count) || null,
+            fileSize: `${((backendDoc.size_bytes ?? file.size) / 1024).toFixed(1)} KB`,
+            uploadedAt: new Date().toISOString().split('T')[0],
+            status: 'indexed',
+            backendDocument: true,
+            backendChunkCount: Number(backendDoc.chunk_count) || 0,
+            embeddingModel: backendDoc.embedding_model || null,
+            isPersistent,
+            isBookmarked: false,
+            blobFile: file
+          });
+          results.push({ file, isPersistent, backendDoc });
         } catch (err) {
-          console.warn('[Upload] IndexedDB save failed for file:', file.name, err);
-          saveResult = { success: false, persistent: false, memoryOnly: true, error: err };
+          console.error('[Upload] AI indexing failed for:', file.name, err);
+          failures.push({ file, error: err });
+          Toast.show(`Could not index "${file.name}": ${err.message}`, 'error', 6000);
         }
+      }
 
-        const isPersistent = Boolean(saveResult && saveResult.persistent);
-        workspaceStore.addDocument({
-          id: docId,
-          title: file.name.replace(/\.pdf$/i, '').replace(/_/g, ' '),
-          filename: file.name,
-          author: 'Local Student Upload',
-          pageCount: null,
-          fileSize: `${(file.size / 1024).toFixed(1)} KB`,
-          uploadedAt: new Date().toISOString().split('T')[0],
-          status: 'local_preview', // explicit LOCAL PREVIEW labelling
-          isPersistent,
-          isBookmarked: false,
-          blobFile: file
-        });
-
-        results.push({ file, isPersistent });
+      if (results.length === 0) {
+        Toast.show('No PDF was indexed. Check that the Syllora AI backend is running and try again.', 'error', 6000);
+        return false;
       }
 
       const savedLocally = results.filter(r => r.isPersistent).length;
-      const memoryOnly = results.filter(r => !r.isPersistent).length;
-
-      if (savedLocally > 0 && memoryOnly === 0) {
-        Toast.show(`Saved ${savedLocally} file(s) locally in browser storage (available across reloads).`, 'success');
-      } else if (memoryOnly > 0 && savedLocally === 0) {
-        Toast.show(`Added ${memoryOnly} file(s) as temporary preview (IndexedDB unavailable; memory-only).`, 'warning');
-      } else {
-        Toast.show(`Added ${results.length} file(s): ${savedLocally} saved persistently, ${memoryOnly} temporary preview only.`, 'info');
-      }
+      const memoryOnly = results.length - savedLocally;
+      Toast.show(
+        `Syllora AI indexed ${results.length} PDF(s) and prepared their passages. ` +
+        (memoryOnly ? `${memoryOnly} PDF file(s) may not reopen after this browser session.` : 'PDF copies are saved in this browser for citation viewing.'),
+        failures.length ? 'warning' : 'success',
+        6000
+      );
 
       if (typeof onSuccess === 'function') onSuccess();
       return true;
@@ -571,7 +608,7 @@ export function openUploadModal(onSuccess) {
         <li class="queue-item">
           <div class="queue-item-info">
             <span class="queue-doc-name">${file.name}</span>
-            <span class="queue-doc-meta">${(file.size / 1024).toFixed(1)} KB • Local preview (Page count: Unknown)</span>
+            <span class="queue-doc-meta">${(file.size / 1024).toFixed(1)} KB • Waiting for Syllora AI indexing</span>
           </div>
           <button type="button" class="btn-remove-queue" data-index="${i}" aria-label="Remove">&times;</button>
         </li>
