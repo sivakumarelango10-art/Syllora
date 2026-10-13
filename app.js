@@ -40,7 +40,6 @@
   const footerPrompt = document.getElementById('footerPrompt');
   const auxRow = document.getElementById('auxRow');
 
-  const btnDemoFill = document.getElementById('btnDemoFill');
   const googleLoginBtn = document.getElementById('googleLoginBtn');
 
   // Recovery Modal
@@ -125,20 +124,7 @@
     }
   });
 
-  // --------------------------------------------------------------------------
-  // 4. Quick Demo Fill (demo@syllora.com / password123)
-  // --------------------------------------------------------------------------
-  btnDemoFill.addEventListener('click', () => {
-    if (currentMode === 'signup') {
-      // Switch back to login for demo credentials
-      toggleModeBtn.click();
-    }
-    clearAllErrors();
-    emailInput.value = 'demo@syllora.com';
-    passwordInput.value = 'password123';
-    showToast('Demo credentials populated (demo@syllora.com / password123)', 'info');
-    emailInput.focus();
-  });
+
 
   // --------------------------------------------------------------------------
   // 5. Form Submission & Mock Authentication (1.5s timeout)

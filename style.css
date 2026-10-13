@@ -319,48 +319,7 @@ html, body {
 }
 
 /* Mobile compact bar (hidden on desktop) */
-.mobile-brand-bar {
-  display: none;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 24px;
-}
 
-.mobile-brand-title {
-  font-family: var(--font-heading);
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--color-charcoal-text);
-  letter-spacing: -0.03em;
-}
-
-/* Quick Demo Fill Button (top right) */
-.quick-demo-wrapper {
-  position: absolute;
-  top: 24px;
-  right: 28px;
-}
-
-.btn-demo-fill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 9999px;
-  border: 1px solid rgba(3, 96, 94, 0.25);
-  background: var(--color-teal-tint);
-  color: var(--color-primary-teal);
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 180ms ease;
-}
-
-.btn-demo-fill:hover {
-  background: rgba(3, 96, 94, 0.16);
-  transform: translateY(-1px);
-}
 
 /* --------------------------------------------------------------------------
    6. FORM ENTRANCE & CARD STYLING
@@ -989,18 +948,9 @@ html, body {
     display: none; /* Hide large desktop brand panel on small mobile viewports */
   }
 
-  .mobile-brand-bar {
-    display: flex; /* Display compact top brand bar */
-  }
-
   .form-panel {
     padding: 36px 18px 48px;
     justify-content: flex-start;
-  }
-
-  .quick-demo-wrapper {
-    top: 18px;
-    right: 18px;
   }
 
   .login-card {
