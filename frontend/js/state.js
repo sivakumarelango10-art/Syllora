@@ -659,7 +659,18 @@ class WorkspaceStore {
   // --- Safe Syllabus-Only Reset ---
   // Preserves uploaded documents, IndexedDB binary storage, study history, and user preferences
   resetSyllabusData() {
+    // Preserve applicable student understanding status for retained topic IDs
+    const previousUnderstanding = new Map(this.state.topics.map(t => [t.id, t.understandingStatus]));
+
     this.state.topics = JSON.parse(JSON.stringify(SEED_DATA.topics));
+
+    // Restore student assessed understanding history
+    this.state.topics.forEach(t => {
+      if (previousUnderstanding.has(t.id)) {
+        t.understandingStatus = previousUnderstanding.get(t.id);
+      }
+    });
+
     // Re-verify matched passages against currently active documents
     const activeDocIds = new Set(this.state.documents.map(d => d.id));
     this.state.topics.forEach(t => {
@@ -668,18 +679,43 @@ class WorkspaceStore {
           const pass = this.state.passages.find(p => p.id === pid);
           return pass && activeDocIds.has(pass.documentId);
         });
+        // Defect E: Truthful evidence status recalculation
         if (t.matchedPassageIds.length > 0) {
           t.evidenceStatus = 'Evidence found';
+        } else {
+          t.evidenceStatus = 'No matching evidence found';
         }
+      } else {
+        t.evidenceStatus = 'No matching evidence found';
       }
     });
+
     this.save();
   }
 
   // --- Full Demo Reset ---
   // Explicit destructive reset only triggered by Settings confirmation dialog
-  resetWorkspaceData() {
-    clearAllPdfBlobs();
+  async resetWorkspaceData() {
+    try {
+      await clearAllPdfBlobs();
+    } catch (err) {
+      console.warn('[WorkspaceStore] Error clearing stored PDF blobs:', err);
+    }
+
+    // Only clear Syllora-owned storage keys, preserving unrelated origin data
+    try {
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('syllora_')) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+    } catch (e) {
+      console.warn('[WorkspaceStore] Error clearing syllora localStorage keys:', e);
+    }
+
     this.state = JSON.parse(JSON.stringify(SEED_DATA));
     this.save();
   }

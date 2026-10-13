@@ -56,12 +56,12 @@ export function isStorageSupported() {
  * Store a PDF Blob or File in IndexedDB
  * @param {string} docId - Stable document identifier
  * @param {Blob|File} blob - PDF binary data
- * @returns {Promise<void>}
+ * @returns {Promise<{success: boolean, persistent: boolean, memoryOnly: boolean, reason?: string}>}
  */
 export async function savePdfBlob(docId, blob) {
   if (!isStorageSupported()) {
     console.warn('[Storage] IndexedDB not available; file will only be visible in memory.');
-    return;
+    return { success: false, persistent: false, memoryOnly: true, reason: 'unsupported' };
   }
 
   try {
@@ -77,9 +77,22 @@ export async function savePdfBlob(docId, blob) {
         size: blob.size,
         updatedAt: Date.now()
       };
-      const req = store.put(record);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error || new Error('Failed to store PDF blob'));
+
+      store.put(record);
+
+      // Defect C: Resolve only on transaction completion, not request onsuccess
+      tx.oncomplete = () => {
+        resolve({ success: true, persistent: true, memoryOnly: false });
+      };
+
+      tx.onerror = (e) => {
+        const error = tx.error || (e.target && e.target.error) || new Error('Transaction failed');
+        reject(error);
+      };
+
+      tx.onabort = () => {
+        reject(new Error('Storage transaction aborted (quota exceeded or interrupted)'));
+      };
     });
   } catch (err) {
     console.error(`[Storage] Error saving PDF for ${docId}:`, err);
@@ -119,24 +132,28 @@ export async function getPdfBlob(docId) {
 /**
  * Delete a stored PDF Blob from IndexedDB
  * @param {string} docId - Document ID
- * @returns {Promise<void>}
+ * @returns {Promise<{success: boolean}>}
  */
 export async function deletePdfBlob(docId) {
   revokeManagedBlobUrl(docId);
 
-  if (!isStorageSupported()) return;
+  if (!isStorageSupported()) return { success: false, reason: 'unsupported' };
 
   try {
     const db = await openFilesDB();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.delete(docId);
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error || new Error('Failed to delete PDF blob'));
+      store.delete(docId);
+
+      // Defect C: Resolve on transaction completion
+      tx.oncomplete = () => resolve({ success: true });
+      tx.onerror = () => reject(tx.error || new Error('Failed to delete PDF blob'));
+      tx.onabort = () => reject(new Error('Delete transaction aborted'));
     });
   } catch (err) {
     console.warn(`[Storage] Could not delete PDF blob for ${docId}:`, err);
+    return { success: false, error: err };
   }
 }
 
@@ -160,9 +177,12 @@ export async function clearAllPdfBlobs() {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.clear();
-      req.onsuccess = () => resolve();
-      req.onerror = () => reject(req.error || new Error('Failed to clear PDF store'));
+      store.clear();
+
+      // Defect C: Resolve on transaction completion
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error || new Error('Failed to clear PDF store'));
+      tx.onabort = () => reject(new Error('Clear transaction aborted'));
     });
   } catch (err) {
     console.warn('[Storage] Could not clear PDF store:', err);

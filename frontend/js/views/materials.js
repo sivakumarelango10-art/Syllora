@@ -453,19 +453,25 @@ export function openUploadModal(onSuccess) {
   const overlay = Modal.open(
     'Upload Study Materials',
     modalContent,
-    () => {
+    async () => {
       if (uploadQueue.length === 0) {
-        Toast.show('No valid PDFs in upload queue.', 'error');
-        return;
+        Toast.show('No valid PDFs in upload queue. Please select or drag a PDF first.', 'error');
+        return false;
       }
 
-      const savePromises = uploadQueue.map(async (file) => {
+      const results = [];
+
+      for (const file of uploadQueue) {
         const docId = `doc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        let saveResult = null;
         try {
-          await savePdfBlob(docId, file);
+          saveResult = await savePdfBlob(docId, file);
         } catch (err) {
-          console.warn('[Upload] IndexedDB save failed:', err);
+          console.warn('[Upload] IndexedDB save failed for file:', file.name, err);
+          saveResult = { success: false, persistent: false, memoryOnly: true, error: err };
         }
+
+        const isPersistent = Boolean(saveResult && saveResult.persistent);
         workspaceStore.addDocument({
           id: docId,
           title: file.name.replace(/\.pdf$/i, '').replace(/_/g, ' '),
@@ -475,15 +481,27 @@ export function openUploadModal(onSuccess) {
           fileSize: `${(file.size / 1024).toFixed(1)} KB`,
           uploadedAt: new Date().toISOString().split('T')[0],
           status: 'local_preview', // explicit LOCAL PREVIEW labelling
+          isPersistent,
           isBookmarked: false,
           blobFile: file
         });
-      });
 
-      Promise.all(savePromises).then(() => {
-        Toast.show(`Successfully added ${uploadQueue.length} document(s) as local previews.`, 'success');
-        if (typeof onSuccess === 'function') onSuccess();
-      });
+        results.push({ file, isPersistent });
+      }
+
+      const savedLocally = results.filter(r => r.isPersistent).length;
+      const memoryOnly = results.filter(r => !r.isPersistent).length;
+
+      if (savedLocally > 0 && memoryOnly === 0) {
+        Toast.show(`Saved ${savedLocally} file(s) locally in browser storage (available across reloads).`, 'success');
+      } else if (memoryOnly > 0 && savedLocally === 0) {
+        Toast.show(`Added ${memoryOnly} file(s) as temporary preview (IndexedDB unavailable; memory-only).`, 'warning');
+      } else {
+        Toast.show(`Added ${results.length} file(s): ${savedLocally} saved persistently, ${memoryOnly} temporary preview only.`, 'info');
+      }
+
+      if (typeof onSuccess === 'function') onSuccess();
+      return true;
     },
     'Add to Workspace',
     'primary'

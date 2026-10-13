@@ -52,6 +52,21 @@ export const Toast = {
   }
 };
 
+// Global stack counter to prevent premature body scroll unlocking across nested modals and PDF readers
+let openOverlayCount = 0;
+
+export function lockBodyScroll() {
+  openOverlayCount++;
+  document.body.classList.add('modal-open');
+}
+
+export function unlockBodyScroll() {
+  openOverlayCount = Math.max(0, openOverlayCount - 1);
+  if (openOverlayCount === 0) {
+    document.body.classList.remove('modal-open');
+  }
+}
+
 export const Modal = {
   activeModal: null,
   previousFocus: null,
@@ -62,8 +77,8 @@ export const Modal = {
 
     this.previousFocus = document.activeElement;
 
-    // Lock body scrolling
-    document.body.classList.add('modal-open');
+    // Lock body scrolling safely using stack manager
+    lockBodyScroll();
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay';
@@ -100,9 +115,23 @@ export const Modal = {
     closeBtn.addEventListener('click', () => this.close());
     if (cancelBtn) cancelBtn.addEventListener('click', () => this.close());
     if (confirmBtn && onConfirm) {
-      confirmBtn.addEventListener('click', () => {
-        onConfirm();
-        this.close();
+      confirmBtn.addEventListener('click', async () => {
+        try {
+          confirmBtn.disabled = true;
+          confirmBtn.setAttribute('aria-busy', 'true');
+          const outcome = await onConfirm();
+          // If onConfirm explicitly returns false (e.g. validation failure), keep dialog open
+          if (outcome !== false) {
+            this.close();
+          }
+        } catch (err) {
+          console.error('[Modal] Confirm action failed:', err);
+        } finally {
+          if (confirmBtn && confirmBtn.isConnected) {
+            confirmBtn.disabled = false;
+            confirmBtn.removeAttribute('aria-busy');
+          }
+        }
       });
     }
 
@@ -163,8 +192,8 @@ export const Modal = {
       this.activeModal.remove();
       this.activeModal = null;
 
-      // Clean up body scroll lock
-      document.body.classList.remove('modal-open');
+      // Clean up body scroll lock safely
+      unlockBodyScroll();
 
       if (this.keyHandler) {
         window.removeEventListener('keydown', this.keyHandler);

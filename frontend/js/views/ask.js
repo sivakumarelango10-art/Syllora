@@ -91,12 +91,60 @@ export function renderAsk(container, queryParams = {}) {
   let searchMode = 'keyword'; // 'keyword' | 'semantic' | 'combined'
   let currentQuery = queryParams.q || workspaceStore.getDraft('ask_query') || '';
   let pendingRequestTimer = null;
+  let activeBaseAnswer = null;
   let activeAnswerData = null;
+  let activeRequestId = 0;
   let showEvidenceInspector = false;
 
   const state = workspaceStore.getState();
   const availableDocs = state.documents.filter(d => !d.isComparisonOnly);
   let selectedDocIds = new Set(availableDocs.map(d => d.id));
+
+  // Defect B: Truthful dynamic evidence support recalculation against selected/active sources
+  function evaluateAnswerSupport(baseMatch) {
+    if (!baseMatch) return null;
+    const currentState = workspaceStore.getState();
+    const validDocIds = new Set(currentState.documents.map(d => d.id));
+    const allCitations = baseMatch.allCitations || baseMatch.citations || [];
+    const totalOriginalCitations = allCitations.length;
+
+    // Filter citations to documents that currently exist and are currently selected
+    const filteredCitations = allCitations.filter(c => selectedDocIds.has(c.docId) && validDocIds.has(c.docId));
+
+    if (baseMatch.status === 'insufficient_evidence' && totalOriginalCitations === 0) {
+      return {
+        ...baseMatch,
+        citations: []
+      };
+    }
+
+    if (filteredCitations.length === 0) {
+      return {
+        ...baseMatch,
+        allCitations,
+        citations: [],
+        status: 'insufficient_evidence',
+        evidenceLabel: 'Insufficient Evidence in Selected Sources',
+        insufficientReason: 'All source citations supporting this academic answer belong to unselected or excluded documents. Select Silberschatz or Tanenbaum in the source filter on the left to verify this answer against course materials.'
+      };
+    } else if (filteredCitations.length < totalOriginalCitations) {
+      return {
+        ...baseMatch,
+        allCitations,
+        citations: filteredCitations,
+        status: 'partially_supported',
+        evidenceLabel: `Partially supported (${filteredCitations.length} of ${totalOriginalCitations} sources selected)`
+      };
+    } else {
+      return {
+        ...baseMatch,
+        allCitations,
+        citations: filteredCitations,
+        status: baseMatch.originalStatus || baseMatch.status,
+        evidenceLabel: baseMatch.originalEvidenceLabel || baseMatch.evidenceLabel
+      };
+    }
+  }
 
   function renderView() {
     container.innerHTML = `
@@ -347,7 +395,7 @@ export function renderAsk(container, queryParams = {}) {
         </div>
 
         <!-- Verified Citations Row -->
-        ${data.citations.length > 0 ? `
+        ${data.citations && data.citations.length > 0 ? `
           <div class="answer-citations-block">
             <h5 class="citations-title">Verified Source Citations:</h5>
             <div class="citation-pills-list">
@@ -365,7 +413,7 @@ export function renderAsk(container, queryParams = {}) {
         ${data.status === 'insufficient_evidence' ? `
           <div class="insufficient-evidence-callout">
             <strong>Missing Material Coverage:</strong>
-            <p>The CS301 library contains no passages addressing this query. To answer questions regarding this topic, please upload the corresponding lecture module or textbook chapter.</p>
+            <p>${data.insufficientReason || 'The CS301 library contains no passages addressing this query. To answer questions regarding this topic, please upload the corresponding lecture module or textbook chapter.'}</p>
           </div>
         ` : ''}
       </div>
@@ -395,12 +443,13 @@ export function renderAsk(container, queryParams = {}) {
     if (pendingCard) pendingCard.style.display = 'flex';
     if (resultWrap) resultWrap.style.display = 'none';
 
-    // Bounded Async State with cancellation
+    // Defect F: Bounded Async State with cancellation & request ID guard
     if (pendingRequestTimer) clearTimeout(pendingRequestTimer);
+    const thisRequestId = ++activeRequestId;
 
     pendingRequestTimer = setTimeout(() => {
       pendingRequestTimer = null;
-      if (!container.isConnected) return;
+      if (thisRequestId !== activeRequestId || !container.isConnected) return;
 
       if (pendingCard) pendingCard.style.display = 'none';
       if (resultWrap) resultWrap.style.display = 'block';
@@ -411,29 +460,31 @@ export function renderAsk(container, queryParams = {}) {
       // Keyword filtering match check
       let match = null;
       for (const [k, v] of Object.entries(QUESTION_FIXTURES)) {
-        if (key.includes(k) || k.includes(key) || (key.includes('deadlock') && key.includes('starvation') && k.includes('starvation'))) {
+        if (key.includes(k) || k.includes(key) || (key.includes('deadlock') && key.includes('starvation'))) {
           match = JSON.parse(JSON.stringify(v));
+          match.originalStatus = match.status;
+          match.originalEvidenceLabel = match.evidenceLabel;
+          match.allCitations = [...match.citations];
           break;
         }
       }
 
       if (match) {
-        // Filter citations to only selected documents
-        if (match.citations) {
-          match.citations = match.citations.filter(c => selectedDocIds.has(c.docId));
-        }
-        activeAnswerData = match;
+        activeBaseAnswer = match;
+        activeAnswerData = evaluateAnswerSupport(match);
       } else {
         // Deliberately unsupported state
-        activeAnswerData = {
+        activeBaseAnswer = {
           status: 'insufficient_evidence',
           evidenceLabel: 'Insufficient Evidence in Loaded Materials',
           answer: `No matching evidence was found in the current CS301 course materials for: **"${queryText}"**.
 
 Syllora strictly refuses to fabricate answers when citations are missing. The active course library focuses on Concurrency, Deadlocks (Coffman conditions, Banker's algorithm, and starvation).`,
           citations: [],
+          allCitations: [],
           claims: []
         };
+        activeAnswerData = activeBaseAnswer;
       }
 
       renderView();
@@ -462,6 +513,9 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
         } else {
           selectedDocIds.clear();
         }
+        if (activeBaseAnswer) {
+          activeAnswerData = evaluateAnswerSupport(activeBaseAnswer);
+        }
         renderView();
       });
     }
@@ -473,6 +527,9 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
           selectedDocIds.add(docId);
         } else {
           selectedDocIds.delete(docId);
+        }
+        if (activeBaseAnswer) {
+          activeAnswerData = evaluateAnswerSupport(activeBaseAnswer);
         }
         renderView();
       });
@@ -522,6 +579,7 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
     const cancelQueryBtn = container.querySelector('#cancelQueryBtn');
     if (cancelQueryBtn) {
       cancelQueryBtn.addEventListener('click', () => {
+        activeRequestId++;
         if (pendingRequestTimer) {
           clearTimeout(pendingRequestTimer);
           pendingRequestTimer = null;
@@ -538,7 +596,13 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
     const clearBtn = container.querySelector('#clearConversationBtn');
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
+        activeRequestId++;
+        if (pendingRequestTimer) {
+          clearTimeout(pendingRequestTimer);
+          pendingRequestTimer = null;
+        }
         currentQuery = '';
+        activeBaseAnswer = null;
         activeAnswerData = null;
         workspaceStore.clearDraft('ask_query');
         renderView();
@@ -556,15 +620,27 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
       });
     }
 
-    // Real bookmark answer action
+    // Real bookmark answer action (Defect H: prevent duplicate saves, persist metadata)
     const bookmarkAnswerBtn = container.querySelector('#bookmarkAnswerBtn');
     if (bookmarkAnswerBtn && activeAnswerData) {
       bookmarkAnswerBtn.addEventListener('click', () => {
+        const bookmarkKey = `ans-${encodeURIComponent((currentQuery || 'answer').trim().toLowerCase())}`;
+        if (workspaceStore.isBookmarked('answer', bookmarkKey)) {
+          Toast.show('Answer is already bookmarked in your revision notes.', 'info');
+          return;
+        }
         workspaceStore.addBookmark({
           targetType: 'answer',
-          targetId: `ans-${Date.now()}`,
-          title: currentQuery ? `Answer: ${currentQuery.slice(0, 40)}...` : 'Ask Syllora Verified Answer',
-          snippet: activeAnswerData.answer.slice(0, 160)
+          targetId: bookmarkKey,
+          title: currentQuery ? `Answer: ${currentQuery.slice(0, 45)}...` : 'Ask Syllora Verified Answer',
+          snippet: activeAnswerData.answer.slice(0, 160),
+          metadata: {
+            question: currentQuery,
+            answer: activeAnswerData.answer,
+            status: activeAnswerData.status,
+            evidenceLabel: activeAnswerData.evidenceLabel,
+            citations: activeAnswerData.citations || []
+          }
         });
         Toast.show('Answer bookmarked to revision notes.', 'success');
       });
@@ -598,8 +674,9 @@ Syllora strictly refuses to fabricate answers when citations are missing. The ac
     renderView();
   }
 
-  // Return unmount cleanup function to cancel active timers
+  // Defect F: Return unmount cleanup function to cancel active timers and invalidate callbacks
   return function cleanup() {
+    activeRequestId++;
     if (pendingRequestTimer) {
       clearTimeout(pendingRequestTimer);
       pendingRequestTimer = null;

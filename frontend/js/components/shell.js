@@ -2,8 +2,8 @@
  * ============================================================================
  * SYLLORA APPSHELL COMPONENT
  * ============================================================================
- * Persistent desktop sidebar (260px wide, white surface), enlarged brand logo (68px),
- * interactive course selector, topbar with breadcrumb & global search,
+ * Persistent desktop sidebar (260-280px wide, white surface), enlarged brand logo (68px),
+ * workspace switcher context, topbar with breadcrumb & global search,
  * responsive mobile drawer, notification popover, and profile integration.
  *
  * Designed to mount ONCE and update routes, badges, and user state in place
@@ -14,6 +14,11 @@ import { router } from '../router.js';
 import { sessionAdapter } from '../session.js';
 import { workspaceStore } from '../state.js';
 import { Toast, Modal } from './modal.js';
+
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str || '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
 
 export class AppShell {
   constructor(containerId = 'workspaceContainer') {
@@ -54,7 +59,7 @@ export class AppShell {
       case 'calendar':
         return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>';
       case 'gear':
-        return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
+        return '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
       default:
         return '';
     }
@@ -74,10 +79,10 @@ export class AppShell {
         <!-- Mobile Drawer Backdrop -->
         <div class="drawer-backdrop" id="drawerBackdrop" aria-hidden="true"></div>
 
-        <!-- Desktop Sidebar (260px wide, White surface) -->
+        <!-- Desktop Sidebar (260-280px wide, White surface) -->
         <aside class="workspace-sidebar" id="workspaceSidebar" aria-label="Main Navigation">
           
-          <!-- Logo & Brand Header: Visible Stacked Logo ~68px high in ~104px brand area -->
+          <!-- Logo & Brand Header: Visible Stacked Logo ~68px high in brand area -->
           <div class="sidebar-brand-header">
             <a href="#/app/overview" class="sidebar-brand-link" aria-label="Syllora Overview">
               <svg class="sidebar-logo-svg" viewBox="150 250 960 840" width="78" height="68" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Syllora Logo">
@@ -105,16 +110,57 @@ export class AppShell {
             </a>
           </div>
 
-          <!-- Course Selector with Interactive Dropdown (Reveals full name & context) -->
-          <div class="sidebar-course-selector" id="sidebarCourseSelector">
-            <label class="selector-label" id="courseSelectorLabel">Course Context</label>
-            <button type="button" class="course-dropdown-btn" id="courseDropdownBtn" aria-haspopup="true" aria-expanded="false" aria-labelledby="courseSelectorLabel">
-              <span class="course-code-pill">CS301</span>
-              <span class="course-name-text" title="Operating Systems">Operating Systems</span>
-              <svg class="chevron-icon" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+          <!-- Workspace Context Switcher (Reference: Folder icon "My workspace" with dropdown chevron) -->
+          <div class="sidebar-workspace-context">
+            <button type="button" class="workspace-switcher-btn" id="workspaceSwitcherBtn" aria-haspopup="true" aria-expanded="false" title="Current Workspace">
+              <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="M2 5a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5z"/>
+              </svg>
+              <span class="workspace-title-text">My workspace</span>
+              <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M6 8l4 4 4-4"/>
               </svg>
             </button>
+          </div>
+
+          <!-- Primary Navigation List (8 Routes) -->
+          <nav class="sidebar-nav" aria-label="Main Application Navigation">
+            <ul class="nav-list" id="sidebarNavList">
+              ${this.navItems.map(item => {
+                const badgeVal = item.badgeKey ? stats[item.badgeKey] : undefined;
+                return `
+                  <li class="nav-item">
+                    <a href="#${item.path}" class="nav-link" data-nav-path="${item.path}">
+                      <span class="nav-icon">${this.getIconSvg(item.icon)}</span>
+                      <span class="nav-label">${escapeHtml(item.label)}</span>
+                      ${badgeVal !== undefined ? `
+                        <span class="nav-badge ${item.badgeStyle === 'coral' ? 'badge-coral' : ''}" data-badge-for="${item.path}">${badgeVal}</span>
+                      ` : ''}
+                    </a>
+                  </li>
+                `;
+              }).join('')}
+            </ul>
+          </nav>
+
+          <!-- Bottom Course Context Card & User Row (Reference Layout) -->
+          <div class="sidebar-footer">
+            
+            <!-- Operating Systems Course Context Card (Truthful active course, NO "Sample workspace" badge) -->
+            <div class="sidebar-course-card" id="courseDropdownBtn" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false">
+              <div class="course-card-icon">
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#006B6B" stroke-width="2">
+                  <rect x="3" y="3" width="14" height="14" rx="3"/>
+                  <path d="M7 7h6M7 10h6M7 13h4"/>
+                </svg>
+              </div>
+              <div class="course-card-details">
+                <span class="course-card-name" title="Operating Systems">Operating Systems</span>
+              </div>
+              <svg class="chevron-icon" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 8l4 4 4-4"/>
+              </svg>
+            </div>
 
             <!-- Course Context Popover -->
             <div class="course-dropdown-menu" id="courseDropdownMenu" role="region" aria-label="Course Details">
@@ -127,50 +173,25 @@ export class AppShell {
                 <span class="course-stat-badge">4 Academic Readings</span>
               </div>
             </div>
-          </div>
 
-          <!-- Primary Navigation List -->
-          <nav class="sidebar-nav" aria-label="Main Application Navigation">
-            <ul class="nav-list" id="sidebarNavList">
-              ${this.navItems.map(item => {
-                const badgeVal = item.badgeKey ? stats[item.badgeKey] : undefined;
-                return `
-                  <li class="nav-item">
-                    <a href="#${item.path}" class="nav-link" data-nav-path="${item.path}">
-                      <span class="nav-icon">${this.getIconSvg(item.icon)}</span>
-                      <span class="nav-label">${item.label}</span>
-                      ${badgeVal !== undefined ? `
-                        <span class="nav-badge ${item.badgeStyle === 'coral' ? 'badge-coral' : ''}" data-badge-for="${item.path}">${badgeVal}</span>
-                      ` : ''}
-                    </a>
-                  </li>
-                `;
-              }).join('')}
-            </ul>
-          </nav>
-
-          <!-- Bottom Profile / User Card -->
-          <div class="sidebar-footer">
-            <div class="user-card" id="userCardBtn" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false">
-              <div class="user-avatar" id="shellUserAvatar">${user.avatarText}</div>
-              <div class="user-details">
-                <span class="user-name" id="shellUserName">${user.name}</span>
-                <span class="user-role" id="shellUserRole">${user.role}</span>
-              </div>
+            <!-- User Account Row (Avatar, Name, Chevron right) -->
+            <div class="sidebar-user-row" id="userCardBtn" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false" title="Account profile">
+              <div class="user-avatar-sm" id="shellUserAvatar">${escapeHtml(user.avatarText)}</div>
+              <div class="user-name-text" id="shellUserName">${escapeHtml(user.name)}</div>
               <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M6 8l4 4 4-4"/>
+                <path d="M8 5l5 5-5 5"/>
               </svg>
             </div>
 
             <!-- User Menu Popup -->
             <div class="user-menu-dropdown" id="userMenuDropdown" role="menu">
               <div class="dropdown-user-header">
-                <strong id="dropdownUserName">${user.name}</strong>
-                <span id="dropdownUserEmail">${user.email}</span>
+                <strong id="dropdownUserName">${escapeHtml(user.name)}</strong>
+                <span id="dropdownUserEmail">${escapeHtml(user.email)}</span>
               </div>
               <hr class="dropdown-divider">
               <a href="#/app/settings" class="dropdown-item" id="userMenuSettingsLink">
-                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="10" cy="10" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
                 Profile & Settings
               </a>
               <button type="button" class="dropdown-item text-danger" id="logoutBtn">
@@ -185,7 +206,7 @@ export class AppShell {
         <!-- Right Main Column: Topbar + View Container -->
         <div class="workspace-main-column">
           
-          <!-- Topbar (White surface, border bottom) -->
+          <!-- Topbar (White surface, 64px tall) -->
           <header class="workspace-topbar" role="banner">
             
             <div class="topbar-left">
@@ -207,9 +228,9 @@ export class AppShell {
                 <span class="mobile-topbar-brand-title">Syllora</span>
               </a>
 
-              <!-- Breadcrumb Trail -->
+              <!-- Breadcrumb Trail: "Workspace / Overview" (Matching Reference) -->
               <nav class="breadcrumb-trail" aria-label="Breadcrumb">
-                <span class="breadcrumb-root">CS301</span>
+                <span class="breadcrumb-root">Workspace</span>
                 <span class="breadcrumb-sep">/</span>
                 <span class="breadcrumb-current" id="shellBreadcrumbCurrent">Overview</span>
               </nav>
@@ -218,13 +239,13 @@ export class AppShell {
             <!-- Topbar Actions & Global Search -->
             <div class="topbar-right">
               
-              <!-- Quick Search Input -->
+              <!-- Quick Search Input (Search your materials... ⌘ K) -->
               <div class="topbar-search-box">
                 <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="18" y2="18"/>
                 </svg>
-                <input type="text" id="topbarSearchInput" placeholder="Search materials, topics, questions..." class="topbar-search-input" aria-label="Global search">
-                <kbd class="kbd-shortcut">Ctrl K</kbd>
+                <input type="text" id="topbarSearchInput" placeholder="Search your materials..." class="topbar-search-input" aria-label="Search materials">
+                <kbd class="kbd-shortcut">⌘ K</kbd>
               </div>
 
               <!-- Notifications Bell -->
@@ -261,17 +282,18 @@ export class AppShell {
                 </div>
               </div>
 
-              <!-- Workspace Status Pill -->
-              <span class="workspace-pill">
-                <span class="status-pulse-dot" aria-hidden="true"></span>
-                CS301 Fall '26
-              </span>
+              <!-- Topbar User Profile Avatar (Reference match) -->
+              <div class="topbar-user-wrap">
+                <button type="button" class="topbar-avatar-btn" id="topbarAvatarBtn" aria-label="User profile menu" aria-haspopup="true">
+                  <div class="user-avatar-sm" id="topbarUserAvatar">${escapeHtml(user.avatarText)}</div>
+                </button>
+              </div>
 
             </div>
 
           </header>
 
-          <!-- Router Mount View Container (Light Mode Canvas #F5F7F8) -->
+          <!-- Router Mount View Container (Light Mode Canvas #F5F8FA) -->
           <main class="workspace-view-content" id="workspaceViewMount" tabindex="-1">
             <!-- Child View Rendered Here -->
           </main>
@@ -314,14 +336,14 @@ export class AppShell {
     if (!user) return;
 
     const avatar = this.container.querySelector('#shellUserAvatar');
+    const topbarAvatar = this.container.querySelector('#topbarUserAvatar');
     const name = this.container.querySelector('#shellUserName');
-    const role = this.container.querySelector('#shellUserRole');
     const dName = this.container.querySelector('#dropdownUserName');
     const dEmail = this.container.querySelector('#dropdownUserEmail');
 
     if (avatar) avatar.textContent = user.avatarText || 'PP';
+    if (topbarAvatar) topbarAvatar.textContent = user.avatarText || 'PP';
     if (name) name.textContent = user.name || 'Prajith P';
-    if (role) role.textContent = user.role || 'CS Undergrad';
     if (dName) dName.textContent = user.name || 'Prajith P';
     if (dEmail) dEmail.textContent = user.email || 'demo@syllora.com';
   }
@@ -371,8 +393,10 @@ export class AppShell {
       this.isUserMenuOpen = false;
       const userMenuDropdown = this.container.querySelector('#userMenuDropdown');
       const userCardBtn = this.container.querySelector('#userCardBtn');
+      const topbarAvatarBtn = this.container.querySelector('#topbarAvatarBtn');
       if (userMenuDropdown) userMenuDropdown.classList.remove('visible');
       if (userCardBtn) userCardBtn.setAttribute('aria-expanded', 'false');
+      if (topbarAvatarBtn) topbarAvatarBtn.setAttribute('aria-expanded', 'false');
     }
 
     if (this.isNotificationOpen) {
@@ -410,14 +434,23 @@ export class AppShell {
       });
     }
 
-    // Auto-close drawer if resized to desktop
+    // Defect J: Align resize listener to CSS desktop threshold (>1024px)
     window.addEventListener('resize', () => {
-      if (window.innerWidth >= 900 && this.isDrawerOpen) {
+      if (window.innerWidth > 1024 && this.isDrawerOpen) {
         this.setDrawerState(false);
       }
     }, { passive: true });
 
-    // Course selector dropdown toggle
+    // Workspace switcher button
+    const workspaceSwitcherBtn = this.container.querySelector('#workspaceSwitcherBtn');
+    if (workspaceSwitcherBtn) {
+      workspaceSwitcherBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        Toast.show('Active workspace: CS301 Operating Systems (Fall 2026)', 'info');
+      });
+    }
+
+    // Course selector dropdown toggle in footer
     const courseDropdownBtn = this.container.querySelector('#courseDropdownBtn');
     const courseDropdownMenu = this.container.querySelector('#courseDropdownMenu');
     if (courseDropdownBtn && courseDropdownMenu) {
@@ -427,27 +460,41 @@ export class AppShell {
         courseDropdownMenu.classList.toggle('visible', this.isCourseMenuOpen);
         courseDropdownBtn.setAttribute('aria-expanded', this.isCourseMenuOpen);
       });
+
+      courseDropdownBtn.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          courseDropdownBtn.click();
+        }
+      });
     }
 
-    // User menu toggle
+    // User menu toggle from sidebar user card and topbar avatar
     const userCardBtn = this.container.querySelector('#userCardBtn');
+    const topbarAvatarBtn = this.container.querySelector('#topbarAvatarBtn');
     const userMenuDropdown = this.container.querySelector('#userMenuDropdown');
     const logoutBtn = this.container.querySelector('#logoutBtn');
 
-    if (userCardBtn && userMenuDropdown) {
-      userCardBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.isUserMenuOpen = !this.isUserMenuOpen;
-        userMenuDropdown.classList.toggle('visible', this.isUserMenuOpen);
-        userCardBtn.setAttribute('aria-expanded', this.isUserMenuOpen);
-      });
+    const toggleUserMenu = (e) => {
+      e.stopPropagation();
+      this.isUserMenuOpen = !this.isUserMenuOpen;
+      if (userMenuDropdown) userMenuDropdown.classList.toggle('visible', this.isUserMenuOpen);
+      if (userCardBtn) userCardBtn.setAttribute('aria-expanded', this.isUserMenuOpen);
+      if (topbarAvatarBtn) topbarAvatarBtn.setAttribute('aria-expanded', this.isUserMenuOpen);
+    };
 
+    if (userCardBtn) {
+      userCardBtn.addEventListener('click', toggleUserMenu);
       userCardBtn.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          userCardBtn.click();
+          toggleUserMenu(e);
         }
       });
+    }
+
+    if (topbarAvatarBtn) {
+      topbarAvatarBtn.addEventListener('click', toggleUserMenu);
     }
 
     if (logoutBtn) {
@@ -498,7 +545,7 @@ export class AppShell {
       this.closeAllMenus();
     });
 
-    // Global keyboard listener (Escape closes popovers, Ctrl+K focuses search)
+    // Global keyboard listener (Escape closes popovers, Ctrl+K / Cmd+K focuses search)
     window.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         this.closeAllMenus();

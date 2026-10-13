@@ -107,10 +107,20 @@ export function renderSettings(container) {
             </div>
           </div>
 
+          <div class="reset-zone-card mb-3">
+            <h4>Reset Syllabus Map Only</h4>
+            <p class="text-sm text-muted">
+              Recalculates topic evidence statuses against active documents and restores default syllabus modules. Preserves all uploaded PDFs, bookmarks, notes, and preferences.
+            </p>
+            <button type="button" class="btn btn-secondary btn-sm mt-3" id="resetSyllabusBtn">
+              Reset Syllabus Topics
+            </button>
+          </div>
+
           <div class="reset-zone-card">
             <h4>Reset Workspace to Seed Demo State</h4>
             <p class="text-sm text-muted">
-              Restores all sample textbooks, syllabus coverage indicators, misconception issues, and revision schedules back to original factory defaults. Only clears Syllora workspace keys.
+              Restores all sample textbooks, syllabus coverage indicators, misconception issues, and revision schedules back to original factory defaults. Only clears Syllora workspace keys and cached PDF blobs.
             </p>
             <button type="button" class="btn btn-danger btn-sm mt-3" id="resetWorkspaceBtn">
               Reset Demo Workspace Data
@@ -149,18 +159,39 @@ export function renderSettings(container) {
     });
   }
 
-  // Reset demo workspace
+  // Reset syllabus only
+  const resetSyllabusBtn = container.querySelector('#resetSyllabusBtn');
+  if (resetSyllabusBtn) {
+    resetSyllabusBtn.addEventListener('click', () => {
+      Modal.open(
+        'Confirm Syllabus Reset',
+        `
+          <p>Reset syllabus topics to default curriculum structure?</p>
+          <p class="text-muted text-sm mt-2">Uploaded PDFs, stored binaries, drafts, and unrelated study records will NOT be deleted.</p>
+        `,
+        () => {
+          workspaceStore.resetSyllabusData();
+          Toast.show('Syllabus topics reset and evidence recalculated against active library.', 'success');
+          renderSettings(container);
+        },
+        'Reset Syllabus',
+        'primary'
+      );
+    });
+  }
+
+  // Reset full demo workspace
   const resetBtn = container.querySelector('#resetWorkspaceBtn');
   if (resetBtn) {
     resetBtn.addEventListener('click', () => {
       Modal.open(
-        'Confirm Workspace Reset',
+        'Confirm Full Workspace Reset',
         `
           <p>Are you sure you want to restore the pristine sample dataset for CS301?</p>
-          <p class="text-muted text-sm mt-2">Any custom documents, added topics, or revised attempts will be reset to the original textbook sample state.</p>
+          <p class="text-muted text-sm mt-2">All uploaded PDFs, stored binaries, drafts, and study records will be reset to factory defaults.</p>
         `,
-        () => {
-          workspaceStore.resetWorkspaceData();
+        async () => {
+          await workspaceStore.resetWorkspaceData();
           Toast.show('Workspace state reset to pristine fixtures.', 'success');
           renderSettings(container);
         },

@@ -7,7 +7,7 @@
  */
 
 import { workspaceStore } from '../state.js';
-import { Toast, Modal } from './modal.js';
+import { Toast, Modal, lockBodyScroll, unlockBodyScroll } from './modal.js';
 import { getManagedBlobUrl } from '../storage.js';
 
 export const PdfReader = {
@@ -48,8 +48,11 @@ export const PdfReader = {
       return;
     }
 
-    // Lock body scrolling
-    document.body.classList.add('modal-open');
+    // Save previous active focus for restoration
+    const previousFocus = document.activeElement;
+
+    // Lock body scrolling using shared stack manager
+    lockBodyScroll();
 
     const modal = document.createElement('div');
     modal.className = 'pdf-reader-overlay';
@@ -68,6 +71,26 @@ export const PdfReader = {
     const metaPillText = isPageCountKnown
       ? `${doc.author} • ${doc.pageCount} pages`
       : `${doc.author} • Page count unavailable`;
+
+    // Truthful citation claims: Only claim "Verified Source Citation" when document is indexed AND passageQuote is valid
+    const isVerifiedCitation = doc.status === 'indexed' && Boolean(passageQuote);
+    const badgeLabel = isVerifiedCitation
+      ? 'Verified Source Citation'
+      : doc.status === 'indexed'
+      ? 'Document Reference'
+      : 'Local Preview (Unindexed)';
+
+    // Never substitute document title for quotation
+    const displayQuoteText = passageQuote
+      ? passageQuote
+      : doc.status === 'indexed'
+      ? 'Select a citation from Ask Syllora or Syllabus Map to view a highlighted passage excerpt.'
+      : 'This is a local student preview. No automated AI passages have been extracted from this user file.';
+
+    // Construct truthful citation string: Quote citation if passage exists, else clearly labeled document metadata reference
+    const citationText = passageQuote
+      ? `"${passageQuote}" — ${doc.title}, Page ${targetPage} (${doc.author})`
+      : `${doc.title} (${doc.author}), Page ${targetPage} [Document Reference]`;
 
     modal.innerHTML = `
       <div class="pdf-reader-frame">
@@ -92,7 +115,7 @@ export const PdfReader = {
               Open Native Tab
             </a>
             <button type="button" class="btn btn-secondary btn-sm" id="copyCitationBtn">
-              Copy Citation
+              ${passageQuote ? 'Copy Citation' : 'Copy Reference'}
             </button>
             <button type="button" class="btn-close-reader" id="closeReaderBtn" aria-label="Close reader">&times;</button>
           </div>
@@ -111,10 +134,10 @@ export const PdfReader = {
             </object>
           </div>
 
-          <!-- Right: Verified Source Excerpt Panel -->
+          <!-- Right: Source Excerpt Panel -->
           <aside class="pdf-excerpt-sidebar">
             <div class="excerpt-panel-header">
-              <span class="excerpt-badge">Verified Source Citation</span>
+              <span class="excerpt-badge ${isVerifiedCitation ? '' : 'pill-gray'}">${badgeLabel}</span>
               <span class="page-tag">Page ${targetPage}</span>
             </div>
 
@@ -125,7 +148,7 @@ export const PdfReader = {
 
             <div class="excerpt-quote-box">
               <div class="quote-icon">“</div>
-              <p class="quote-text">${passageQuote || (doc.status === 'indexed' ? 'Select a citation from Ask Syllora or Syllabus Map to view verified highlighted excerpt.' : 'This is a local student preview. No automated AI passages have been extracted from this user file.')}</p>
+              <p class="quote-text">${displayQuoteText}</p>
             </div>
 
             <div class="citation-audit-card">
@@ -135,7 +158,7 @@ export const PdfReader = {
               </div>
               <div class="audit-row">
                 <span class="audit-label">Integrity Status:</span>
-                <span class="audit-val audit-verified">${doc.status === 'indexed' ? '✓ Bundled Verified Sample' : 'ℹ Local Student Preview (Unindexed)'}</span>
+                <span class="audit-val ${doc.status === 'indexed' ? 'audit-verified' : ''}">${doc.status === 'indexed' ? '✓ Bundled Verified Sample' : 'ℹ Local Student Preview (Unindexed)'}</span>
               </div>
               <div class="audit-row">
                 <span class="audit-label">Citation Key:</span>
@@ -144,9 +167,15 @@ export const PdfReader = {
             </div>
 
             <div class="excerpt-footer-action">
-              <button type="button" class="btn btn-primary btn-block" id="sidebarCopyQuoteBtn">
-                Copy Excerpt Text
-              </button>
+              ${passageQuote ? `
+                <button type="button" class="btn btn-primary btn-block" id="sidebarCopyQuoteBtn">
+                  Copy Excerpt Text
+                </button>
+              ` : `
+                <button type="button" class="btn btn-secondary btn-block" id="sidebarCopyQuoteBtn">
+                  Copy Reference Metadata
+                </button>
+              `}
             </div>
           </aside>
         </div>
@@ -161,31 +190,62 @@ export const PdfReader = {
 
     const handleClose = () => {
       modal.remove();
-      document.body.classList.remove('modal-open');
+      unlockBodyScroll();
       window.removeEventListener('keydown', keyHandler);
+      if (previousFocus && typeof previousFocus.focus === 'function') {
+        previousFocus.focus();
+      }
     };
 
     const keyHandler = (e) => {
-      if (e.key === 'Escape') handleClose();
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        handleClose();
+      }
+      if (e.key === 'Tab') {
+        const focusable = modal.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
     };
 
     closeBtn.addEventListener('click', handleClose);
     window.addEventListener('keydown', keyHandler);
 
-    const citationText = `"${passageQuote || doc.title}" — ${doc.title}, Page ${targetPage} (${doc.author})`;
-
     copyCitationBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(citationText).then(() => {
-        Toast.show('Citation copied to clipboard!', 'success');
-      });
+      navigator.clipboard.writeText(citationText)
+        .then(() => {
+          Toast.show('Citation reference copied to clipboard!', 'success');
+        })
+        .catch(() => {
+          Toast.show('Clipboard permission denied. Please copy manually.', 'error');
+        });
     });
 
     if (sidebarCopyQuoteBtn) {
       sidebarCopyQuoteBtn.addEventListener('click', () => {
-        navigator.clipboard.writeText(passageQuote || citationText).then(() => {
-          Toast.show('Excerpt text copied!', 'success');
-        });
+        const textToCopy = passageQuote || citationText;
+        navigator.clipboard.writeText(textToCopy)
+          .then(() => {
+            Toast.show(passageQuote ? 'Excerpt quote copied!' : 'Reference metadata copied!', 'success');
+          })
+          .catch(() => {
+            Toast.show('Clipboard permission denied. Please copy manually.', 'error');
+          });
       });
     }
+
+    // Set initial focus
+    setTimeout(() => {
+      if (closeBtn) closeBtn.focus();
+    }, 50);
   }
 };
