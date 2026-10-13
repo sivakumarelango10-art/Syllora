@@ -9,14 +9,71 @@
  */
 
 export const SUPABASE_CONFIG = {
-  url: "https://lgiarosqejiaejizrxdu.supabase.co",
-  publishableKey: "sb_publishable_AasSK22U-NcZhWk4e-7VAA_FFAUyQIU",
-  storageBucket: "syllora-study-pdfs",
+  url: (typeof window !== "undefined" && window.__SYLLORA_CONFIG__?.PUBLIC_SUPABASE_URL) || "https://lgiarosqejiaejizrxdu.supabase.co",
+  publishableKey: (typeof window !== "undefined" && window.__SYLLORA_CONFIG__?.PUBLIC_SUPABASE_PUBLISHABLE_KEY) || "sb_publishable_AasSK22U-NcZhWk4e-7VAA_FFAUyQIU",
+  storageBucket: (typeof window !== "undefined" && window.__SYLLORA_CONFIG__?.SUPABASE_STORAGE_BUCKET) || "syllora-study-pdfs",
   sessionStorageKey: "syllora_supabase_session",
 };
 
 let _supabaseClient = null;
 const _authListeners = new Set();
+let _refreshPromise = null;
+
+// Multi-tab storage synchronization: notify listeners when session changes across tabs
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (event) => {
+    if (event.key === SUPABASE_CONFIG.sessionStorageKey) {
+      if (!event.newValue) {
+        _notifyAuthListeners("SIGNED_OUT", null);
+      } else {
+        try {
+          const parsed = JSON.parse(event.newValue);
+          const session = parsed?.currentSession || parsed;
+          if (session?.access_token) {
+            _notifyAuthListeners("TOKEN_REFRESHED", session);
+          }
+        } catch {}
+      }
+    }
+  });
+}
+
+/**
+ * Safely parse a JWT payload without external libraries.
+ * @param {string} token
+ * @returns {object|null}
+ */
+export function parseJwtPayload(token) {
+  if (!token || typeof token !== "string") return null;
+  const parts = token.split(".");
+  if (parts.length !== 3) return null;
+  try {
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Determine if a JWT token is expired or close to expiring (within buffer seconds).
+ * @param {string} token
+ * @param {number} bufferSeconds
+ * @returns {boolean}
+ */
+export function isTokenExpired(token, bufferSeconds = 30) {
+  const payload = parseJwtPayload(token);
+  if (!payload || !payload.exp) return true;
+  const now = Math.floor(Date.now() / 1000);
+  return payload.exp <= now + bufferSeconds;
+}
 
 /**
  * Initialize or retrieve official Supabase client instance
@@ -25,6 +82,16 @@ export async function getSupabase() {
   if (_supabaseClient) {
     return _supabaseClient;
   }
+
+  const hookSdkListener = (client) => {
+    if (client && client.auth && typeof client.auth.onAuthStateChange === "function") {
+      try {
+        client.auth.onAuthStateChange((event, session) => {
+          _notifyAuthListeners(event, session);
+        });
+      } catch {}
+    }
+  };
 
   // 1. Check if Supabase is already available globally (e.g. from script tag)
   if (typeof window !== "undefined" && window.supabase && window.supabase.createClient) {
@@ -39,6 +106,7 @@ export async function getSupabase() {
         },
       }
     );
+    hookSdkListener(_supabaseClient);
     return _supabaseClient;
   }
 
@@ -56,6 +124,7 @@ export async function getSupabase() {
         },
       }
     );
+    hookSdkListener(_supabaseClient);
     return _supabaseClient;
   } catch (err) {
     console.warn("[Syllora Supabase] CDN module unavailable, using native REST fallback:", err);
@@ -67,7 +136,8 @@ export async function getSupabase() {
 }
 
 /**
- * Retrieve active JWT token for backend requests
+ * Retrieve active JWT token for backend requests.
+ * Enforces structure validation; rejects malformed or forged tokens.
  * @returns {string|null}
  */
 export function getAuthToken() {
@@ -75,7 +145,16 @@ export function getAuthToken() {
     const raw = localStorage.getItem(SUPABASE_CONFIG.sessionStorageKey);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    return parsed?.access_token || parsed?.currentSession?.access_token || null;
+    const token = parsed?.access_token || parsed?.currentSession?.access_token || null;
+    if (!token || typeof token !== "string") return null;
+
+    // Validate 3-part dot-separated JWT structure
+    const payload = parseJwtPayload(token);
+    if (!payload || !payload.sub) {
+      console.warn("[Syllora Supabase] Discarding malformed or forged token from storage.");
+      return null;
+    }
+    return token;
   } catch {
     return null;
   }
@@ -93,6 +172,32 @@ export function getCurrentUser() {
   } catch {
     return null;
   }
+}
+
+/**
+ * Verify active session with the backend/Supabase Auth server.
+ * Ensures the session has not been revoked or forged.
+ * @returns {Promise<object|null>}
+ */
+export async function verifyActiveSession() {
+  const token = getAuthToken();
+  if (!token) return null;
+
+  const client = await getSupabase();
+  if (client && client.auth && typeof client.auth.getUser === "function") {
+    try {
+      const { data, error } = await client.auth.getUser(token);
+      if (error || !data?.user) {
+        console.warn("[Syllora Supabase] Session verification failed on server:", error);
+        await signOut();
+        return null;
+      }
+      return data.user;
+    } catch {
+      return getCurrentUser();
+    }
+  }
+  return getCurrentUser();
 }
 
 /**
@@ -116,16 +221,32 @@ export async function signUp(email, password, options = {}) {
  */
 export async function signOut() {
   const client = await getSupabase();
-  localStorage.removeItem(SUPABASE_CONFIG.sessionStorageKey);
-  const result = await client.auth.signOut();
+  try {
+    localStorage.removeItem(SUPABASE_CONFIG.sessionStorageKey);
+  } catch {}
+  let result = null;
+  try {
+    result = await client.auth.signOut();
+  } catch {}
   _notifyAuthListeners("SIGNED_OUT", null);
   return result;
 }
 
 /**
- * Refresh current Supabase session using stored refresh token
+ * Refresh current Supabase session using stored refresh token.
+ * Thread-safe: deduplicates concurrent requests using a shared promise mutex.
  */
 export async function refreshSession() {
+  if (_refreshPromise) {
+    return _refreshPromise;
+  }
+  _refreshPromise = _performRefreshSession().finally(() => {
+    _refreshPromise = null;
+  });
+  return _refreshPromise;
+}
+
+async function _performRefreshSession() {
   const client = await getSupabase();
   if (client && client.auth && typeof client.auth.refreshSession === "function") {
     try {
@@ -156,7 +277,14 @@ export async function refreshSession() {
       },
       body: JSON.stringify({ refresh_token: refreshToken }),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // If refresh token is revoked or invalid, clear session
+      if (res.status === 400 || res.status === 401) {
+        localStorage.removeItem(SUPABASE_CONFIG.sessionStorageKey);
+        _notifyAuthListeners("SIGNED_OUT", null);
+      }
+      return null;
+    }
     const data = await res.json();
     if (data.access_token) {
       localStorage.setItem(SUPABASE_CONFIG.sessionStorageKey, JSON.stringify(data));

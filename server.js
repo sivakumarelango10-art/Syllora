@@ -2,7 +2,8 @@
  * ============================================================================
  * SYLLORA LOCAL DEV & PREVIEW SERVER
  * ============================================================================
- * Lightweight native HTTP server for local serving and verification.
+ * Hardened lightweight HTTP server for local serving and verification.
+ * Enforces strict path isolation, forbidden file blocking, and anti-leak guards.
  */
 
 const http = require('http');
@@ -27,14 +28,47 @@ const MIME_TYPES = {
 };
 
 const server = http.createServer((req, res) => {
+  // Normalize and decode URI path
   let reqPath = decodeURI(req.url.split('?')[0]);
-  if (reqPath === '/' || reqPath === '') reqPath = '/index.html';
+  let cleanPath = reqPath.replace(/^[/\\]+/, '');
+  if (!cleanPath) cleanPath = 'index.html';
 
-  let filePath = path.join(targetDir, reqPath);
+  const resolvedTarget = path.resolve(targetDir);
+  const resolvedPath = path.resolve(targetDir, cleanPath);
 
-  // Fallback to index.html for SPA routes if file not found
-  if (!fs.existsSync(filePath)) {
-    filePath = path.join(targetDir, 'index.html');
+  // 1. Path traversal guard: must strictly stay within targetDir
+  if (!resolvedPath.startsWith(resolvedTarget)) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('403 Forbidden: Path traversal attempt detected');
+    return;
+  }
+
+  // 2. Sensitive file blocklist: NEVER serve .env, .git, backend, sqlite, package.json
+  const lowerPath = cleanPath.toLowerCase();
+  if (
+    lowerPath.includes('.env') ||
+    lowerPath.includes('.git') ||
+    lowerPath.startsWith('backend') ||
+    lowerPath.startsWith('prisma') ||
+    lowerPath.includes('.sqlite') ||
+    lowerPath.includes('package.json')
+  ) {
+    res.writeHead(403, { 'Content-Type': 'text/plain' });
+    res.end('403 Forbidden: Access to sensitive file denied');
+    return;
+  }
+
+  let filePath = resolvedPath;
+
+  // 3. Fallback for SPA routing if file not found
+  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+    if (!path.extname(cleanPath)) {
+      filePath = path.join(resolvedTarget, 'index.html');
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('404 Not Found');
+      return;
+    }
   }
 
   const ext = path.extname(filePath).toLowerCase();
@@ -42,13 +76,15 @@ const server = http.createServer((req, res) => {
 
   fs.readFile(filePath, (err, content) => {
     if (err) {
-      res.writeHead(500);
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
       res.end(`Server Error: ${err.code}`);
       return;
     }
     res.writeHead(200, {
       'Content-Type': contentType,
-      'Cache-Control': 'no-cache, no-store, must-revalidate'
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN'
     });
     res.end(content);
   });

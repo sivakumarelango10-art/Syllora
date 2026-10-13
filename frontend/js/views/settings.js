@@ -13,13 +13,18 @@ import { workspaceStore } from '../state.js';
 import { Toast, Modal } from '../components/modal.js';
 import { sylloraApi } from '../services/aiApi.js';
 
+function escapeHtml(str) {
+  if (typeof str !== 'string') return str || '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 export function renderSettings(container) {
-  const user = sessionAdapter.getDemoUser() || {
-    name: 'Prajith P',
-    email: 'demo@syllora.com',
-    role: 'CS Undergrad',
-    program: 'B.Tech Computer Science & Engineering',
-    graduationYear: '2027',
+  const user = sessionAdapter.getUser() || {
+    name: 'Student',
+    email: '',
+    role: 'Student',
+    program: 'Academic Studies',
+    graduationYear: '',
     dailyGoalMinutes: 45,
     notificationsEnabled: true
   };
@@ -32,7 +37,7 @@ export function renderSettings(container) {
       <header class="page-header-row">
         <div class="header-text">
           <h1 class="page-title">Profile & Workspace Settings</h1>
-          <p class="page-desc">Manage your demo student profile, daily study targets, and local workspace data.</p>
+          <p class="page-desc">Manage your student profile, daily study targets, and workspace data.</p>
         </div>
       </header>
 
@@ -42,30 +47,30 @@ export function renderSettings(container) {
         <div class="card settings-card">
           <div class="settings-card-header">
             <h3>Student Profile</h3>
-            <span class="pill-badge pill-green">Active Demo Session</span>
+            <span class="pill-badge pill-green">Authenticated Student</span>
           </div>
 
           <form id="profileForm" class="settings-form">
             <div class="form-group">
               <label class="form-label" for="profileNameInput">Full Name:</label>
-              <input type="text" id="profileNameInput" class="form-input" value="${user.name}" required>
+              <input type="text" id="profileNameInput" class="form-input" value="${escapeHtml(user.name)}" required>
             </div>
 
             <div class="form-group">
               <label class="form-label" for="profileEmailInput">Email Address:</label>
-              <input type="email" id="profileEmailInput" class="form-input" value="${user.email}" required>
-              <span class="text-xs text-muted">Connected to demo-session adapter.</span>
+              <input type="email" id="profileEmailInput" class="form-input" value="${escapeHtml(user.email)}" required readonly style="background-color: #f1f5f9; cursor: not-allowed;">
+              <span class="text-xs text-muted">Primary verified account email.</span>
             </div>
 
             <div class="form-row-2">
               <div class="form-group">
                 <label class="form-label" for="profileProgramInput">Academic Program:</label>
-                <input type="text" id="profileProgramInput" class="form-input" value="${user.program}">
+                <input type="text" id="profileProgramInput" class="form-input" value="${escapeHtml(user.program || '')}">
               </div>
 
               <div class="form-group">
                 <label class="form-label" for="profileGradYearInput">Graduation Year:</label>
-                <input type="text" id="profileGradYearInput" class="form-input" value="${user.graduationYear}">
+                <input type="text" id="profileGradYearInput" class="form-input" value="${escapeHtml(user.graduationYear || '')}">
               </div>
             </div>
 
@@ -85,8 +90,8 @@ export function renderSettings(container) {
         <!-- Right: Workspace Data & Reset Card -->
         <div class="card settings-card">
           <div class="settings-card-header">
-            <h3>Workspace Diagnostics & Data Reset</h3>
-            <span class="pill-badge pill-gray">Local Storage</span>
+            <h3>Workspace Diagnostics</h3>
+            <span class="pill-badge pill-gray">Database Backed</span>
           </div>
 
           <div class="workspace-health-box">
@@ -108,23 +113,13 @@ export function renderSettings(container) {
             </div>
           </div>
 
-          <div class="reset-zone-card mb-3">
-            <h4>Reset Syllabus Map Only</h4>
+          <div class="reset-zone-card mt-3">
+            <h4>Clear Local Caches</h4>
             <p class="text-sm text-muted">
-              Recalculates topic evidence statuses against active documents and restores default syllabus modules. Preserves all uploaded PDFs, bookmarks, notes, and preferences.
+              Clears local offline drafts and view caches. Your genuine student profile and database records remain safely preserved on the server.
             </p>
-            <button type="button" class="btn btn-secondary btn-sm mt-3" id="resetSyllabusBtn">
-              Reset Syllabus Topics
-            </button>
-          </div>
-
-          <div class="reset-zone-card">
-            <h4>Reset Workspace to Seed Demo State</h4>
-            <p class="text-sm text-muted">
-              Restores all sample textbooks, syllabus coverage indicators, misconception issues, and revision schedules back to original factory defaults. Only clears Syllora workspace keys and cached PDF blobs.
-            </p>
-            <button type="button" class="btn btn-danger btn-sm mt-3" id="resetWorkspaceBtn">
-              Reset Demo Workspace Data
+            <button type="button" class="btn btn-secondary btn-sm mt-3" id="clearLocalCachesBtn">
+              Clear Local Caches
             </button>
           </div>
         </div>
@@ -137,13 +132,19 @@ export function renderSettings(container) {
   // Form submission
   const profileForm = container.querySelector('#profileForm');
   if (profileForm) {
-    profileForm.addEventListener('submit', (e) => {
+    profileForm.addEventListener('submit', async (e) => {
       e.preventDefault();
+      const saveBtn = container.querySelector('#saveProfileBtn');
       const name = container.querySelector('#profileNameInput').value.trim();
       const email = container.querySelector('#profileEmailInput').value.trim();
       const program = container.querySelector('#profileProgramInput').value.trim();
       const graduationYear = container.querySelector('#profileGradYearInput').value.trim();
       const dailyGoalMinutes = parseInt(container.querySelector('#profileGoalInput').value, 10);
+
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+      }
 
       sessionAdapter.updateProfile({
         name,
@@ -151,69 +152,53 @@ export function renderSettings(container) {
         program,
         graduationYear,
         dailyGoalMinutes,
-        avatarText: name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+        avatarText: name.split(' ').filter(Boolean).map(n => n[0]).join('').slice(0, 2).toUpperCase() || 'ST'
       });
 
-      // Also persist to backend asynchronously if online
       try {
-        sylloraApi.updateProfile({
+        await sylloraApi.updateProfile({
           full_name: name,
           academic_program: program,
           graduation_year: graduationYear,
           daily_goal_minutes: dailyGoalMinutes
-        }).catch(err => console.debug('[Settings] Profile sync deferred or offline:', err));
-
-        sylloraApi.updateSettings({
-          daily_study_goal_minutes: dailyGoalMinutes
-        }).catch(err => console.debug('[Settings] Settings sync deferred or offline:', err));
+        });
+        Toast.show('Profile information saved to server.', 'success');
       } catch (err) {
-        // non-blocking
+        console.warn('[Settings] Cloud profile sync notice:', err);
+        Toast.show('Profile preferences updated locally.', 'info');
+      } finally {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = 'Save Profile Changes';
+        }
       }
 
-      Toast.show('Profile information saved.', 'success');
       // Refresh topbar/shell user display
       window.dispatchEvent(new Event('syllora_user_updated'));
     });
   }
 
-  // Reset syllabus only
-  const resetSyllabusBtn = container.querySelector('#resetSyllabusBtn');
-  if (resetSyllabusBtn) {
-    resetSyllabusBtn.addEventListener('click', () => {
+  // Clear local caches
+  const clearCachesBtn = container.querySelector('#clearLocalCachesBtn');
+  if (clearCachesBtn) {
+    clearCachesBtn.addEventListener('click', () => {
       Modal.open(
-        'Confirm Syllabus Reset',
+        'Confirm Clear Local Caches',
         `
-          <p>Reset syllabus topics to default curriculum structure?</p>
-          <p class="text-muted text-sm mt-2">Uploaded PDFs, stored binaries, drafts, and unrelated study records will NOT be deleted.</p>
-        `,
-        () => {
-          workspaceStore.resetSyllabusData();
-          Toast.show('Syllabus topics reset and evidence recalculated against active library.', 'success');
-          renderSettings(container);
-        },
-        'Reset Syllabus',
-        'primary'
-      );
-    });
-  }
-
-  // Reset full demo workspace
-  const resetBtn = container.querySelector('#resetWorkspaceBtn');
-  if (resetBtn) {
-    resetBtn.addEventListener('click', () => {
-      Modal.open(
-        'Confirm Full Workspace Reset',
-        `
-          <p>Are you sure you want to restore the pristine sample dataset for CS301?</p>
-          <p class="text-muted text-sm mt-2">All uploaded PDFs, stored binaries, drafts, and study records will be reset to factory defaults.</p>
+          <p>Clear locally cached workspace drafts and temporary offline views?</p>
+          <p class="text-muted text-sm mt-2">Your real database records, documents, and account credentials will NOT be deleted.</p>
         `,
         async () => {
-          await workspaceStore.resetWorkspaceData();
-          Toast.show('Workspace state reset to pristine fixtures.', 'success');
+          const user = sessionAdapter.getUser();
+          const userId = user?.id || 'default';
+          localStorage.removeItem(`syllora_workspace_state_${userId}`);
+          sessionAdapter.cleanupLegacyDemoStorage();
+          Toast.show('Local caches cleared. Syncing fresh state from database...', 'info');
+          await workspaceStore.syncWithBackend();
           renderSettings(container);
         },
-        'Confirm Reset',
-        'danger'
+        'Clear Local Caches',
+        'primary'
       );
     });
   }

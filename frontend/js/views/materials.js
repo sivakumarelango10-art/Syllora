@@ -52,6 +52,20 @@ export function renderMaterials(container, queryParams = {}) {
   }
 
   function renderDocsHTML(docs) {
+    const totalCount = workspaceStore.getState().documents.filter(d => !d.isComparisonOnly).length;
+    if (totalCount === 0) {
+      return `
+        <div class="card empty-state-box" style="padding: 48px 24px; text-align: center;">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#64748B" stroke-width="1.5" style="margin: 0 auto 16px;">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+          </svg>
+          <h3>No study materials uploaded yet</h3>
+          <p style="color: var(--color-text-muted); margin-bottom: 20px;">Upload your course syllabus, lecture slides, or textbook chapters in PDF format (up to 20MB) to start AI indexing and citation tracking.</p>
+          <button type="button" class="btn btn-primary" id="emptyUploadBtn">Upload your first PDF</button>
+        </div>
+      `;
+    }
+
     if (docs.length === 0) {
       return `
         <div class="card empty-state-box">
@@ -103,7 +117,7 @@ export function renderMaterials(container, queryParams = {}) {
                     <td class="text-muted">${doc.fileSize}</td>
                     <td>
                       ${doc.status === 'indexed' ? `
-                        <span class="pill-badge pill-green">Indexed Sample</span>
+                        <span class="pill-badge pill-green">Indexed</span>
                       ` : `
                         <span class="pill-badge pill-amber" title="Newly selected local preview (not semantically indexed)">LOCAL PREVIEW</span>
                       `}
@@ -191,6 +205,11 @@ export function renderMaterials(container, queryParams = {}) {
     mount.innerHTML = renderDocsHTML(docs);
     bindDocumentActionEvents();
 
+    const emptyBtn = mount.querySelector('#emptyUploadBtn');
+    if (emptyBtn) {
+      emptyBtn.addEventListener('click', () => openUploadModal(renderView));
+    }
+
     const clearBtn = mount.querySelector('#clearFiltersBtn');
     if (clearBtn) {
       clearBtn.addEventListener('click', () => {
@@ -209,6 +228,9 @@ export function renderMaterials(container, queryParams = {}) {
   }
 
   function renderView() {
+    const state = workspaceStore.getState();
+    const courseDesc = state.course ? ` for ${state.course.name}` : '';
+
     container.innerHTML = `
       <div class="view-materials-page">
         
@@ -216,7 +238,7 @@ export function renderMaterials(container, queryParams = {}) {
         <header class="page-header-row">
           <div class="header-text">
             <h1 class="page-title">Study Materials</h1>
-            <p class="page-desc">Academic textbooks, lecture slide packages, and verified course readings for CS301.</p>
+            <p class="page-desc">Academic textbooks, lecture slide packages, and verified course readings${courseDesc}.</p>
           </div>
 
           <div class="header-buttons">
@@ -224,7 +246,7 @@ export function renderMaterials(container, queryParams = {}) {
               <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M4 4v12m12-12v12M8 8h4M8 12h4"/>
               </svg>
-              Compare Editions (v1 vs v2)
+              Compare Editions
             </button>
             <button type="button" class="btn btn-primary" id="openUploadModalBtn">
               <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -249,7 +271,7 @@ export function renderMaterials(container, queryParams = {}) {
               <label class="control-label" for="statusFilterSelect">Status:</label>
               <select id="statusFilterSelect" class="filter-select">
                 <option value="all" ${statusFilter === 'all' ? 'selected' : ''}>All Sources</option>
-                <option value="indexed" ${statusFilter === 'indexed' ? 'selected' : ''}>Indexed Samples</option>
+                <option value="indexed" ${statusFilter === 'indexed' ? 'selected' : ''}>Indexed</option>
                 <option value="local_preview" ${statusFilter === 'local_preview' ? 'selected' : ''}>Local Previews</option>
               </select>
             </div>
@@ -444,7 +466,6 @@ export function openUploadModal(onSuccess) {
         <input type="file" id="modalFileInput" accept=".pdf,application/pdf" multiple style="display:none;">
         <div class="dropzone-actions mt-2">
           <button type="button" class="btn btn-secondary btn-sm" id="triggerFileSelectBtn">Browse local files</button>
-          <button type="button" class="btn btn-secondary btn-sm ml-2" id="testLoadSampleBtn" title="Load sample student PDF for local preview testing">Load Test PDF</button>
         </div>
       </div>
 
@@ -551,20 +572,6 @@ export function openUploadModal(onSuccess) {
     const queueList = overlay.querySelector('#queueList');
 
     triggerBtn.addEventListener('click', () => fileInput.click());
-
-    const testSampleBtn = overlay.querySelector('#testLoadSampleBtn');
-    if (testSampleBtn) {
-      testSampleBtn.addEventListener('click', async () => {
-        try {
-          const res = await fetch('assets/docs/Silberschatz_OS_Deadlocks_Ch8.pdf');
-          const blob = await res.blob();
-          const file = new File([blob], 'student_coursework_sample.pdf', { type: 'application/pdf' });
-          handleFiles([file]);
-        } catch (e) {
-          Toast.show('Failed to load sample: ' + e.message, 'error');
-        }
-      });
-    }
 
     const handleFiles = (fileList) => {
       const state = workspaceStore.getState();

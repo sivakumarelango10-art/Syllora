@@ -70,7 +70,8 @@ export class AppShell {
       return;
     }
 
-    const user = sessionAdapter.getDemoUser() || { name: 'Prajith P', email: 'demo@syllora.com', role: 'CS Undergrad', avatarText: 'PP' };
+    const state = workspaceStore.getState();
+    const user = sessionAdapter.getUser() || { name: 'Student', email: '', role: 'Student', avatarText: 'ST' };
     const stats = workspaceStore.getStats();
 
     this.container.innerHTML = `
@@ -146,7 +147,7 @@ export class AppShell {
           <!-- Bottom Course Context Card & User Row (Reference Layout) -->
           <div class="sidebar-footer">
             
-            <!-- Operating Systems Course Context Card (Truthful active course, NO "Sample workspace" badge) -->
+            <!-- Truthful active course context card -->
             <div class="sidebar-course-card" id="courseDropdownBtn" tabindex="0" role="button" aria-haspopup="true" aria-expanded="false">
               <div class="course-card-icon">
                 <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#006B6B" stroke-width="2">
@@ -155,7 +156,7 @@ export class AppShell {
                 </svg>
               </div>
               <div class="course-card-details">
-                <span class="course-card-name" title="Operating Systems">Operating Systems</span>
+                <span class="course-card-name" id="shellActiveCourseName" title="${escapeHtml(state.course ? state.course.name : 'No course selected')}">${escapeHtml(state.course ? state.course.name : 'No course selected')}</span>
               </div>
               <svg class="chevron-icon" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M6 8l4 4 4-4"/>
@@ -165,12 +166,12 @@ export class AppShell {
             <!-- Course Context Popover -->
             <div class="course-dropdown-menu" id="courseDropdownMenu" role="region" aria-label="Course Details">
               <div class="course-dropdown-header">
-                <strong>CS301: Operating Systems</strong>
-                <span class="course-dropdown-sub">Fall 2026 • Prof. A. Subramanian</span>
+                <strong id="shellCourseHeaderTitle">${escapeHtml(state.course ? (state.course.code ? `${state.course.code}: ${state.course.name}` : state.course.name) : 'No course selected')}</strong>
+                <span class="course-dropdown-sub" id="shellCourseHeaderSub">${escapeHtml(state.course && state.course.term ? `${state.course.term}${state.course.instructor ? ' • ' + state.course.instructor : ''}` : 'Manage courses in Syllabus Map')}</span>
               </div>
               <div class="course-dropdown-stats">
-                <span class="course-stat-badge">6 Syllabus Modules</span>
-                <span class="course-stat-badge">4 Academic Readings</span>
+                <span class="course-stat-badge" id="shellCourseModulesBadge">${(state.topics || []).length} Syllabus Modules</span>
+                <span class="course-stat-badge" id="shellCourseDocsBadge">${(state.documents || []).length} Academic Readings</span>
               </div>
             </div>
 
@@ -254,7 +255,7 @@ export class AppShell {
                   <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M10 2a6 6 0 0 0-6 6v3.586l-.707.707A1 1 0 0 0 4 14h12a1 1 0 0 0 .707-1.707L16 11.586V8a6 6 0 0 0-6-6zM8 17a2 2 0 0 0 4 0"/>
                   </svg>
-                  <span class="notification-badge" id="shellNotificationBadge">${stats.openMisconceptionsCount}</span>
+                  <span class="notification-badge" id="shellNotificationBadge" style="${stats.openMisconceptionsCount > 0 ? '' : 'display:none;'}">${stats.openMisconceptionsCount}</span>
                 </button>
 
                 <!-- Notifications Dropdown -->
@@ -264,20 +265,30 @@ export class AppShell {
                     <span class="badge-tag" id="shellNotifActiveTag">${stats.openMisconceptionsCount} Active</span>
                   </div>
                   <div class="notifications-list">
-                    <a href="#/app/misconceptions" class="notification-item" id="notifItemMisconception">
-                      <div class="notif-dot coral"></div>
-                      <div class="notif-text">
-                        <strong>Open Misconception:</strong> Deadlock vs Starvation definition review needed.
-                        <span class="notif-time">2 days ago</span>
+                    ${(state.misconceptions || []).filter(m => m.status !== 'Student-marked complete').slice(0, 3).map(m => `
+                      <a href="#/app/misconceptions" class="notification-item">
+                        <div class="notif-dot coral"></div>
+                        <div class="notif-text">
+                          <strong>Open Misconception:</strong> ${escapeHtml(m.topicTitle || 'Review needed')}
+                          <span class="notif-time">${escapeHtml(m.lastAttemptDate || 'Recent')}</span>
+                        </div>
+                      </a>
+                    `).join('')}
+                    ${(state.revisionTasks || []).filter(t => !t.completed).slice(0, 2).map(t => `
+                      <a href="#/app/revision" class="notification-item">
+                        <div class="notif-dot amber"></div>
+                        <div class="notif-text">
+                          <strong>Revision Task:</strong> ${escapeHtml(t.title)}
+                          <span class="notif-time">${escapeHtml(t.scheduledDate || 'Upcoming')}</span>
+                        </div>
+                      </a>
+                    `).join('')}
+                    ${(!state.misconceptions || state.misconceptions.filter(m => m.status !== 'Student-marked complete').length === 0) &&
+                      (!state.revisionTasks || state.revisionTasks.filter(t => !t.completed).length === 0) ? `
+                      <div class="notification-item" style="padding: 16px; text-align: center; color: #64748B;">
+                        No pending notifications
                       </div>
-                    </a>
-                    <a href="#/app/revision" class="notification-item" id="notifItemRevision">
-                      <div class="notif-dot amber"></div>
-                      <div class="notif-text">
-                        <strong>Revision Task Due:</strong> Coffman Conditions exam practice.
-                        <span class="notif-time">Today</span>
-                      </div>
-                    </a>
+                    ` : ''}
                   </div>
                 </div>
               </div>
@@ -332,8 +343,7 @@ export class AppShell {
   }
 
   updateUser() {
-    const user = sessionAdapter.getDemoUser();
-    if (!user) return;
+    const user = sessionAdapter.getUser() || { name: 'Student', email: '', role: 'Student', avatarText: 'ST' };
 
     const avatar = this.container.querySelector('#shellUserAvatar');
     const topbarAvatar = this.container.querySelector('#topbarUserAvatar');
@@ -341,14 +351,15 @@ export class AppShell {
     const dName = this.container.querySelector('#dropdownUserName');
     const dEmail = this.container.querySelector('#dropdownUserEmail');
 
-    if (avatar) avatar.textContent = user.avatarText || 'PP';
-    if (topbarAvatar) topbarAvatar.textContent = user.avatarText || 'PP';
-    if (name) name.textContent = user.name || 'Prajith P';
-    if (dName) dName.textContent = user.name || 'Prajith P';
-    if (dEmail) dEmail.textContent = user.email || 'demo@syllora.com';
+    if (avatar) avatar.textContent = user.avatarText || 'ST';
+    if (topbarAvatar) topbarAvatar.textContent = user.avatarText || 'ST';
+    if (name) name.textContent = user.name || 'Student';
+    if (dName) dName.textContent = user.name || 'Student';
+    if (dEmail) dEmail.textContent = user.email || '';
   }
 
   updateStats() {
+    const state = workspaceStore.getState();
     const stats = workspaceStore.getStats();
 
     this.navItems.forEach(item => {
@@ -361,10 +372,35 @@ export class AppShell {
     });
 
     const notifBadge = this.container.querySelector('#shellNotificationBadge');
-    if (notifBadge) notifBadge.textContent = stats.openMisconceptionsCount;
+    if (notifBadge) {
+      notifBadge.textContent = stats.openMisconceptionsCount;
+      notifBadge.style.display = stats.openMisconceptionsCount > 0 ? '' : 'none';
+    }
 
     const notifTag = this.container.querySelector('#shellNotifActiveTag');
     if (notifTag) notifTag.textContent = `${stats.openMisconceptionsCount} Active`;
+
+    // Dynamic course card refresh
+    const courseCardName = this.container.querySelector('#shellActiveCourseName');
+    if (courseCardName) {
+      courseCardName.textContent = state.course ? state.course.name : 'No course selected';
+    }
+    const courseHeaderTitle = this.container.querySelector('#shellCourseHeaderTitle');
+    if (courseHeaderTitle) {
+      courseHeaderTitle.textContent = state.course ? (state.course.code ? `${state.course.code}: ${state.course.name}` : state.course.name) : 'No course selected';
+    }
+    const courseHeaderSub = this.container.querySelector('#shellCourseHeaderSub');
+    if (courseHeaderSub) {
+      courseHeaderSub.textContent = state.course && state.course.term ? `${state.course.term}${state.course.instructor ? ' • ' + state.course.instructor : ''}` : 'Manage courses in Syllabus Map';
+    }
+    const courseModulesBadge = this.container.querySelector('#shellCourseModulesBadge');
+    if (courseModulesBadge) {
+      courseModulesBadge.textContent = `${(state.topics || []).length} Syllabus Modules`;
+    }
+    const courseDocsBadge = this.container.querySelector('#shellCourseDocsBadge');
+    if (courseDocsBadge) {
+      courseDocsBadge.textContent = `${(state.documents || []).length} Academic Readings`;
+    }
   }
 
   setDrawerState(isOpen) {
@@ -446,7 +482,8 @@ export class AppShell {
     if (workspaceSwitcherBtn) {
       workspaceSwitcherBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        Toast.show('Active workspace: CS301 Operating Systems (Fall 2026)', 'info');
+        const course = workspaceStore.getState().course;
+        Toast.show(course ? `Active workspace: ${course.name}` : 'No active course. Create one in Syllabus Map.', 'info');
       });
     }
 

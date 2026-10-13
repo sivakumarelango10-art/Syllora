@@ -16,18 +16,27 @@ def get_storage_adapter(force_reload: bool = False) -> StorageAdapter:
     if _ACTIVE_STORAGE is not None and not force_reload:
         return _ACTIVE_STORAGE
 
-    provider = os.getenv("SYLLORA_STORAGE_PROVIDER", "local").strip().lower()
+    from app.config import (
+        STORAGE_BUCKET,
+        STORAGE_PROVIDER,
+        SUPABASE_SECRET_KEY,
+        SUPABASE_URL,
+        UPLOAD_DIR,
+    )
 
-    if provider in ("local", "filesystem", ""):
-        backend_dir = Path(__file__).resolve().parents[2]
-        upload_dir = Path(
-            os.getenv("SYLLORA_UPLOAD_DIR", str(backend_dir / "data" / "uploads"))
-        )
+    provider = os.getenv("SYLLORA_STORAGE_PROVIDER")
+    if not provider:
+        provider = STORAGE_PROVIDER or "local"
+    provider = provider.strip().lower()
+
+    if provider in ("local", "filesystem"):
+        upload_dir_env = os.getenv("SYLLORA_UPLOAD_DIR") or os.getenv("LOCAL_UPLOAD_DIR")
+        upload_dir = Path(upload_dir_env) if upload_dir_env else UPLOAD_DIR
         adapter = LocalStorageAdapter(upload_dir)
     elif provider in ("supabase", "cloud"):
-        supabase_url = os.getenv("SUPABASE_URL", "").strip()
-        service_key = os.getenv("SUPABASE_SECRET_KEY", "").strip()
-        bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "syllora-study-pdfs").strip()
+        supabase_url = os.getenv("SUPABASE_URL", SUPABASE_URL).strip()
+        service_key = os.getenv("SUPABASE_SECRET_KEY", SUPABASE_SECRET_KEY).strip()
+        bucket = os.getenv("SUPABASE_STORAGE_BUCKET", STORAGE_BUCKET).strip()
         if not supabase_url or not service_key:
             raise ValueError(
                 "SYLLORA_STORAGE_PROVIDER is set to 'supabase', but SUPABASE_URL and/or SUPABASE_SECRET_KEY is missing."

@@ -23,8 +23,15 @@
     (function () {
       try {
         var hash = window.location.hash || '';
-        var isAuth = !!localStorage.getItem('syllora_demo_user');
-        if (hash.startsWith('#/app') || (isAuth && (hash === '' || hash === '#' || hash === '#/'))) {
+        var isAuth = false;
+        try {
+          var raw = localStorage.getItem('syllora_supabase_session');
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            isAuth = !!(parsed && (parsed.access_token || parsed.currentSession && parsed.currentSession.access_token));
+          }
+        } catch (e) {}
+        if (hash.startsWith('#/app') && isAuth) {
           document.documentElement.classList.add('direct-workspace');
         }
       } catch (e) {}
@@ -326,6 +333,9 @@
 
 <!-- Screen Reader Announcements -->
 <div id="a11yAnnouncer" class="sr-only" aria-live="polite"></div>
+
+<!-- Public Runtime Configuration -->
+<script src="config.js"></script>
 
 <!-- Application Logic & Web Animations Controller -->
 <script src="app.js"></script>

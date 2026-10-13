@@ -7,365 +7,33 @@
  */
 
 import { deletePdfBlob, clearAllPdfBlobs } from './storage.js';
+import { sessionAdapter } from './session.js';
+import { sylloraApi } from './services/aiApi.js';
 
-const STORAGE_KEY = 'syllora_workspace_state_v1';
+const STORAGE_KEY_PREFIX = 'syllora_workspace_state_';
+const LEGACY_STORAGE_KEY = 'syllora_workspace_state_v1';
 
-// Initial Pristine Fixtures
-const SEED_DATA = {
-  course: {
-    id: 'cs301',
-    code: 'CS301',
-    name: 'Operating Systems',
-    term: 'Fall 2026',
-    instructor: 'Prof. A. Subramanian',
-    totalUnits: 6
-  },
-  documents: [
-    {
-      id: 'doc-1',
-      title: 'Operating System Concepts (Ch. 8: Deadlocks)',
-      filename: 'Silberschatz_OS_Deadlocks_Ch8.pdf',
-      author: 'Silberschatz, Galvin & Gagne',
-      pageCount: 4,
-      fileSize: '5.5 KB',
-      uploadedAt: '2026-10-02',
-      status: 'indexed', // 'indexed' | 'local_preview'
-      isBookmarked: true,
-      hasComparison: true,
-      comparisonDocId: 'doc-4'
-    },
-    {
-      id: 'doc-2',
-      title: 'Modern Operating Systems (Ch. 6 Excerpt)',
-      filename: 'Tanenbaum_MOS_Deadlocks_Excerpt.pdf',
-      author: 'Andrew S. Tanenbaum',
-      pageCount: 3,
-      fileSize: '3.6 KB',
-      uploadedAt: '2026-10-04',
-      status: 'indexed',
-      isBookmarked: false
-    },
-    {
-      id: 'doc-3',
-      title: 'CS301 Lecture Slides: Concurrency & Deadlocks',
-      filename: 'Lecture_Slides_Week6_Concurrency.pdf',
-      author: 'Dept. of Computer Science',
-      pageCount: 5,
-      fileSize: '5.0 KB',
-      uploadedAt: '2026-10-08',
-      status: 'indexed',
-      isBookmarked: false
-    },
-    {
-      id: 'doc-4',
-      title: 'Operating System Concepts (10th Ed. Revised Ch. 8)',
-      filename: 'Silberschatz_OS_Deadlocks_Ch8_v2.pdf',
-      author: 'Silberschatz, Galvin & Gagne',
-      pageCount: 4,
-      fileSize: '4.4 KB',
-      uploadedAt: '2026-10-10',
-      status: 'indexed',
-      isBookmarked: false,
-      isComparisonOnly: true
+// One-time legacy cleanup: remove any unauthenticated demo state
+if (typeof window !== 'undefined') {
+  try {
+    if (localStorage.getItem(LEGACY_STORAGE_KEY)) {
+      localStorage.removeItem(LEGACY_STORAGE_KEY);
+      console.info('[Syllora State] Cleared legacy demo workspace state.');
     }
-  ],
-  passages: [
-    {
-      id: 'pass-1',
-      documentId: 'doc-1',
-      documentTitle: 'Silberschatz (Ch. 8)',
-      pageNumber: 2,
-      sectionTitle: '8.2 Deadlock Characterization: The Four Coffman Conditions',
-      quote: 'A deadlock situation can arise if and only if the following four conditions hold simultaneously: 1. Mutual Exclusion, 2. Hold and Wait, 3. No Preemption, 4. Circular Wait.',
-      topicId: 'top-1'
-    },
-    {
-      id: 'pass-2',
-      documentId: 'doc-1',
-      documentTitle: 'Silberschatz (Ch. 8)',
-      pageNumber: 3,
-      sectionTitle: '8.3 Resource-Allocation Graphs & Deadlock vs Starvation',
-      quote: 'A deadlock occurs when every process in a set is waiting for an event that only another process in the set can cause. In contrast, starvation (indefinite postponement) occurs when a runnable process is perpetually denied access because resources are continuously allocated to higher-priority processes.',
-      topicId: 'top-3'
-    },
-    {
-      id: 'pass-3',
-      documentId: 'doc-1',
-      documentTitle: 'Silberschatz (Ch. 8)',
-      pageNumber: 4,
-      sectionTitle: "8.4 Deadlock Avoidance & Banker's Algorithm",
-      quote: "The Banker's Algorithm ensures the system never enters an unsafe state. A state is safe if the system can allocate resources to each process (up to its maximum) in some specified order without deadlocking. Safety invariant: Allocation + Need <= Max resources.",
-      topicId: 'top-5'
-    },
-    {
-      id: 'pass-4',
-      documentId: 'doc-2',
-      documentTitle: 'Tanenbaum (Ch. 6 Excerpt)',
-      pageNumber: 2,
-      sectionTitle: '6.2 The Dining Philosophers Problem & Circular Wait',
-      quote: 'Deadlock requires circular wait across non-preemptible resources; breaking the cycle prevents deadlocks completely. Consider five philosophers: if each picks up the left chopstick simultaneously, circular waiting causes total halt.',
-      topicId: 'top-1'
-    },
-    {
-      id: 'pass-5',
-      documentId: 'doc-3',
-      documentTitle: 'CS301 Lecture Slides',
-      pageNumber: 3,
-      sectionTitle: 'Slide 3: Summary of the Four Coffman Conditions',
-      quote: 'Remember the acronym M-H-N-C: Mutual Exclusion, Hold and Wait, No Preemption, Circular Wait. ALL 4 conditions MUST be simultaneously true for deadlock to manifest.',
-      topicId: 'top-1'
-    },
-    {
-      id: 'pass-6',
-      documentId: 'doc-3',
-      documentTitle: 'CS301 Lecture Slides',
-      pageNumber: 5,
-      sectionTitle: 'Slide 5: Starvation Mitigation via Aging',
-      quote: 'Aging gradually increases the priority of processes that wait in the system for a long time, ensuring low-priority runnable threads eventually execute.',
-      topicId: 'top-3'
-    }
-  ],
-  topics: [
-    {
-      id: 'top-1',
-      title: 'Deadlock Characterization (Coffman Conditions)',
-      unit: 'Unit 3: Concurrency Control',
-      evidenceStatus: 'Evidence found', // 'Evidence found' | 'Limited evidence' | 'No matching evidence found'
-      understandingStatus: 'Review needed', // 'Not assessed' | 'Needs practice' | 'Review needed'
-      matchedPassageIds: ['pass-1', 'pass-4', 'pass-5'],
-      prerequisites: ['top-2']
-    },
-    {
-      id: 'top-2',
-      title: 'Mutual Exclusion & Critical Sections',
-      unit: 'Unit 2: Synchronization Primitives',
-      evidenceStatus: 'Evidence found',
-      understandingStatus: 'Not assessed',
-      matchedPassageIds: ['pass-1'],
-      prerequisites: []
-    },
-    {
-      id: 'top-3',
-      title: 'Deadlock vs Starvation',
-      unit: 'Unit 3: Concurrency Control',
-      evidenceStatus: 'Evidence found',
-      understandingStatus: 'Needs practice',
-      matchedPassageIds: ['pass-2', 'pass-6'],
-      prerequisites: ['top-1']
-    },
-    {
-      id: 'top-4',
-      title: 'Resource-Allocation Graphs & Cycle Detection',
-      unit: 'Unit 3: Concurrency Control',
-      evidenceStatus: 'Evidence found',
-      understandingStatus: 'Needs practice',
-      matchedPassageIds: ['pass-2'],
-      prerequisites: ['top-1']
-    },
-    {
-      id: 'top-5',
-      title: "Banker's Algorithm & Safe States",
-      unit: 'Unit 4: Deadlock Avoidance',
-      evidenceStatus: 'Evidence found',
-      understandingStatus: 'Not assessed',
-      matchedPassageIds: ['pass-3'],
-      prerequisites: ['top-4']
-    },
-    {
-      id: 'top-6',
-      title: 'Deadlock Detection & Recovery Strategies',
-      unit: 'Unit 4: Deadlock Avoidance',
-      evidenceStatus: 'Evidence found',
-      understandingStatus: 'Not assessed',
-      matchedPassageIds: ['pass-4'],
-      prerequisites: ['top-1']
-    },
-    {
-      id: 'top-7',
-      title: 'Paging & Memory Allocation',
-      unit: 'Unit 5: Memory Management',
-      evidenceStatus: 'Limited evidence',
-      understandingStatus: 'Needs practice',
-      matchedPassageIds: [],
-      prerequisites: []
-    },
-    {
-      id: 'top-8',
-      title: 'Segmentation vs Paging Trade-offs',
-      unit: 'Unit 5: Memory Management',
-      evidenceStatus: 'Limited evidence',
-      understandingStatus: 'Not assessed',
-      matchedPassageIds: [],
-      prerequisites: ['top-7']
-    },
-    {
-      id: 'top-9',
-      title: 'Thrashing & Working Set Model',
-      unit: 'Unit 6: Virtual Memory',
-      evidenceStatus: 'No matching evidence found',
-      understandingStatus: 'Not assessed',
-      matchedPassageIds: [],
-      prerequisites: ['top-7']
-    },
-    {
-      id: 'top-10',
-      title: 'Distributed Deadlock Detection',
-      unit: 'Unit 6: Virtual Memory',
-      evidenceStatus: 'No matching evidence found',
-      understandingStatus: 'Not assessed',
-      matchedPassageIds: [],
-      prerequisites: ['top-5']
-    }
-  ],
-  misconceptions: [
-    {
-      id: 'misc-1',
-      topicId: 'top-3',
-      topicTitle: 'Deadlock vs Starvation',
-      observedIssue: 'Conflating circular wait with priority starvation',
-      originalExplanation: 'Deadlock and starvation are basically the same thing because both make threads stop running forever.',
-      feedback: 'Deadlock requires a cyclic dependency where no thread can make progress without external intervention. Starvation is indefinite postponement caused by priority scheduling where higher-priority tasks continue executing.',
-      sourceCitations: [
-        { documentTitle: 'Silberschatz (Ch. 8)', pageNumber: 3, quote: 'A deadlock occurs when every process in a set is waiting for an event only another process can cause. Starvation is postponement due to priority bias.' }
-      ],
-      status: 'Review needed', // 'Open' | 'Improving' | 'Review needed' | 'Student-marked complete'
-      attemptsCount: 2,
-      lastAttemptDate: '2 days ago'
-    },
-    {
-      id: 'misc-2',
-      topicId: 'top-1',
-      topicTitle: 'Deadlock Characterization',
-      observedIssue: 'Assuming single-unit resource cycles only cause potential deadlock',
-      originalExplanation: 'Even if each resource only has 1 instance, a cycle in the resource allocation graph does not guarantee a deadlock.',
-      feedback: 'If every resource type has exactly one instance, then a cycle in the resource allocation graph is a necessary AND sufficient condition for deadlock (guaranteed deadlock). Cycles only indicate potential deadlock when multiple instances exist.',
-      sourceCitations: [
-        { documentTitle: 'Silberschatz (Ch. 8)', pageNumber: 3, quote: 'If each resource type has only one instance, then a cycle implies deadlock.' }
-      ],
-      status: 'Open',
-      attemptsCount: 1,
-      lastAttemptDate: 'Yesterday'
-    }
-  ],
-  revisionTasks: [
-    {
-      id: 'task-1',
-      topicId: 'top-3',
-      title: 'Review Starvation vs Deadlock Distinction',
-      estimatedMinutes: 25,
-      priority: 'high', // 'high' | 'medium' | 'low'
-      completed: false,
-      scheduledDate: 'Today',
-      reason: 'Target open misconception #1 before midterm',
-      pastPaperQuestionId: 'CS301-2024-Q3'
-    },
-    {
-      id: 'task-2',
-      topicId: 'top-1',
-      title: 'Practice Coffman Condition Scenarios',
-      estimatedMinutes: 30,
-      priority: 'high',
-      completed: false,
-      scheduledDate: 'Today',
-      reason: 'Topic marked: Review needed',
-      pastPaperQuestionId: 'CS301-2023-Q5'
-    },
-    {
-      id: 'task-3',
-      topicId: 'top-4',
-      title: 'Resource Allocation Graph Cycle Workouts',
-      estimatedMinutes: 20,
-      priority: 'medium',
-      completed: false,
-      scheduledDate: 'Tomorrow',
-      reason: 'Topic marked: Needs practice',
-      pastPaperQuestionId: 'CS301-2024-Q3'
-    },
-    {
-      id: 'task-4',
-      topicId: 'top-7',
-      title: 'Upload / Review Paging Reference Materials',
-      estimatedMinutes: 35,
-      priority: 'medium',
-      completed: false,
-      scheduledDate: 'Nov 14',
-      reason: 'Topic has limited evidence in materials',
-      pastPaperQuestionId: null
-    },
-    {
-      id: 'task-5',
-      topicId: 'top-5',
-      title: "Banker's Algorithm Safety Vector Simulation",
-      estimatedMinutes: 40,
-      priority: 'low',
-      completed: true,
-      scheduledDate: 'Completed',
-      reason: 'Routine syllabus coverage',
-      pastPaperQuestionId: 'CS301-2022-Q2'
-    }
-  ],
-  pastPaperQuestions: [
-    {
-      id: 'CS301-2024-Q3',
-      year: 2024,
-      semester: 'Spring',
-      questionText: 'Differentiate between Deadlock and Starvation with respect to operating system scheduler behavior. Draw a resource-allocation graph with 3 processes demonstrating circular wait. (8 Marks)',
-      topicId: 'top-3',
-      topicTitle: 'Deadlock vs Starvation',
-      frequencyBadge: 'Appeared in 4 of last 5 semester exams',
-      frequencyCount: 4,
-      citationPassageId: 'pass-2'
-    },
-    {
-      id: 'CS301-2023-Q5',
-      year: 2023,
-      semester: 'Fall',
-      questionText: 'State and explain the four Coffman conditions necessary for deadlock. Explain how eliminating circular wait through resource ordering prevents deadlock. (6 Marks)',
-      topicId: 'top-1',
-      topicTitle: 'Deadlock Characterization',
-      frequencyBadge: 'Core fundamental question (100% syllabus occurrence)',
-      frequencyCount: 5,
-      citationPassageId: 'pass-1'
-    },
-    {
-      id: 'CS301-2022-Q2',
-      year: 2022,
-      semester: 'Spring',
-      questionText: "Given 5 processes and 3 resource types A, B, C, execute the Banker's Algorithm safety check. Determine if state <Allocation, Max, Available> is safe. (10 Marks)",
-      topicId: 'top-5',
-      topicTitle: "Banker's Algorithm & Safe States",
-      frequencyBadge: 'Appeared in 3 of last 5 semester exams',
-      frequencyCount: 3,
-      citationPassageId: 'pass-3'
-    }
-  ],
-  understandingAttempts: [
-    {
-      id: 'att-1',
-      topicId: 'top-3',
-      topicTitle: 'Deadlock vs Starvation',
-      timestamp: '2026-10-11T14:20:00Z',
-      userExplanation: 'Deadlock and starvation are basically the same thing because both make threads stop running forever.',
-      score: 1, // out of 3
-      rubric: {
-        conceptualAccuracy: 'Needs correction: conflates cyclic blocked dependency with priority starvation.',
-        essentialPoints: 'Missed circular wait; missed scheduling postponement distinction.',
-        reasoning: 'Superficial comparison based only on symptom of thread waiting.'
-      },
-      missingPoints: [
-        'Failed to state that deadlock involves cyclic waiting among processes holding resources.',
-        'Failed to mention that starvation occurs when runnable threads are postponed due to unfair priority scheduling.'
-      ],
-      possibleMisconceptions: [
-        'Believing thread waiting always means the system is in deadlock.'
-      ],
-      revised: false
-    }
-  ],
-  bookmarks: [
-    { id: 'bm-1', targetType: 'document', targetId: 'doc-1', createdAt: '2026-10-02' },
-    { id: 'bm-2', targetType: 'passage', targetId: 'pass-2', createdAt: '2026-10-11' }
-  ]
+  } catch (e) {}
+}
+
+const EMPTY_STATE = {
+  course: null,
+  courses: [],
+  documents: [],
+  passages: [],
+  topics: [],
+  misconceptions: [],
+  revisionTasks: [],
+  pastPaperQuestions: [],
+  understandingAttempts: [],
+  bookmarks: []
 };
 
 // Safe State Manager Class
@@ -375,32 +43,36 @@ class WorkspaceStore {
     this.state = this.loadInitialState();
   }
 
+  getStorageKey() {
+    const user = sessionAdapter.getUser();
+    return (user && user.id) ? `${STORAGE_KEY_PREFIX}${user.id}` : LEGACY_STORAGE_KEY;
+  }
+
   loadInitialState() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const key = this.getStorageKey();
+      const raw = localStorage.getItem(key);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed && parsed.course && parsed.topics) {
+        if (parsed && Array.isArray(parsed.documents)) {
           // Normalize documents
-          if (Array.isArray(parsed.documents)) {
-            parsed.documents.forEach(d => {
-              if (typeof d.pageCount !== 'number' || isNaN(d.pageCount)) {
-                d.pageCount = null;
-              }
-            });
-          }
+          parsed.documents.forEach(d => {
+            if (typeof d.pageCount !== 'number' || isNaN(d.pageCount)) {
+              d.pageCount = null;
+            }
+          });
           return parsed;
         }
       }
     } catch (e) {
-      console.warn('[Syllora State] Failed to load localStorage, falling back to seed data:', e);
+      console.warn('[Syllora State] Failed to load localStorage:', e);
     }
-    // Return cloned seed data
-    return JSON.parse(JSON.stringify(SEED_DATA));
+    return JSON.parse(JSON.stringify(EMPTY_STATE));
   }
 
   save() {
     try {
+      const key = this.getStorageKey();
       // Do not store transient blobUrl strings or File objects in localStorage
       const clone = JSON.parse(JSON.stringify(this.state));
       if (clone.documents) {
@@ -409,11 +81,98 @@ class WorkspaceStore {
           delete d.blobFile;
         });
       }
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(clone));
+      localStorage.setItem(key, JSON.stringify(clone));
     } catch (e) {
       console.warn('[Syllora State] Storage write failed (quota exceeded or incognito):', e);
     }
     this.notify();
+  }
+
+  async syncWithBackend() {
+    if (!sessionAdapter.isAuthenticated()) {
+      return;
+    }
+    try {
+      // 1. Fetch real courses from PostgreSQL
+      const coursesRes = await sylloraApi.listCourses().catch(() => []);
+      const courses = Array.isArray(coursesRes) ? coursesRes : [];
+      this.state.courses = courses;
+      if (courses.length > 0) {
+        const active = courses[0];
+        this.state.course = {
+          id: active.id,
+          code: active.code || '',
+          name: active.title || active.name || '',
+          term: active.term || '',
+          instructor: active.instructor || '',
+          totalUnits: active.total_units || 0
+        };
+      } else {
+        this.state.course = null;
+      }
+
+      // 2. Fetch real documents from PostgreSQL & Storage
+      const docsRes = await sylloraApi.listDocuments().catch(() => ({ documents: [] }));
+      const rawDocs = Array.isArray(docsRes.documents) ? docsRes.documents : (Array.isArray(docsRes) ? docsRes : []);
+      this.state.documents = rawDocs.map(d => ({
+        id: d.id,
+        title: d.title || d.filename,
+        filename: d.filename,
+        author: d.author || 'Uploaded Document',
+        pageCount: Number(d.page_count) || null,
+        fileSize: d.size_bytes ? `${(d.size_bytes / 1024).toFixed(1)} KB` : 'Unknown',
+        uploadedAt: d.created_at ? d.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+        status: d.status || 'indexed',
+        backendDocument: true,
+        backendChunkCount: Number(d.chunk_count) || 0,
+        isBookmarked: false
+      }));
+
+      // 3. Fetch real topics from PostgreSQL
+      const topicsRes = await sylloraApi.listTopics().catch(() => []);
+      const rawTopics = Array.isArray(topicsRes) ? topicsRes : [];
+      this.state.topics = rawTopics.map(t => ({
+        id: t.id,
+        title: t.title,
+        unit: t.description || 'Module 1',
+        evidenceStatus: t.coverage_status === 'covered' ? 'Evidence found' : (t.coverage_status === 'partially_covered' ? 'Limited evidence' : 'No matching evidence found'),
+        understandingStatus: t.mastery_score >= 0.75 ? 'Mastered' : (t.mastery_score >= 0.5 ? 'Needs practice' : (t.mastery_score > 0 ? 'Review needed' : 'Not assessed')),
+        matchedPassageIds: [],
+        prerequisites: []
+      }));
+
+      // 4. Fetch real misconceptions from PostgreSQL
+      const miscRes = await sylloraApi.listMisconceptions().catch(() => []);
+      const rawMisc = Array.isArray(miscRes) ? miscRes : [];
+      this.state.misconceptions = rawMisc.map(m => ({
+        id: m.id,
+        topicId: m.topic_id,
+        topicTitle: m.topic_title || 'Syllabus Topic',
+        observedIssue: m.title || m.description,
+        originalExplanation: m.student_explanation || '',
+        feedback: m.correction_guidance || m.feedback || '',
+        status: m.status === 'resolved' ? 'Student-marked complete' : (m.status === 'improving' ? 'Improving' : 'Open'),
+        sourceCitations: []
+      }));
+
+      // 5. Fetch real revision tasks from PostgreSQL
+      const revRes = await sylloraApi.listRevisionTasks().catch(() => []);
+      const rawTasks = Array.isArray(revRes) ? revRes : [];
+      this.state.revisionTasks = rawTasks.map(tsk => ({
+        id: tsk.id,
+        topicId: tsk.topic_id,
+        title: tsk.title,
+        day: tsk.due_date ? tsk.due_date.split('T')[0] : 'Scheduled',
+        estimatedMins: tsk.estimated_minutes || 30,
+        priority: tsk.priority >= 4 ? 'high' : (tsk.priority >= 2 ? 'medium' : 'low'),
+        completed: tsk.status === 'completed',
+        reason: tsk.task_type || 'Curriculum revision'
+      }));
+
+      this.save();
+    } catch (err) {
+      console.warn('[WorkspaceStore] Backend sync failed:', err);
+    }
   }
 
   notify() {
@@ -441,24 +200,29 @@ class WorkspaceStore {
 
   // Derived Statistics (used across Overview and Navigation)
   getStats() {
-    const s = this.state;
-    const nonComparisonDocs = s.documents.filter(d => !d.isComparisonOnly);
-    const topicsWithEvidence = s.topics.filter(t => t.evidenceStatus === 'Evidence found');
-    const needsPractice = s.topics.filter(t => t.understandingStatus === 'Needs practice');
-    const openMisconceptions = s.misconceptions.filter(m => m.status !== 'Student-marked complete');
-    const pendingTasks = s.revisionTasks.filter(t => !t.completed);
+    const s = this.state || {};
+    const docs = Array.isArray(s.documents) ? s.documents : [];
+    const topics = Array.isArray(s.topics) ? s.topics : [];
+    const misconceptions = Array.isArray(s.misconceptions) ? s.misconceptions : [];
+    const tasks = Array.isArray(s.revisionTasks) ? s.revisionTasks : [];
+
+    const nonComparisonDocs = docs.filter(d => !d.isComparisonOnly);
+    const topicsWithEvidence = topics.filter(t => t.evidenceStatus === 'Evidence found');
+    const needsPractice = topics.filter(t => t.understandingStatus === 'Needs practice');
+    const openMisconceptions = misconceptions.filter(m => m.status !== 'Student-marked complete');
+    const pendingTasks = tasks.filter(t => !t.completed);
 
     return {
       totalDocs: nonComparisonDocs.length,
       indexedDocs: nonComparisonDocs.filter(d => d.status === 'indexed').length,
       localPreviewDocs: nonComparisonDocs.filter(d => d.status === 'local_preview').length,
-      totalTopics: s.topics.length,
+      totalTopics: topics.length,
       topicsWithEvidenceCount: topicsWithEvidence.length,
-      evidenceCoveragePct: Math.round((topicsWithEvidence.length / s.topics.length) * 100),
+      evidenceCoveragePct: topics.length > 0 ? Math.round((topicsWithEvidence.length / topics.length) * 100) : 0,
       needsPracticeCount: needsPractice.length,
       openMisconceptionsCount: openMisconceptions.length,
       pendingTasksCount: pendingTasks.length,
-      totalTasksCount: s.revisionTasks.length
+      totalTasksCount: tasks.length
     };
   }
 
@@ -656,45 +420,8 @@ class WorkspaceStore {
     } catch {}
   }
 
-  // --- Safe Syllabus-Only Reset ---
-  // Preserves uploaded documents, IndexedDB binary storage, study history, and user preferences
-  resetSyllabusData() {
-    // Preserve applicable student understanding status for retained topic IDs
-    const previousUnderstanding = new Map(this.state.topics.map(t => [t.id, t.understandingStatus]));
-
-    this.state.topics = JSON.parse(JSON.stringify(SEED_DATA.topics));
-
-    // Restore student assessed understanding history
-    this.state.topics.forEach(t => {
-      if (previousUnderstanding.has(t.id)) {
-        t.understandingStatus = previousUnderstanding.get(t.id);
-      }
-    });
-
-    // Re-verify matched passages against currently active documents
-    const activeDocIds = new Set(this.state.documents.map(d => d.id));
-    this.state.topics.forEach(t => {
-      if (Array.isArray(t.matchedPassageIds)) {
-        t.matchedPassageIds = t.matchedPassageIds.filter(pid => {
-          const pass = this.state.passages.find(p => p.id === pid);
-          return pass && activeDocIds.has(pass.documentId);
-        });
-        // Defect E: Truthful evidence status recalculation
-        if (t.matchedPassageIds.length > 0) {
-          t.evidenceStatus = 'Evidence found';
-        } else {
-          t.evidenceStatus = 'No matching evidence found';
-        }
-      } else {
-        t.evidenceStatus = 'No matching evidence found';
-      }
-    });
-
-    this.save();
-  }
-
-  // --- Full Demo Reset ---
-  // Explicit destructive reset only triggered by Settings confirmation dialog
+  // --- Clear Local Caches & Resync ---
+  // Preserves server state, clears local caches and resets local state to empty
   async resetWorkspaceData() {
     try {
       await clearAllPdfBlobs();
@@ -702,12 +429,12 @@ class WorkspaceStore {
       console.warn('[WorkspaceStore] Error clearing stored PDF blobs:', err);
     }
 
-    // Only clear Syllora-owned storage keys, preserving unrelated origin data
+    // Only clear Syllora-owned local storage caches, preserving active session
     try {
       const keysToRemove = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k && k.startsWith('syllora_')) {
+        if (k && k.startsWith('syllora_') && k !== 'syllora_supabase_session') {
           keysToRemove.push(k);
         }
       }
@@ -716,8 +443,11 @@ class WorkspaceStore {
       console.warn('[WorkspaceStore] Error clearing syllora localStorage keys:', e);
     }
 
-    this.state = JSON.parse(JSON.stringify(SEED_DATA));
+    this.state = JSON.parse(JSON.stringify(EMPTY_STATE));
     this.save();
+    if (sessionAdapter.isAuthenticated()) {
+      await this.syncWithBackend();
+    }
   }
 }
 

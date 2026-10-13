@@ -91,6 +91,30 @@ def verify_supabase_jwt(token: str) -> dict[str, Any]:
         raise HTTPException(status_code=401, detail="User subject claim is not a valid UUID.")
 
 
+def is_loopback_request(request: Request) -> bool:
+    """
+    Determine if a request originates strictly from a local loopback environment.
+    Rejects any request arriving through public tunnels (e.g. Cloudflare, ngrok)
+    or external reverse proxies.
+    """
+    # 1. Reject any request with public tunnel / external proxy headers
+    proxy_headers = ("cf-ray", "cf-connecting-ip", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto")
+    if any(h in request.headers for h in proxy_headers):
+        return False
+
+    # 2. Verify Host header if present (must be a loopback or test address)
+    host_raw = request.headers.get("host", "").split(":")[0].strip().lower()
+    if host_raw and host_raw not in ("localhost", "127.0.0.1", "testserver", "::1"):
+        return False
+
+    # 3. Verify client IP if present (uvicorn populates client for all network connections)
+    client_ip = (request.client.host if request.client else "").strip().lower()
+    if client_ip and client_ip not in ("127.0.0.1", "::1", "localhost", "testclient"):
+        return False
+
+    return True
+
+
 def get_current_user_id(request: Request) -> str:
     """
     Extract and verify the authenticated user ID from the request.
@@ -100,8 +124,9 @@ def get_current_user_id(request: Request) -> str:
         Must be a cryptographically verified Supabase JWT.
         Forged, expired, or tampered tokens are REJECTED with HTTP 401.
     - If NO Authorization header is provided:
-        - In local SQLite development mode, falls back to local demo user UUID.
         - In hosted PostgreSQL mode, strictly requires an authenticated token.
+        - On public tunnels, proxies, or remote hosts, strictly requires an authenticated token.
+        - In offline SQLite local dev mode, only allowed on loopback when SYLLORA_ALLOW_DEMO_AUTH is enabled.
     - Rejects client-supplied spoofing headers (e.g., X-User-Id).
     """
     auth_header = request.headers.get("Authorization", "").strip()
@@ -116,12 +141,34 @@ def get_current_user_id(request: Request) -> str:
         return str(uuid.UUID(str(payload["sub"])))
 
     # No Authorization header provided:
-    db_provider = os.getenv("SYLLORA_DB_PROVIDER", "sqlite").strip().lower()
+    db_provider = os.getenv("SYLLORA_DB_PROVIDER", "postgres").strip().lower()
+    require_auth = os.getenv("SYLLORA_REQUIRE_AUTH", "true").strip().lower() in ("true", "1")
     if db_provider in ("postgres", "postgresql", "supabase"):
         raise HTTPException(
             status_code=401,
             detail="Authentication required in hosted database mode. Provide a valid Supabase Bearer token.",
         )
+    if require_auth:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Provide a valid Supabase Bearer token.",
+        )
 
-    # Local development / prototype fallback for offline SQLite mode
+    # In SQLite mode, strictly verify whether demo authentication is permitted:
+    # 1. Must be a loopback request (not a public tunnel, external proxy, or remote IP)
+    if not is_loopback_request(request):
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Anonymous demo access is strictly prohibited on public, tunnel, or external network requests.",
+        )
+
+    # 2. Explicit demo mode flag must not be disabled
+    allow_demo = os.getenv("SYLLORA_ALLOW_DEMO_AUTH", "true").strip().lower() in ("true", "1")
+    if not allow_demo:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required. Demo authentication mode is disabled.",
+        )
+
+    # Local development fallback for offline SQLite mode on loopback only
     return DEFAULT_DEMO_USER_ID

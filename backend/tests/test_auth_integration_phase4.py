@@ -232,3 +232,70 @@ def test_rate_limiter_protection():
     assert "Rate limit exceeded" in exc_info.value.detail
     assert "Retry-After" in exc_info.value.headers
 
+
+def test_public_tunnel_headers_block_anonymous_demo_access(client):
+    """
+    Verify that if a request carries Cloudflare tunnel or proxy headers,
+    anonymous access to academic data is rejected with HTTP 401.
+    """
+    # 1. Cloudflare tunnel header
+    res = client.get("/api/v1/courses", headers={"CF-Ray": "89345abcdef-ORD"})
+    assert res.status_code == 401
+    assert "Anonymous demo access is strictly prohibited on public, tunnel" in res.json()["detail"]
+
+    # 2. CF-Connecting-IP header
+    res = client.get("/api/v1/dashboard/summary", headers={"CF-Connecting-IP": "198.51.100.24"})
+    assert res.status_code == 401
+    assert "Anonymous demo access is strictly prohibited on public, tunnel" in res.json()["detail"]
+
+    # 3. External forwarded-host
+    res = client.get("/api/v1/documents", headers={"X-Forwarded-Host": "syllora.trycloudflare.com"})
+    assert res.status_code == 401
+
+
+def test_untrusted_host_blocks_anonymous_demo_access(client):
+    """Verify that if the Host header is an external public domain, anonymous access is rejected."""
+    res = client.get("/api/v1/courses", headers={"Host": "works-demographic-brake-appliances.trycloudflare.com"})
+    assert res.status_code == 401
+    assert "Anonymous demo access is strictly prohibited on public, tunnel" in res.json()["detail"]
+
+
+def test_disabling_demo_auth_blocks_all_anonymous_requests(client, monkeypatch):
+    """Verify that explicitly setting SYLLORA_ALLOW_DEMO_AUTH=false forces authentication even on loopback."""
+    monkeypatch.setenv("SYLLORA_ALLOW_DEMO_AUTH", "false")
+    res = client.get("/api/v1/courses")
+    assert res.status_code == 401
+    assert "Demo authentication mode is disabled" in res.json()["detail"]
+
+
+def test_rate_limiter_spoofed_forwarding_headers():
+    """Verify that get_client_rate_limit_key rejects spoofed forwarding headers from non-loopback clients."""
+    from fastapi import Request
+    from app.rate_limiter import get_client_rate_limit_key
+
+    # Direct client from untrusted public IP trying to spoof X-Forwarded-For
+    scope = {
+        "type": "http",
+        "client": ("203.0.113.50", 54321),
+        "headers": [
+            (b"x-forwarded-for", b"1.1.1.1"),
+            (b"cf-connecting-ip", b"8.8.8.8"),
+        ],
+    }
+    req = Request(scope)
+    key = get_client_rate_limit_key(req)
+    # Must use direct peer IP, not spoofed header
+    assert key == "ip:203.0.113.50"
+
+
+def test_inference_concurrency_guard():
+    """Verify that inference_concurrency_guard acquires and releases properly."""
+    import asyncio
+    from app.rate_limiter import inference_concurrency_guard
+
+    async def _run():
+        async with inference_concurrency_guard(timeout_seconds=5.0):
+            pass
+
+    asyncio.run(_run())
+

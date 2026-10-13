@@ -42,6 +42,20 @@ export function renderSyllabus(container) {
   }
 
   function renderTableHTML(topics) {
+    const totalCount = workspaceStore.getState().topics.length;
+    if (totalCount === 0) {
+      return `
+        <div class="card empty-state-box" style="padding: 48px 24px; text-align: center;">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#64748B" stroke-width="1.5" style="margin: 0 auto 16px;">
+            <polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" y1="3" x2="9" y2="18"/><line x1="15" y1="6" x2="15" y2="21"/>
+          </svg>
+          <h3>No syllabus topics yet</h3>
+          <p style="color: var(--color-text-muted); margin-bottom: 20px;">Map your curriculum topics to track evidence across uploaded study materials and measure student understanding.</p>
+          <button type="button" class="btn btn-primary" id="emptyAddTopicBtn">+ Add your first topic</button>
+        </div>
+      `;
+    }
+
     if (topics.length === 0) {
       return `
         <div class="card empty-state-box">
@@ -123,6 +137,11 @@ export function renderSyllabus(container) {
     const topics = getFilteredTopics();
     mount.innerHTML = renderTableHTML(topics);
     bindTableActionEvents();
+
+    const emptyAddBtn = mount.querySelector('#emptyAddTopicBtn');
+    if (emptyAddBtn) {
+      emptyAddBtn.addEventListener('click', openAddTopicModal);
+    }
   }
 
   function renderView() {
@@ -139,8 +158,8 @@ export function renderSyllabus(container) {
           </div>
 
           <div class="header-buttons">
-            <button type="button" class="btn btn-secondary" id="loadSampleSyllabusBtn">
-              Reload Sample Syllabus
+            <button type="button" class="btn btn-secondary" id="syncSyllabusBtn">
+              Sync with Server
             </button>
             <button type="button" class="btn btn-primary" id="addCustomTopicBtn">
               + Add Custom Topic
@@ -241,18 +260,21 @@ export function renderSyllabus(container) {
 
     if (addTopicBtn) addTopicBtn.addEventListener('click', openAddTopicModal);
 
-    if (reloadBtn) {
-      reloadBtn.addEventListener('click', () => {
-        Modal.open(
-          'Reload Sample Syllabus',
-          '<p>Are you sure you want to reload the official CS301 sample syllabus? All curriculum topics will be refreshed to default, while your uploaded PDFs and study history remain safely preserved.</p>',
-          () => {
-            workspaceStore.resetSyllabusData();
-            Toast.show('Official syllabus topics reloaded. Uploaded PDFs preserved.', 'success');
-            renderView();
-          },
-          'Reload Syllabus'
-        );
+    const syncBtn = container.querySelector('#syncSyllabusBtn');
+    if (syncBtn) {
+      syncBtn.addEventListener('click', async () => {
+        syncBtn.disabled = true;
+        syncBtn.textContent = 'Syncing...';
+        try {
+          await workspaceStore.syncWithBackend();
+          Toast.show('Syllabus updated from database.', 'success');
+          renderView();
+        } catch (err) {
+          Toast.show(`Sync error: ${err.message}`, 'error');
+        } finally {
+          syncBtn.disabled = false;
+          syncBtn.textContent = 'Sync with Server';
+        }
       });
     }
   }
@@ -419,7 +441,7 @@ export function renderSyllabus(container) {
           <input type="text" id="newTopicUnit" class="form-input" placeholder="e.g. Unit 6: Distributed Coordination">
         </div>
         <div class="alert-box-info text-xs">
-          <strong>Demo Behaviour:</strong> User-added topics default to <em>"No matching evidence found"</em> unless corresponding study materials are uploaded.
+          <strong>Evidence status:</strong> New topics initialize as <em>"No matching evidence found"</em> until corresponding study materials are indexed.
         </div>
       `,
       () => {

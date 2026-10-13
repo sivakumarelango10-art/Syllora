@@ -1,35 +1,138 @@
 import { getAuthToken, refreshSession } from "./supabase.js";
 
-export function getApiBase() {
-  if (typeof window !== "undefined") {
-    if (window.SYLLORA_API_BASE) {
-      return window.SYLLORA_API_BASE.replace(/\/+$/, "");
+/**
+ * Strictly approved API origin whitelist.
+ * Bearer tokens and sensitive student requests will NEVER be sent to
+ * an origin outside this list.
+ */
+export const APPROVED_API_ORIGINS = [
+  "http://127.0.0.1:8000",
+  "http://localhost:8000",
+  "http://127.0.0.1:3000",
+  "http://localhost:3000",
+  "https://syllora-seven.vercel.app"
+];
+
+/**
+ * Determine if a target URL origin is explicitly approved.
+ * Rejects arbitrary URLs, protocol-relative URLs, and unapproved external hosts.
+ * @param {string} urlString
+ * @returns {boolean}
+ */
+export function isApprovedOrigin(urlString) {
+  if (!urlString || typeof urlString !== "string") return false;
+  try {
+    if (urlString.startsWith("/") && typeof window !== "undefined") {
+      urlString = `${window.location.origin}${urlString}`;
     }
-    try {
-      const stored = localStorage.getItem("syllora_api_base");
-      if (stored) return stored.replace(/\/+$/, "");
-    } catch {}
-    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
-      return "http://127.0.0.1:8000";
+    const parsed = new URL(urlString, typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:8000");
+    const origin = parsed.origin.toLowerCase();
+    
+    // Check exact match in approved list
+    if (APPROVED_API_ORIGINS.some(allowed => allowed.toLowerCase() === origin)) {
+      return true;
     }
+    
+    // Allow configured runtime PUBLIC_API_BASE_URL if it is HTTPS or local
+    if (typeof window !== "undefined" && window.__SYLLORA_CONFIG__?.PUBLIC_API_BASE_URL) {
+      try {
+        const configuredOrigin = new URL(window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL).origin.toLowerCase();
+        if (configuredOrigin === origin) {
+          return true;
+        }
+      } catch {}
+    }
+
+    // Allow same-origin if window is defined and origin matches current page on trusted domain
+    if (typeof window !== "undefined" && window.location.origin.toLowerCase() === origin) {
+      const hostname = window.location.hostname.toLowerCase();
+      if (hostname === "localhost" || hostname === "127.0.0.1" || hostname.endsWith(".vercel.app")) {
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
   }
-  return "https://works-demographic-brake-appliances.trycloudflare.com";
 }
 
-const API_BASE = "https://works-demographic-brake-appliances.trycloudflare.com";
+/**
+ * Resolve the active API base URL.
+ * Only returns an origin if it is explicitly approved.
+ * Rejects unverified localStorage overrides or untrusted window properties.
+ * @returns {string}
+ */
+export function getApiBase() {
+  if (typeof window !== "undefined") {
+    // 0. Runtime public config injected at build/deployment
+    if (window.__SYLLORA_CONFIG__?.PUBLIC_API_BASE_URL) {
+      const candidate = window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL.replace(/\/+$/, "");
+      if (isApprovedOrigin(candidate)) {
+        return candidate;
+      }
+      console.warn("[Syllora Security] Rejected unapproved window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL:", candidate);
+    }
+
+    // 1. Explicit window property, only if validated against approved list
+    if (window.SYLLORA_API_BASE && typeof window.SYLLORA_API_BASE === "string") {
+      const candidate = window.SYLLORA_API_BASE.replace(/\/+$/, "");
+      if (isApprovedOrigin(candidate)) {
+        return candidate;
+      }
+      console.warn("[Syllora Security] Rejected unapproved window.SYLLORA_API_BASE:", candidate);
+    }
+
+    // 2. Local storage override, strictly validated against approved list
+    try {
+      const stored = localStorage.getItem("syllora_api_base");
+      if (stored) {
+        const candidate = stored.replace(/\/+$/, "");
+        if (isApprovedOrigin(candidate)) {
+          return candidate;
+        }
+        console.warn("[Syllora Security] Ignored unapproved localStorage syllora_api_base:", candidate);
+      }
+    } catch {}
+
+    // 3. Localhost development environment default
+    const hostname = window.location.hostname;
+    if (hostname === "localhost" || hostname === "127.0.0.1") {
+      return "http://127.0.0.1:8000";
+    }
+
+    // 4. Hosted production default
+    if (hostname.endsWith(".vercel.app") || isApprovedOrigin(window.location.origin)) {
+      return window.location.origin;
+    }
+  }
+
+  // Fallback for Node/SSR environments or default local dev
+  return "http://127.0.0.1:8000";
+}
 
 async function request(path, options = {}) {
+  const activeBase = getApiBase();
+
+  // Validate origin before sending any payload or token
+  if (!isApprovedOrigin(activeBase)) {
+    throw new Error(`Security Exception: API base origin '${activeBase}' is not in the approved whitelist.`);
+  }
+
   const headers = new Headers(options.headers || {});
   let token = getAuthToken();
   if (token && !headers.has("Authorization")) {
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const activeBase = getApiBase();
-  let response = await fetch(`${activeBase}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+  try {
+    response = await fetch(`${activeBase}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch (netErr) {
+    throw new Error(`Network error communicating with API (${activeBase}): ${netErr.message || 'Connection failed'}`);
+  }
 
   // If 401 Unauthorized, attempt session refresh once without entering an infinite loop
   if (response.status === 401 && token && !options._isRetry) {

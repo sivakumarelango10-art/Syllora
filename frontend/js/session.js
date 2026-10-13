@@ -11,15 +11,31 @@ import { signOut, SUPABASE_CONFIG, getCurrentUser, getAuthToken } from './servic
 
 const DEMO_SESSION_KEY = 'syllora_demo_user';
 
+// One-time legacy cleanup: remove any stale demo session to prevent silent demo login
+if (typeof window !== 'undefined') {
+  try {
+    if (localStorage.getItem(DEMO_SESSION_KEY)) {
+      localStorage.removeItem(DEMO_SESSION_KEY);
+      console.info('[SessionAdapter] Legacy demo session cleared from storage.');
+    }
+  } catch (e) {}
+}
+
 export const sessionAdapter = {
   /**
-   * Determine if the active session is an offline demo session
+   * Demo authentication is strictly disabled across development and production
+   * @returns {boolean}
+   */
+  isDemoAllowed() {
+    return false;
+  },
+
+  /**
+   * Determine if the active session is an offline demo session (always false)
    * @returns {boolean}
    */
   isDemoSession() {
-    if (this.getSupabaseUser()) return false;
-    const demo = this._getRawDemoUser();
-    return !!(demo && demo.isDemo);
+    return false;
   },
 
   /**
@@ -44,94 +60,44 @@ export const sessionAdapter = {
       email: sbUser.email,
       role: meta.role || 'Student',
       program: meta.program || 'Academic Studies',
-      graduationYear: meta.graduation_year || '2027',
+      graduationYear: meta.graduation_year || '',
       avatarText: initials,
-      activeCourseId: 'cs301',
-      dailyGoalMinutes: 45,
-      notificationsEnabled: true,
+      activeCourseId: null,
+      dailyGoalMinutes: meta.daily_goal_minutes || 45,
+      notificationsEnabled: meta.notifications_enabled ?? true,
       isDemo: false
     };
   },
 
   /**
-   * Internal helper: read raw demo session from localStorage
-   */
-  _getRawDemoUser() {
-    try {
-      const data = localStorage.getItem(DEMO_SESSION_KEY);
-      if (data) {
-        return JSON.parse(data);
-      }
-    } catch (e) {
-      console.warn('[SessionAdapter] Storage read error:', e);
-    }
-    return null;
-  },
-
-  /**
-   * Get active user: real Supabase student if signed in, demo user if demo mode active
+   * Get authenticated user
    */
   getUser() {
-    const supabaseUser = this.getSupabaseUser();
-    if (supabaseUser) {
-      return supabaseUser;
-    }
-    const demo = this._getRawDemoUser();
-    if (demo) {
-      return { ...demo, isDemo: true };
-    }
-    return null;
+    return this.getSupabaseUser();
   },
 
   /**
-   * Backward-compatible alias for existing views (e.g. shell, overview, settings)
+   * Backward-compatible alias for existing views
    */
   getDemoUser() {
     return this.getUser();
   },
 
   /**
-   * Create or update demo session (local dev only)
+   * Demo user creation is strictly disabled
    */
-  loginDemoUser(user = {}) {
-    const defaultUser = {
-      name: 'Prajith P',
-      email: 'demo@syllora.com',
-      role: 'CS Undergrad',
-      program: 'B.Tech Computer Science & Engineering',
-      graduationYear: '2027',
-      avatarText: 'PP',
-      activeCourseId: 'cs301',
-      dailyGoalMinutes: 45,
-      notificationsEnabled: true,
-      isDemo: true
-    };
-
-    const sessionUser = { ...defaultUser, ...user, isDemo: true, loggedInAt: new Date().toISOString() };
-    try {
-      localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(sessionUser));
-    } catch (e) {
-      console.warn('[SessionAdapter] Storage write error:', e);
-    }
-    return sessionUser;
+  loginDemoUser() {
+    console.warn('[SessionAdapter] loginDemoUser is disabled. Use genuine Supabase Auth.');
+    return null;
   },
 
   /**
    * Update profile info for active user
    */
   updateProfile(updates) {
-    if (this.isDemoSession()) {
-      const current = this._getRawDemoUser() || {};
-      const updated = { ...current, ...updates };
-      try {
-        localStorage.setItem(DEMO_SESSION_KEY, JSON.stringify(updated));
-      } catch (e) {
-        console.warn('[SessionAdapter] Storage write error:', e);
-      }
-      return updated;
-    }
-    // For real Supabase user, return updated merged user representation
-    return { ...this.getSupabaseUser(), ...updates };
+    const user = this.getSupabaseUser();
+    if (!user) return null;
+    return { ...user, ...updates };
   },
 
   /**
@@ -145,24 +111,14 @@ export const sessionAdapter = {
     try {
       signOut();
     } catch (e) {}
-    // Navigate back to login
     window.location.hash = '#/login';
   },
 
   /**
-   * Check if a verified session or demo user is currently active
+   * Check if a verified session is currently active
    */
   isAuthenticated() {
-    // 1. Real Supabase session with token
     const token = getAuthToken();
-    if (token && this.getSupabaseUser()) {
-      return true;
-    }
-    // 2. Demo mode active
-    const demo = this._getRawDemoUser();
-    if (demo && demo.isDemo) {
-      return true;
-    }
-    return false;
+    return Boolean(token && this.getSupabaseUser());
   }
 };

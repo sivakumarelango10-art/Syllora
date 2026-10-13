@@ -10,6 +10,7 @@ import { workspaceStore } from '../state.js';
 import { router } from '../router.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Modal, Toast } from '../components/modal.js';
+import { sylloraApi } from '../services/aiApi.js';
 
 export function renderMisconceptions(container) {
   let searchQuery = '';
@@ -17,12 +18,12 @@ export function renderMisconceptions(container) {
 
   function getFilteredIssues() {
     const state = workspaceStore.getState();
-    let issues = [...state.misconceptions];
+    let issues = [...(state.misconceptions || [])];
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase().trim();
       if (q) {
-        issues = issues.filter(i => i.topicTitle.toLowerCase().includes(q) || i.observedIssue.toLowerCase().includes(q));
+        issues = issues.filter(i => (i.topicTitle || '').toLowerCase().includes(q) || (i.observedIssue || '').toLowerCase().includes(q));
       }
     }
 
@@ -34,6 +35,20 @@ export function renderMisconceptions(container) {
   }
 
   function renderCardsHTML(issues) {
+    const totalCount = (workspaceStore.getState().misconceptions || []).length;
+    if (totalCount === 0) {
+      return `
+        <div class="card empty-state-box" style="padding: 48px 24px; text-align: center;">
+          <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#64748B" stroke-width="1.5" style="margin: 0 auto 16px;">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          <h3>No misconceptions recorded</h3>
+          <p style="color: var(--color-text-muted); margin-bottom: 20px;">When you check your understanding on syllabus topics, any identified reasoning gaps will automatically appear here with corrective source citations.</p>
+          <a href="#/app/understanding" class="btn btn-primary">Check Understanding</a>
+        </div>
+      `;
+    }
+
     if (issues.length === 0) {
       return `
         <div class="card empty-state-box">
@@ -229,7 +244,8 @@ export function renderMisconceptions(container) {
 
         const nextStatus = item.status === 'Student-marked complete' ? 'Open' : 'Student-marked complete';
         workspaceStore.updateMisconceptionStatus(miscId, nextStatus);
-        Toast.show(nextStatus === 'Student-marked complete' ? 'Issue marked complete by student.' : 'Issue reopened for review.', 'info');
+        sylloraApi.updateMisconception(miscId, { status: nextStatus }).catch(e => console.debug('[Misconception] Backend sync deferred:', e));
+        Toast.show(nextStatus === 'Student-marked complete' ? 'Issue marked complete.' : 'Issue reopened for review.', 'info');
         updateMount();
       });
     });

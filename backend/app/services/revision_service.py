@@ -9,7 +9,11 @@ from app.repositories.academic_repository import get_academic_repository
 
 class RevisionService:
     def __init__(self, repo=None):
-        self.repo = repo or get_academic_repository()
+        self._repo = repo
+
+    @property
+    def repo(self):
+        return self._repo or get_academic_repository()
 
     def generate_revision_plan(
         self, user_id: str, days_ahead: int = 7, daily_study_minutes: int | None = None

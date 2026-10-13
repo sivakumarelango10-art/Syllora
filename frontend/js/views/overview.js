@@ -32,8 +32,8 @@ function escapeHtml(str) {
 export function renderOverview(container) {
   const state = workspaceStore.getState();
   const stats = workspaceStore.getStats();
-  const user = sessionAdapter.getDemoUser() || { name: 'Prajith P' };
-  const firstName = (user.name || 'Prajith').split(' ')[0];
+  const user = sessionAdapter.getUser() || { name: 'Student' };
+  const firstName = (user.name || 'Student').split(' ')[0];
 
   // Dynamic time-of-day greeting
   const now = new Date();
@@ -45,18 +45,20 @@ export function renderOverview(container) {
     timeGreeting = 'Good evening';
   }
 
-  // 4 Top/Relevant Topics for the Syllabus at a glance preview
-  const previewTopics = state.topics.slice(0, 4);
+  // Top/Relevant Topics for the Syllabus at a glance preview
+  const previewTopics = (state.topics || []).slice(0, 4);
 
   // Recent study materials (up to 3)
-  const recentDocs = state.documents.filter(d => !d.isComparisonOnly).slice(0, 3);
+  const recentDocs = (state.documents || []).filter(d => !d.isComparisonOnly).slice(0, 3);
 
   // Active misconception for Continue Learning
-  const activeMisconception = state.misconceptions.find(m => m.status !== 'Student-marked complete') || state.misconceptions[0];
-  let continueSourceDocName = 'OS_Lecture_Notes.pdf';
+  const activeMisconception = (state.misconceptions || []).find(m => m.status !== 'Student-marked complete');
+  let continueSourceDocName = '';
   if (activeMisconception && activeMisconception.sourceCitations && activeMisconception.sourceCitations.length > 0) {
-    continueSourceDocName = activeMisconception.sourceCitations[0].documentTitle;
+    continueSourceDocName = activeMisconception.sourceCitations[0].documentTitle || '';
   }
+
+  const courseDisplayName = state.course ? state.course.name : 'No course selected';
 
   container.innerHTML = `
     <div class="view-overview-page">
@@ -76,14 +78,14 @@ export function renderOverview(container) {
             Upload materials
           </button>
 
-          <button type="button" class="course-badge-btn" id="overviewCourseBtn" aria-label="Course selection: Operating Systems">
+          <button type="button" class="course-badge-btn" id="overviewCourseBtn" aria-label="Course selection: ${escapeHtml(courseDisplayName)}">
             <span class="course-badge-icon">
               <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                 <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                 <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
               </svg>
             </span>
-            <span>Operating Systems</span>
+            <span>${escapeHtml(courseDisplayName)}</span>
             <svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
               <path d="M6 8l4 4 4-4"/>
             </svg>
@@ -194,7 +196,7 @@ export function renderOverview(container) {
                   </tr>
                 </thead>
                 <tbody>
-                  ${previewTopics.map(t => {
+                  ${previewTopics.length > 0 ? previewTopics.map(t => {
                     let evPill = 'pill-gray';
                     let evLabel = t.evidenceStatus;
                     if (t.evidenceStatus === 'Evidence found') {
@@ -231,7 +233,13 @@ export function renderOverview(container) {
                         </td>
                       </tr>
                     `;
-                  }).join('')}
+                  }).join('') : `
+                    <tr>
+                      <td colspan="4" style="text-align: center; padding: 24px; color: #64748B;">
+                        No syllabus topics yet. <a href="#/app/syllabus" class="link-action-teal">Create a topic</a> to start tracking your syllabus.
+                      </td>
+                    </tr>
+                  `}
                 </tbody>
               </table>
             </div>
@@ -265,16 +273,20 @@ export function renderOverview(container) {
               <h3 class="understanding-card-title">Check your understanding</h3>
               <p class="understanding-card-sub">Explain a concept in your own words.</p>
 
-              <span class="try-example-label">Try an example:</span>
-              <button type="button" class="try-example-pill-btn" id="overviewExampleCheckBtn" data-topic-id="top-3">
-                <span class="example-icon">
-                  <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor">
-                    <path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.414A2 2 0 0017.414 6L13.586 2.172A2 2 0 0012.172 2H4z"/>
-                  </svg>
-                </span>
-                <span class="example-text">Deadlock vs. starvation</span>
-                <span class="example-chevron">&rsaquo;</span>
-              </button>
+              ${state.topics && state.topics.length > 0 ? `
+                <span class="try-example-label">Try an example:</span>
+                <button type="button" class="try-example-pill-btn" id="overviewExampleCheckBtn" data-topic-id="${state.topics[0].id}">
+                  <span class="example-icon">
+                    <svg viewBox="0 0 20 20" width="16" height="16" fill="currentColor">
+                      <path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.414A2 2 0 0017.414 6L13.586 2.172A2 2 0 0012.172 2H4z"/>
+                    </svg>
+                  </span>
+                  <span class="example-text">${escapeHtml(state.topics[0].title)}</span>
+                  <span class="example-chevron">&rsaquo;</span>
+                </button>
+              ` : `
+                <p class="text-xs text-muted mt-2">Add topics in Syllabus Map to check understanding.</p>
+              `}
             </div>
 
             <button type="button" class="btn btn-primary overview-start-check-btn" id="overviewStartCheckBtn">
@@ -309,7 +321,7 @@ export function renderOverview(container) {
             </div>
 
             <div class="recent-docs-stack">
-              ${recentDocs.map(doc => {
+              ${recentDocs.length > 0 ? recentDocs.map(doc => {
                 const pageLabel = doc.pageCount ? `PDF • ${doc.pageCount} pages` : 'PDF • Page count unavailable';
                 return `
                   <div class="recent-doc-row" data-doc-id="${doc.id}">
@@ -326,7 +338,12 @@ export function renderOverview(container) {
                     </button>
                   </div>
                 `;
-              }).join('')}
+              }).join('') : `
+                <div class="recent-docs-empty" style="text-align: center; padding: 24px 16px; color: #64748B;">
+                  <p style="margin-bottom: 12px; font-size: 14px;">No study materials uploaded yet.</p>
+                  <button type="button" class="btn btn-outline btn-sm" id="overviewEmptyUploadBtn">Upload a PDF</button>
+                </div>
+              `}
             </div>
           </div>
 
@@ -411,6 +428,13 @@ export function renderOverview(container) {
     const uploadBtn = container.querySelector('#overviewUploadBtn');
     if (uploadBtn) {
       uploadBtn.addEventListener('click', () => {
+        openUploadModal(() => renderOverview(container));
+      });
+    }
+
+    const emptyUploadBtn = container.querySelector('#overviewEmptyUploadBtn');
+    if (emptyUploadBtn) {
+      emptyUploadBtn.addEventListener('click', () => {
         openUploadModal(() => renderOverview(container));
       });
     }
@@ -534,7 +558,7 @@ export function renderOverview(container) {
         }
       })
       .catch(err => {
-        console.debug('[Overview] Live dashboard summary fallback to local fixtures:', err);
+        console.debug('[Overview] Live dashboard summary unavailable:', err);
       });
   }
 }

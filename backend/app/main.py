@@ -9,13 +9,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal
 
-try:
-    from dotenv import load_dotenv
-    _backend_dir = Path(__file__).resolve().parent.parent
-    load_dotenv(_backend_dir / ".env")
-    load_dotenv(_backend_dir.parent / ".env.local")
-except Exception:
-    pass
+from app.config import (
+    APP_NAME,
+    CORS_ALLOWED_ORIGINS,
+    MAX_CHUNKS_PER_DOCUMENT,
+    MAX_PDF_PAGES,
+    MAX_UPLOAD_BYTES,
+    OLLAMA_MODEL,
+    validate_environment,
+)
 
 import httpx
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -23,7 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user_id
-from app.rate_limiter import ai_rate_limiter, standard_rate_limiter
+from app.rate_limiter import ai_rate_limiter, standard_rate_limiter, inference_concurrency_guard
 from app.rag.pdf_processing import PdfProcessingError, extract_pdf_chunks
 from app.rag.search import SearchMode, has_sufficient_evidence, invalidate_index_cache, search_passages
 from app.rag.store import UPLOAD_DIR, count_chunks, delete_document as delete_document_record
@@ -53,11 +55,6 @@ from app.api.v1 import (
     settings_router,
 )
 
-APP_NAME = "Syllora AI Backend"
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
-MAX_UPLOAD_BYTES = int(os.getenv("SYLLORA_MAX_UPLOAD_MB", "20")) * 1024 * 1024
-MAX_PDF_PAGES = int(os.getenv("SYLLORA_MAX_PDF_PAGES", "500"))
-MAX_CHUNKS_PER_DOCUMENT = int(os.getenv("SYLLORA_MAX_CHUNKS_PER_DOCUMENT", "1200"))
 INSUFFICIENT_EVIDENCE_MESSAGE = (
     "I couldn't find enough evidence in the uploaded materials to answer this reliably. "
     "Try uploading the relevant lecture notes or textbook section."
@@ -66,21 +63,15 @@ INSUFFICIENT_EVIDENCE_MESSAGE = (
 app = FastAPI(
     title=APP_NAME,
     description=(
-        "Local Syllora API for Ollama, PDF ingestion, precomputed passage embeddings, "
-        "keyword/semantic retrieval, and answers grounded in uploaded study documents."
+        "Syllora Academic Platform API for Ollama, PDF ingestion, vector retrieval, "
+        "and verified curriculum progress."
     ),
-    version="0.2.1",
+    version="1.0.0",
 )
 
-# Local-development origins only. Do not expose this unauthenticated prototype publicly.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", "http://127.0.0.1:3000",
-        "http://localhost:5173", "http://127.0.0.1:5173",
-        "http://localhost:8080", "http://127.0.0.1:8080",
-        "https://syllora-seven.vercel.app",
-    ],
+    allow_origins=CORS_ALLOWED_ORIGINS,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization"],
@@ -176,8 +167,17 @@ def _get_storage():
 
 
 @app.get("/health", tags=["health"])
-async def health() -> dict[str, str]:
-    return {"status": "ok", "service": APP_NAME, "version": app.version}
+async def health() -> dict[str, Any]:
+    env_status = validate_environment()
+    return {
+        "status": "ok" if env_status["valid"] else "degraded",
+        "service": APP_NAME,
+        "version": app.version,
+        "environment": env_status["app_env"],
+        "database_provider": env_status["db_provider"],
+        "storage_provider": env_status["storage_provider"],
+        "require_auth": env_status["require_auth"],
+    }
 
 
 @app.get("/api/v1/llm/status", tags=["llm"])
@@ -234,19 +234,20 @@ async def test_llm(request: ModelTestRequest, http_request: Request) -> ModelTes
     user_id = get_current_user_id(http_request)
     ai_rate_limiter.check(user_id)
     try:
-        answer = await chat_completion(
-            OLLAMA_MODEL,
-            [
-                {"role": "system", "content": (
-                    "You are Syllora, a clear and concise academic study assistant. "
-                    "This is a general model connectivity test; no study documents were provided. "
-                    "Do not claim to cite or have read uploaded materials."
-                )},
-                {"role": "user", "content": request.message},
-            ],
-            temperature=0.2,
-            num_ctx=4096,
-        )
+        async with inference_concurrency_guard():
+            answer = await chat_completion(
+                OLLAMA_MODEL,
+                [
+                    {"role": "system", "content": (
+                        "You are Syllora, a clear and concise academic study assistant. "
+                        "This is a general model connectivity test; no study documents were provided. "
+                        "Do not claim to cite or have read uploaded materials."
+                    )},
+                    {"role": "user", "content": request.message},
+                ],
+                temperature=0.2,
+                num_ctx=4096,
+            )
     except OllamaServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     return ModelTestResponse(model=OLLAMA_MODEL, answer=answer)
@@ -272,6 +273,17 @@ async def upload_document(
     if Path(display_filename).suffix.casefold() != ".pdf":
         raise HTTPException(status_code=415, detail="Only PDF files are supported in this phase.")
 
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_UPLOAD_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File is too large. The current upload limit is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
+                )
+        except ValueError:
+            pass
+
     pdf_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(pdf_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(
@@ -293,9 +305,10 @@ async def upload_document(
     chunk_texts = [chunk.text for chunk in pdf_chunks]
     try:
         vectors: list[list[float]] = []
-        # Batches keep request payloads bounded and use the batched Ollama API when available.
-        for start in range(0, len(chunk_texts), 32):
-            vectors.extend(await embed_texts(chunk_texts[start:start + 32], purpose="document", model=embedding_model))
+        async with inference_concurrency_guard():
+            # Batches keep request payloads bounded and use the batched Ollama API when available.
+            for start in range(0, len(chunk_texts), 32):
+                vectors.extend(await embed_texts(chunk_texts[start:start + 32], purpose="document", model=embedding_model))
     except OllamaServiceError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
@@ -476,12 +489,13 @@ async def ask_from_documents(request: AskRequest, http_request: Request) -> dict
     )
     user_prompt = f"QUESTION:\n{request.question}\n\nRETRIEVED STUDY PASSAGES:\n{context}\n\nAnswer with source labels such as [S1]."
     try:
-        answer = await chat_completion(
-            OLLAMA_MODEL,
-            [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-            temperature=0.1,
-            num_ctx=4096,
-        )
+        async with inference_concurrency_guard():
+            answer = await chat_completion(
+                OLLAMA_MODEL,
+                [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                temperature=0.1,
+                num_ctx=4096,
+            )
     except OllamaServiceError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 

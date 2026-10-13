@@ -5,14 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-try:
-    from dotenv import load_dotenv
-    _backend_dir = Path(__file__).resolve().parents[2]
-    load_dotenv(_backend_dir / ".env")
-    load_dotenv(_backend_dir.parent / ".env.local")
-except Exception:
-    pass
-
+from app.config import DATABASE_URL, DB_PATH, DB_PROVIDER
 from app.db.base import DatabaseAdapter, DEFAULT_DEMO_USER_ID
 from app.db.sqlite_adapter import SQLiteAdapter
 
@@ -28,21 +21,19 @@ def get_db_adapter(force_reload: bool = False) -> DatabaseAdapter:
     provider = os.getenv("SYLLORA_DB_PROVIDER", "sqlite").strip().lower()
 
     if provider in ("sqlite", ""):
-        backend_dir = Path(__file__).resolve().parents[2]
-        db_path = Path(
-            os.getenv("SYLLORA_DB_PATH", str(backend_dir / "data" / "indexes" / "syllora.sqlite3"))
-        )
+        db_path_env = os.getenv("SYLLORA_DB_PATH")
+        db_path = Path(db_path_env) if db_path_env else DB_PATH
         adapter = SQLiteAdapter(db_path)
     elif provider in ("postgres", "postgresql", "supabase"):
-        database_url = os.getenv("DATABASE_URL", "").strip()
-        if not database_url:
+        db_url = os.getenv("DATABASE_URL", "").strip()
+        if not db_url:
             raise ValueError(
                 "SYLLORA_DB_PROVIDER is set to 'postgres', but DATABASE_URL environment variable is missing. "
-                "Set DATABASE_URL (e.g., postgresql://postgres:password@127.0.0.1:54322/postgres) or switch to SYLLORA_DB_PROVIDER=sqlite."
+                "Set DATABASE_URL or switch to SYLLORA_DB_PROVIDER=sqlite."
             )
         from app.db.postgres_adapter import PostgresAdapter
 
-        adapter = PostgresAdapter(database_url)
+        adapter = PostgresAdapter(db_url)
     else:
         raise ValueError(
             f"Unsupported SYLLORA_DB_PROVIDER: '{provider}'. "

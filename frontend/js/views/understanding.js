@@ -25,6 +25,28 @@ export function renderUnderstanding(container, queryParams = {}) {
   let scenarioSubmitted = false;
 
   function renderView() {
+    if (!state.topics || state.topics.length === 0) {
+      container.innerHTML = `
+        <div class="view-understanding-page">
+          <header class="page-header-row">
+            <div class="header-text">
+              <h1 class="page-title">Check Your Understanding</h1>
+              <p class="page-desc">Explain key concepts in your own words, receive rubric-grounded feedback, and test edge scenarios.</p>
+            </div>
+          </header>
+          <div class="card empty-state-box" style="padding: 48px 24px; text-align: center;">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#64748B" stroke-width="1.5" style="margin: 0 auto 16px;">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            <h3>No syllabus topics available</h3>
+            <p style="color: var(--color-text-muted); margin-bottom: 20px;">To check your understanding and receive AI-guided rubric feedback, create topics in your Syllabus Map first.</p>
+            <a href="#/app/syllabus" class="btn btn-primary">Go to Syllabus Map</a>
+          </div>
+        </div>
+      `;
+      return;
+    }
+
     const topic = state.topics.find(t => t.id === selectedTopicId) || state.topics[0];
 
     container.innerHTML = `
@@ -61,29 +83,13 @@ export function renderUnderstanding(container, queryParams = {}) {
                 <span class="pill-badge pill-amber">${topic.understandingStatus}</span>
               </div>
 
-              <h2 class="prompt-question-title">
-                ${topic.id === 'top-3' ?
-                  'In 2–3 sentences, explain why starvation can occur in an operating system even when zero deadlocks exist.' :
-                  `Explain the fundamental requirements and operating system implications of: ${topic.title}.`}
+              <h2 class="prompt-question-title" id="understandingQuestionTitle">
+                Explain the fundamental requirements and operating system implications of: ${escapeHtml(topic.title)}.
               </h2>
 
               <p class="prompt-guidance">
-                Focus on resource allocation graphs, circular dependencies, and scheduler priority queue behaviors.
+                Explain the concept in your own words. Focus on core mechanisms, trade-offs, and operating system implications.
               </p>
-
-              <!-- Quick fill sample chips for evaluation testing -->
-              <div class="sample-explanation-row">
-                <span class="text-xs text-muted">Test sample inputs:</span>
-                <button type="button" class="btn-sample-fill fill-incorrect" id="fillIncorrectBtn">
-                  Incorrect explanation
-                </button>
-                <button type="button" class="btn-sample-fill fill-partial" id="fillPartialBtn">
-                  Partial explanation
-                </button>
-                <button type="button" class="btn-sample-fill fill-exemplary" id="fillExemplaryBtn">
-                  Exemplary explanation
-                </button>
-              </div>
 
               <!-- Input Area -->
               <div class="explanation-input-wrap">
@@ -221,14 +227,6 @@ export function renderUnderstanding(container, queryParams = {}) {
               </div>
             </div>
 
-            <!-- Notice Card -->
-            <div class="card demo-eval-notice">
-              <h5>Frontend Demonstration Notice</h5>
-              <p class="text-xs text-muted">
-                Rubric checks run deterministic pattern analysis for the supported Operating Systems modules. Automatic review does not claim official course grading.
-              </p>
-            </div>
-
           </div>
 
         </div>
@@ -237,63 +235,6 @@ export function renderUnderstanding(container, queryParams = {}) {
     `;
 
     bindEvents();
-  }
-
-  function evaluateExplanation(text) {
-    const lower = text.toLowerCase();
-
-    // Check for Exemplary
-    if ((lower.includes('circular') || lower.includes('cyclic')) && lower.includes('starvation') && (lower.includes('priority') || lower.includes('postponement'))) {
-      return {
-        score: 3,
-        headline: 'Exemplary Understanding Demonstrated',
-        rubric: {
-          conceptualAccuracy: 'Accurately distinguishes circular dependency from scheduling postponement.',
-          essentialPoints: 'Identified all key criteria: circular wait, independent progress, priority starvation.',
-          reasoning: 'Cohesive, precise explanation linking system state to scheduler behavior.'
-        },
-        missingPoints: [],
-        possibleMisconceptions: []
-      };
-    }
-
-    // Check for Partial
-    if (lower.includes('wait') && (lower.includes('priority') || lower.includes('starvation'))) {
-      return {
-        score: 2,
-        headline: 'Partial Understanding (Missing Formal Conditions)',
-        rubric: {
-          conceptualAccuracy: 'Recognizes priority scheduling delay, but lacks formal Coffman circular wait criteria.',
-          essentialPoints: 'Mentioned thread waiting and priority, missed circular dependency definition.',
-          reasoning: 'Adequate intuitive reasoning; needs rigorous operating system terminology.'
-        },
-        missingPoints: [
-          'State that deadlock is a closed cyclic waiting graph where throughput drops to zero.',
-          'Explain that in starvation, other non-starving processes continue executing normally.'
-        ],
-        possibleMisconceptions: [
-          'Treating thread latency as equivalent to deadlock.'
-        ]
-      };
-    }
-
-    // Default to Incorrect / Superficial
-    return {
-      score: 1,
-      headline: 'Conceptual Revision Needed',
-      rubric: {
-        conceptualAccuracy: 'Conflates circular deadlock with scheduling starvation.',
-        essentialPoints: 'Missed both circular waiting requirements and priority postponement.',
-        reasoning: 'Superficial comparison based only on symptom of thread waiting.'
-      },
-      missingPoints: [
-        'A deadlock requires a cyclic dependency among processes holding resources.',
-        'Starvation is indefinite postponement caused by priority scheduling where higher-priority tasks continue executing.'
-      ],
-      possibleMisconceptions: [
-        'Believing thread waiting always means the system is in deadlock.'
-      ]
-    };
   }
 
   function bindEvents() {
@@ -318,57 +259,61 @@ export function renderUnderstanding(container, queryParams = {}) {
       });
     }
 
-    // Quick fill sample buttons
-    const fillIncorrect = container.querySelector('#fillIncorrectBtn');
-    const fillPartial = container.querySelector('#fillPartialBtn');
-    const fillExemplary = container.querySelector('#fillExemplaryBtn');
-
-    if (fillIncorrect) {
-      fillIncorrect.addEventListener('click', () => {
-        explanationInputText = 'Deadlock and starvation are basically the same thing because both make threads stop running forever.';
-        workspaceStore.saveDraft(`und_${selectedTopicId}`, explanationInputText);
-        if (textarea) textarea.value = explanationInputText;
-        if (charCounter) charCounter.textContent = `${explanationInputText.length} characters`;
-      });
-    }
-
-    if (fillPartial) {
-      fillPartial.addEventListener('click', () => {
-        explanationInputText = 'Starvation is when a low-priority thread waits a long time because high-priority threads keep jumping ahead, while deadlock is when threads are waiting on each other.';
-        workspaceStore.saveDraft(`und_${selectedTopicId}`, explanationInputText);
-        if (textarea) textarea.value = explanationInputText;
-        if (charCounter) charCounter.textContent = `${explanationInputText.length} characters`;
-      });
-    }
-
-    if (fillExemplary) {
-      fillExemplary.addEventListener('click', () => {
-        explanationInputText = 'Deadlock is a circular waiting state where none of the involved threads can ever proceed because each holds a resource the other needs. Starvation is indefinite postponement where resources are continually being allocated to higher-priority threads, leaving a runnable thread perpetually waiting without circular dependency.';
-        workspaceStore.saveDraft(`und_${selectedTopicId}`, explanationInputText);
-        if (textarea) textarea.value = explanationInputText;
-        if (charCounter) charCounter.textContent = `${explanationInputText.length} characters`;
-      });
-    }
-
-    // Submit explanation
+    // Submit explanation using genuine academic AI service
     const submitBtn = container.querySelector('#submitExplanationBtn');
     if (submitBtn) {
-      submitBtn.addEventListener('click', () => {
+      submitBtn.addEventListener('click', async () => {
         const text = (textarea ? textarea.value : explanationInputText).trim();
         if (!text) {
           Toast.show('Please enter an explanation before submitting.', 'error');
-          textarea.focus();
+          if (textarea) textarea.focus();
           return;
         }
 
-        activeEvaluation = evaluateExplanation(text);
-        renderView();
+        const topic = state.topics.find(t => t.id === selectedTopicId) || state.topics[0];
+        const questionEl = container.querySelector('#understandingQuestionTitle');
+        const questionText = questionEl ? questionEl.textContent.trim() : `Explain ${topic.title}`;
 
-        // Scroll evaluation card into view
-        setTimeout(() => {
-          const evalCard = container.querySelector('#evaluationResultCard');
-          if (evalCard) evalCard.scrollIntoView({ behavior: 'smooth' });
-        }, 80);
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Evaluating with Syllora AI...';
+
+        try {
+          const evalRes = await sylloraApi.evaluateUnderstanding(topic.id, questionText, text);
+          activeEvaluation = {
+            score: evalRes.score || 1,
+            headline: evalRes.score >= 3 ? 'Exemplary Understanding Demonstrated' : evalRes.score === 2 ? 'Partial Understanding (Revisions Recommended)' : 'Conceptual Revision Needed',
+            rubric: {
+              conceptualAccuracy: evalRes.rubric?.conceptual_accuracy || evalRes.rubric?.conceptualAccuracy || (evalRes.feedback || 'Evaluated against academic rubric.'),
+              essentialPoints: evalRes.rubric?.essential_points || evalRes.rubric?.essentialPoints || 'Essential points checked against syllabus.',
+              reasoning: evalRes.rubric?.reasoning || 'Evaluated for consistency.'
+            },
+            missingPoints: evalRes.missing_points || evalRes.missingPoints || [],
+            possibleMisconceptions: evalRes.possible_misconceptions || [],
+            feedback: evalRes.feedback || ''
+          };
+
+          // Record attempt in persistent workspace store
+          workspaceStore.addUnderstandingAttempt({
+            id: evalRes.attempt_id || `att-${Date.now()}`,
+            topicId: topic.id,
+            topicTitle: topic.title,
+            score: activeEvaluation.score,
+            headline: activeEvaluation.headline,
+            feedback: activeEvaluation.feedback
+          });
+
+          renderView();
+
+          setTimeout(() => {
+            const evalCard = container.querySelector('#evaluationResultCard');
+            if (evalCard) evalCard.scrollIntoView({ behavior: 'smooth' });
+          }, 80);
+        } catch (err) {
+          Toast.show(`AI evaluation failed: ${err.message || 'Service unavailable'}`, 'error');
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Submit Explanation for Feedback';
+        }
       });
     }
 

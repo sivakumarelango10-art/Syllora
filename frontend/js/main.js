@@ -9,6 +9,7 @@
 
 import { router } from './router.js';
 import { sessionAdapter } from './session.js';
+import { workspaceStore } from './state.js';
 import { AppShell } from './components/shell.js';
 import { Toast } from './components/modal.js';
 import { signInWithPassword, signOut, getAuthToken, getCurrentUser } from './services/supabase.js';
@@ -188,39 +189,14 @@ window.sylloraAuthenticate = async function (email, password) {
   const cleanEmail = (email || '').trim();
   const cleanPassword = password || '';
 
-  // 1. Explicit demo account check
-  // Permitted ONLY in explicit local development or local file environments
-  const isLocalDev = (
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1' ||
-    window.location.hostname === '' ||
-    window.location.protocol === 'file:'
-  );
-
-  if (cleanEmail.toLowerCase() === 'demo@syllora.com' && (cleanPassword === 'password123' || cleanPassword === 'demo123')) {
-    if (isLocalDev) {
-      return {
-        success: true,
-        isDemo: true,
-        user: {
-          name: 'Prajith P',
-          email: 'demo@syllora.com',
-          role: 'CS Undergrad',
-          program: 'B.Tech Computer Science & Engineering',
-          graduationYear: '2027',
-          avatarText: 'PP',
-          activeCourseId: 'cs301'
-        }
-      };
-    } else {
-      return {
-        success: false,
-        error: 'Demo accounts are only permitted in local development mode.'
-      };
-    }
+  if (!cleanEmail || !cleanPassword) {
+    return {
+      success: false,
+      error: 'Please enter both email and password.'
+    };
   }
 
-  // 2. Real Supabase Auth via signInWithPassword
+  // Genuine Supabase Auth via signInWithPassword
   try {
     const { data, error } = await signInWithPassword(cleanEmail, cleanPassword);
     if (error || !data || !data.session) {
@@ -261,7 +237,7 @@ window.sylloraAuthenticate = async function (email, password) {
         role: meta.role || 'Student',
         program: meta.program || 'Academic Studies',
         avatarText: initials,
-        activeCourseId: 'cs301'
+        activeCourseId: null
       }
     };
   } catch (err) {
@@ -275,13 +251,12 @@ window.sylloraAuthenticate = async function (email, password) {
 
 // Global hook to transition from login into workspace
 window.sylloraEnterWorkspace = function (authResult) {
-  if (authResult && authResult.success) {
-    if (authResult.isDemo && authResult.user) {
-      sessionAdapter.loginDemoUser(authResult.user);
+  if ((authResult && authResult.success) || sessionAdapter.isAuthenticated()) {
+    try {
+      workspaceStore.syncWithBackend();
+    } catch (e) {
+      console.debug('[Syllora State] Initial sync error:', e);
     }
-    // For real Supabase user, session is already persisted in syllora_supabase_session
-    router.navigate('/app/overview');
-  } else if (sessionAdapter.isAuthenticated()) {
     router.navigate('/app/overview');
   } else {
     router.navigate('/login');

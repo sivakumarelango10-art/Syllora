@@ -754,13 +754,13 @@
       });
     }, 500);
 
-    // Authenticate via Supabase Auth or explicit demo credentials
+    // Authenticate exclusively via Supabase Auth
     const authStartTime = performance.now();
     const authPromise = (typeof window.sylloraAuthenticate === 'function')
       ? window.sylloraAuthenticate(email, password)
       : Promise.resolve({
-          success: (email.toLowerCase() === 'demo@syllora.com' && (password === 'password123' || password === 'demo123')),
-          error: 'Incorrect email or password.'
+          success: false,
+          error: 'Authentication service unavailable.'
         });
 
     authPromise.then((result) => {
@@ -938,13 +938,10 @@
     }, 1650);
   }
 
-  // Google SSO Click Simulation
+  // Google SSO Click Action
   googleBtn.addEventListener('click', () => {
-    emailInput.value = 'demo@syllora.com';
-    passwordInput.value = 'password123';
-    clearFieldError(emailGroup, emailError);
-    clearFieldError(passwordGroup, passwordError);
-    authForm.dispatchEvent(new Event('submit'));
+    setFieldError(emailGroup, emailError, 'Google Single Sign-On is not configured. Please sign in with your email and password.');
+    triggerErrorShake();
   });
 
   // Global Skip Listeners (Click, Tap or Keydown)

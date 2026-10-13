@@ -47,16 +47,13 @@ assert(
 );
 console.log('✓ PASS: frontend/js/main.js invokes real signInWithPassword from Supabase service');
 
-// 4. Verify main.js blocks demo accounts outside of local dev
+// 4. Verify demo accounts are completely disabled in all environments
+const sessionJsContent = fs.readFileSync(SESSION_JS_PATH, 'utf8');
 assert(
-  mainJsContent.includes("isLocalDev"),
-  'FAIL: main.js must check isLocalDev for demo mode!'
+  sessionJsContent.includes("isDemoAllowed()") && sessionJsContent.includes("return false;"),
+  'FAIL: session.js must return false for isDemoAllowed()!'
 );
-assert(
-  mainJsContent.includes("Demo accounts are only permitted in local development mode"),
-  'FAIL: main.js must reject demo logins in non-local environments!'
-);
-console.log('✓ PASS: Demo account bypass strictly restricted to local dev environment');
+console.log('✓ PASS: Demo account bypass strictly eliminated in all environments');
 
 // 5. Verify router.js route guard does NOT auto-login demo user
 const routerJsContent = fs.readFileSync(ROUTER_JS_PATH, 'utf8');
@@ -71,7 +68,6 @@ assert(
 console.log('✓ PASS: frontend/js/router.js redirects unauthenticated access to /login');
 
 // 6. Verify session.js logout clears both session keys and calls signOut
-const sessionJsContent = fs.readFileSync(SESSION_JS_PATH, 'utf8');
 assert(
   sessionJsContent.includes("signOut"),
   'FAIL: session.js must call signOut on logout!'
@@ -125,4 +121,49 @@ for (const id of requiredDomIds) {
 }
 console.log('✓ PASS: All original animation timings, easing curves, and DOM elements preserved perfectly');
 
-console.log('\nALL 9 FRONTEND INTEGRATION CHECKS PASSED SUCCESSFULLY.');
+// 10. Verify aiApi.js enforces approved origin whitelist and rejects arbitrary overrides
+assert(
+  aiApiJsContent.includes("export const APPROVED_API_ORIGINS"),
+  'FAIL: aiApi.js must define APPROVED_API_ORIGINS whitelist!'
+);
+assert(
+  aiApiJsContent.includes("isApprovedOrigin"),
+  'FAIL: aiApi.js must export isApprovedOrigin validator!'
+);
+assert(
+  aiApiJsContent.includes("Ignored unapproved localStorage syllora_api_base"),
+  'FAIL: aiApi.js must reject unapproved localStorage api base overrides!'
+);
+assert(
+  aiApiJsContent.includes("Security Exception: API base origin"),
+  'FAIL: aiApi.js must block requests to unapproved origins!'
+);
+console.log('✓ PASS: frontend/js/services/aiApi.js strictly enforces approved origin whitelist and rejects tampering');
+
+// 11. Verify supabase.js implements token structure checks, concurrent refresh mutex, and multi-tab sync
+assert(
+  supabaseJsContent.includes("export function parseJwtPayload"),
+  'FAIL: supabase.js must implement parseJwtPayload!'
+);
+assert(
+  supabaseJsContent.includes("let _refreshPromise = null"),
+  'FAIL: supabase.js must implement _refreshPromise mutex for concurrent refresh deduplication!'
+);
+assert(
+  supabaseJsContent.includes("window.addEventListener(\"storage\""),
+  'FAIL: supabase.js must listen for storage events across browser tabs!'
+);
+assert(
+  supabaseJsContent.includes("export async function verifyActiveSession"),
+  'FAIL: supabase.js must provide verifyActiveSession to validate tokens with the server!'
+);
+console.log('✓ PASS: frontend/js/services/supabase.js enforces JWT structure, concurrent mutex, and multi-tab sync');
+
+// 12. Verify session.js restricts demo mode with isDemoAllowed
+assert(
+  sessionJsContent.includes("isDemoAllowed()"),
+  'FAIL: session.js must implement isDemoAllowed to guard demo sessions!'
+);
+console.log('✓ PASS: frontend/js/session.js gates demo mode strictly behind isDemoAllowed()');
+
+console.log('\nALL 12 STAGE B1 FRONTEND SECURITY & INTEGRATION CHECKS PASSED SUCCESSFULLY.');

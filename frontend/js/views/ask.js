@@ -16,77 +16,6 @@ import { PdfReader } from '../components/pdfViewer.js';
 import { Toast } from '../components/modal.js';
 import { sylloraApi } from '../services/aiApi.js';
 
-// Deterministic Academic Answer Fixtures
-const QUESTION_FIXTURES = {
-  'explain deadlock in simple words': {
-    status: 'fully_supported',
-    evidenceLabel: 'Fully supported by materials',
-    answer: `A **deadlock** is a standstill situation in an operating system where a group of processes is permanently blocked because each process is holding a resource that another process needs, and neither can move forward without it.
-
-For example, if Process A holds the printer and requests the disk, while Process B holds the disk and requests the printer, neither process can release what it has, and neither can proceed. All four **Coffman conditions** (Mutual Exclusion, Hold and Wait, No Preemption, and Circular Wait) must hold simultaneously for this state to exist.`,
-    citations: [
-      { docId: 'doc-1', docTitle: 'Silberschatz (Ch. 8)', page: 2, quote: 'A deadlock situation can arise if and only if the following four conditions hold simultaneously: Mutual Exclusion, Hold and Wait, No Preemption, Circular Wait.' },
-      { docId: 'doc-2', docTitle: 'Tanenbaum (Ch. 6)', page: 2, quote: 'Consider five philosophers: if each picks up the left chopstick simultaneously, circular waiting causes total halt.' }
-    ],
-    claims: [
-      { claim: 'Deadlock requires 4 simultaneous conditions (Coffman Criteria)', sourcePassageId: 'pass-1' },
-      { claim: 'Circular wait creates unbroken dependency chains', sourcePassageId: 'pass-4' }
-    ]
-  },
-  'how is deadlock different from starvation': {
-    status: 'fully_supported',
-    evidenceLabel: 'Fully supported by materials',
-    answer: `While both deadlock and starvation cause processes to wait, their underlying causes and system states are fundamentally different:
-
-1. **Deadlock (Static Terminal State):**
-   A circular dependency where progress is mathematically impossible for the involved processes without external intervention. System throughput for the deadlocked set drops to 0%.
-
-2. **Starvation (Dynamic Scheduling Pathology):**
-   Also termed *indefinite postponement*, starvation occurs when a process is runnable and willing to execute, but is perpetually bypassed because the scheduler continually allocates resources to higher-priority processes.
-
-Operating systems mitigate starvation using **aging** (gradually elevating process priority over wait time), whereas resolving deadlocks requires cycle breaking, resource preemption, or process termination.`,
-    citations: [
-      { docId: 'doc-1', docTitle: 'Silberschatz (Ch. 8)', page: 3, quote: 'A deadlock occurs when every process in a set is waiting for an event only another process can cause. Starvation is postponement due to priority bias.' },
-      { docId: 'doc-3', docTitle: 'Lecture Slides', page: 5, quote: 'Aging gradually increases the priority of processes that wait in the system for a long time.' }
-    ],
-    claims: [
-      { claim: 'Deadlock involves circular waiting; starvation does not require circular wait', sourcePassageId: 'pass-2' },
-      { claim: 'Starvation is resolved via aging priority adjustments', sourcePassageId: 'pass-6' }
-    ]
-  },
-  'compare paging and segmentation': {
-    status: 'partially_supported',
-    evidenceLabel: 'Partially supported (Limited Evidence in Materials)',
-    answer: `The available materials for CS301 (Deadlocks & Concurrency modules) contain **limited evidence** regarding memory management:
-
-- **Paging:** Divides virtual memory into fixed-sized blocks called pages and physical memory into page frames, eliminating external fragmentation.
-- **Segmentation:** Divides memory into logical, variable-length segments reflecting the programmer's view (code, stack, data), which can suffer from external fragmentation.
-
-*Notice:* The loaded CS301 textbook chapters currently focus primarily on Chapter 8 Deadlocks. For comprehensive memory translation diagrams, upload or index the Chapter 9/10 Memory Management reading package.`,
-    citations: [],
-    claims: [
-      { claim: 'Materials contain high-level topic references in syllabus table, but lack full text excerpts in active library.', sourcePassageId: null }
-    ]
-  },
-  'why do programs keep waiting for each other': {
-    status: 'fully_supported',
-    evidenceLabel: 'Fully supported by materials',
-    answer: `Programs wait on each other due to **inter-process resource contention** and **synchronization primitives**:
-
-1. **Mutual Exclusion:** Critical resources (like disk blocks, sockets, and hardware devices) cannot be safely shared simultaneously without data corruption.
-2. **Hold and Wait:** A thread holds lock A while waiting to acquire lock B. If another thread holds lock B and waits for lock A, neither yields their lock voluntarily (No Preemption).
-
-Breaking any single Coffman condition—such as requiring processes to request all resources at once or enforcing strict hierarchical resource ordering—prevents perpetual waiting.`,
-    citations: [
-      { docId: 'doc-1', docTitle: 'Silberschatz (Ch. 8)', page: 2, quote: 'At least one resource must be held in a nonsharable mode... and resources cannot be preempted.' },
-      { docId: 'doc-3', docTitle: 'Lecture Slides', page: 3, quote: 'ALL 4 conditions MUST be simultaneously true for deadlock to manifest.' }
-    ],
-    claims: [
-      { claim: 'Lock contention originates in non-preemptible resource sharing', sourcePassageId: 'pass-1' }
-    ]
-  }
-};
-
 export function renderAsk(container, queryParams = {}) {
   let activeTab = 'ask'; // 'ask' | 'search' | 'summarise'
   let searchMode = 'keyword'; // 'keyword' | 'semantic' | 'combined'
@@ -271,7 +200,7 @@ export function renderAsk(container, queryParams = {}) {
                 <div class="spinner-arc-teal"></div>
                 <div class="pending-text">
                   <strong>Scanning verified passages...</strong>
-                  <span>Matching claims across Silberschatz & Tanenbaum</span>
+                  <span>Searching indexed study materials for evidence passages</span>
                 </div>
               </div>
               <button type="button" class="btn btn-secondary btn-sm" id="cancelQueryBtn">Cancel query</button>
@@ -297,64 +226,31 @@ export function renderAsk(container, queryParams = {}) {
             <aside class="ask-evidence-inspector card">
               <div class="inspector-header">
                 <h3>Evidence Inspector</h3>
-                <span class="pill-badge pill-green">Audit Trace</span>
+                <span class="pill-badge ${activeAnswerData && activeAnswerData.citations && activeAnswerData.citations.length > 0 ? 'pill-green' : 'pill-gray'}">
+                  ${activeAnswerData && activeAnswerData.citations ? activeAnswerData.citations.length + ' Citations' : 'Standby'}
+                </span>
               </div>
 
-              <!-- Topic-Level Source Comparison (Silberschatz vs Tanenbaum) -->
-              <div class="inspector-section">
-                <h4 class="section-label">Source Comparison: Deadlock Characterization</h4>
-                <div class="source-comparison-card">
-                  <div class="comp-item">
-                    <span class="comp-badge">Silberschatz (p. 2)</span>
-                    <p class="comp-quote">"Requires 4 simultaneous Coffman conditions. No preemption implies resources are released voluntarily."</p>
-                  </div>
-                  <div class="comp-item">
-                    <span class="comp-badge">Tanenbaum (p. 2)</span>
-                    <p class="comp-quote">"Emphasizes non-preemptible resource classes. Circular wait illustrated via Dining Philosophers."</p>
-                  </div>
-                  <div class="comp-verdict">
-                    <span class="pill-badge pill-green">Agreement: Complementary Assumptions</span>
-                    <p class="comp-note">Both authors agree on circular dependency necessity; Silberschatz focuses on formal criteria while Tanenbaum classifies preemptibility.</p>
+              ${activeAnswerData && activeAnswerData.citations && activeAnswerData.citations.length > 0 ? `
+                <div class="inspector-section">
+                  <h4 class="section-label">Retrieved Evidence Passages</h4>
+                  <div class="claims-list">
+                    ${activeAnswerData.citations.map(c => `
+                      <div class="claim-item">
+                        <div class="claim-dot"></div>
+                        <div class="claim-body">
+                          <span><strong>${escapeHtml(c.docTitle)}</strong> (p. ${c.page}): "${escapeHtml(c.quote)}"</span>
+                          <button type="button" class="link-sm inspect-pass-btn" data-doc="${escapeQuotes(c.docId)}" data-page="${c.page}">View in PDF</button>
+                        </div>
+                      </div>
+                    `).join('')}
                   </div>
                 </div>
-              </div>
-
-              <!-- Formula Card -->
-              <div class="inspector-section">
-                <h4 class="section-label">Formula Card: Banker's Algorithm</h4>
-                <div class="formula-card">
-                  <div class="formula-math">
-                    <code>Allocation<sub>i</sub> + Need<sub>i</sub> &le; Max<sub>i</sub></code>
-                  </div>
-                  <div class="formula-meta">
-                    <div class="f-row"><span>Variables:</span> <strong>Allocation (held), Need (remaining), Max (declared)</strong></div>
-                    <div class="f-row"><span>Units:</span> <strong>Discrete resource instances vector</strong></div>
-                    <div class="f-row"><span>Assumptions:</span> <strong>A priori maximum resource declaration</strong></div>
-                    <div class="f-row"><span>Verified Source:</span> <strong>Silberschatz (Ch. 8), Page 4</strong></div>
-                  </div>
+              ` : `
+                <div class="inspector-section">
+                  <p style="padding: 16px; color: #64748B; font-size: 13px;">No active query citations yet. Ask a question or search passages to inspect verified source excerpts.</p>
                 </div>
-              </div>
-
-              <!-- Extracted Claims -->
-              <div class="inspector-section">
-                <h4 class="section-label">Extracted Proposition Claims</h4>
-                <div class="claims-list">
-                  <div class="claim-item">
-                    <div class="claim-dot"></div>
-                    <div class="claim-body">
-                      <span>Deadlock requires 4 simultaneous Coffman conditions</span>
-                      <button type="button" class="link-sm inspect-pass-btn" data-doc="doc-1" data-page="2">View Pass. 1</button>
-                    </div>
-                  </div>
-                  <div class="claim-item">
-                    <div class="claim-dot"></div>
-                    <div class="claim-body">
-                      <span>Starvation occurs when runnable threads are postponed by scheduler priority</span>
-                      <button type="button" class="link-sm inspect-pass-btn" data-doc="doc-1" data-page="3">View Pass. 2</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              `}
 
             </aside>
           ` : ''}

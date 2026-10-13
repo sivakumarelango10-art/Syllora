@@ -84,7 +84,7 @@ export function renderRevision(container) {
             </div>
 
             <div class="tasks-timeline-list">
-              ${tasks.map(task => {
+              ${tasks.length > 0 ? tasks.map(task => {
                 let prioBadge = 'pill-amber';
                 if (task.priority === 'high') prioBadge = 'pill-coral';
                 if (task.priority === 'low') prioBadge = 'pill-gray';
@@ -118,7 +118,16 @@ export function renderRevision(container) {
                     </div>
                   </div>
                 `;
-              }).join('')}
+              }).join('') : `
+                <div class="card empty-state-box" style="padding: 48px 24px; text-align: center;">
+                  <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="#64748B" stroke-width="1.5" style="margin: 0 auto 16px;">
+                    <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+                  </svg>
+                  <h3>No revision tasks scheduled</h3>
+                  <p style="color: var(--color-text-muted); margin-bottom: 20px;">Generate a personalised revision schedule based on your syllabus topics and learning gaps.</p>
+                  <button type="button" class="btn btn-primary" id="generatePlanBtn">Generate 7-Day Revision Plan</button>
+                </div>
+              `}
             </div>
 
           </div>
@@ -127,12 +136,12 @@ export function renderRevision(container) {
           <div class="past-papers-container">
             
             <div class="past-papers-intro-banner card">
-              <h4>Historical Past Exam Question Fixtures</h4>
-              <p class="text-sm text-muted">Actual exam questions linked to verified textbook passages and topic masteries. Frequency counts derived from historical fixtures.</p>
+              <h4>Past Exam Paper Analysis</h4>
+              <p class="text-sm text-muted">Course exam questions linked to syllabus concepts and topic masteries.</p>
             </div>
 
             <div class="past-questions-grid">
-              ${pastPapers.map(q => `
+              ${pastPapers.length > 0 ? pastPapers.map(q => `
                 <div class="card past-paper-card">
                   <div class="paper-card-header">
                     <span class="exam-tag">${q.year} ${q.semester} • ${q.id}</span>
@@ -148,7 +157,12 @@ export function renderRevision(container) {
                     </button>
                   </div>
                 </div>
-              `).join('')}
+              `).join('') : `
+                <div class="card empty-state-box" style="padding: 48px 24px; text-align: center; grid-column: 1 / -1;">
+                  <h3>No past paper questions archived yet</h3>
+                  <p style="color: var(--color-text-muted);">Upload exam papers in Study Materials to index questions and benchmark practice.</p>
+                </div>
+              `}
             </div>
 
           </div>
@@ -182,6 +196,25 @@ export function renderRevision(container) {
         dailyMinutes = parseInt(e.target.value, 10);
         Toast.show(`Daily allocation updated to ${dailyMinutes} minutes.`, 'info');
         renderView();
+      });
+    }
+
+    const generatePlanBtn = container.querySelector('#generatePlanBtn');
+    if (generatePlanBtn) {
+      generatePlanBtn.addEventListener('click', async () => {
+        generatePlanBtn.disabled = true;
+        generatePlanBtn.textContent = 'Generating revision plan...';
+        try {
+          await sylloraApi.generateRevisionPlan(7);
+          await workspaceStore.syncWithBackend();
+          Toast.show('7-Day revision plan generated from your syllabus!', 'success');
+          renderView();
+        } catch (err) {
+          Toast.show(`Could not generate plan: ${err.message}`, 'error');
+        } finally {
+          generatePlanBtn.disabled = false;
+          generatePlanBtn.textContent = 'Generate 7-Day Revision Plan';
+        }
       });
     }
 

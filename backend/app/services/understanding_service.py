@@ -10,13 +10,18 @@ from typing import Any
 from app.rag.search import search_passages
 from app.repositories.academic_repository import get_academic_repository
 from app.services.ollama_client import OLLAMA_MODEL, chat_completion, OllamaServiceError
+from app.rate_limiter import inference_concurrency_guard
 
 logger = logging.getLogger(__name__)
 
 
 class UnderstandingService:
     def __init__(self, repo=None):
-        self.repo = repo or get_academic_repository()
+        self._repo = repo
+
+    @property
+    def repo(self):
+        return self._repo or get_academic_repository()
 
     async def generate_question(
         self, user_id: str, topic_id: str, difficulty: str = "intermediate"
@@ -50,12 +55,13 @@ class UnderstandingService:
         )
 
         try:
-            raw_response = await chat_completion(
-                OLLAMA_MODEL,
-                [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-                temperature=0.2,
-                num_ctx=4096,
-            )
+            async with inference_concurrency_guard():
+                raw_response = await chat_completion(
+                    OLLAMA_MODEL,
+                    [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                    temperature=0.2,
+                    num_ctx=4096,
+                )
             # Clean possible markdown fence from JSON
             cleaned = re.sub(r"^```(?:json)?|```$", "", raw_response.strip(), flags=re.MULTILINE).strip()
             data = json.loads(cleaned)
@@ -114,12 +120,13 @@ class UnderstandingService:
         )
 
         try:
-            raw_response = await chat_completion(
-                OLLAMA_MODEL,
-                [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-                temperature=0.1,
-                num_ctx=4096,
-            )
+            async with inference_concurrency_guard():
+                raw_response = await chat_completion(
+                    OLLAMA_MODEL,
+                    [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+                    temperature=0.1,
+                    num_ctx=4096,
+                )
             cleaned = re.sub(r"^```(?:json)?|```$", "", raw_response.strip(), flags=re.MULTILINE).strip()
             data = json.loads(cleaned)
             score = max(1, min(3, int(data.get("score", 2))))
