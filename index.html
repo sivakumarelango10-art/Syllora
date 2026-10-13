@@ -4,292 +4,199 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
   <title>Syllora — Log In | Your syllabus, simplified.</title>
-  <meta name="description" content="Sign in to Syllora, the intelligent learning platform. Your syllabus, simplified.">
+  <meta name="description" content="Sign in to Syllora, the education and learning platform. Your syllabus, simplified.">
   
   <!-- Favicon -->
   <link rel="icon" type="image/svg+xml" href="logo.svg">
   
-  <!-- Google Fonts: Outfit (headings & wordmark) + Inter (body) -->
+  <!-- Google Fonts: Poppins (500, 600) & Inter (400, 600) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Poppins:wght@500;600&display=swap" rel="stylesheet">
   
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- App Wrapper (Desktop Split 50/50, Mobile Stack) -->
-  <div class="split-layout-container">
+  <!-- Fullscreen Main Container -->
+  <div class="app-stage" id="appStage">
 
     <!-- ======================================================================
-         LEFT 50%: BRAND PANEL
-         Teal gradient (#03605E -> #024A48), floating papers, animated logo & tagline
+         LEFT HALF: BRAND PANEL
+         Revealed via clip-path circle expansion from the logo center
          ====================================================================== -->
-    <section class="brand-panel" aria-label="Syllora Brand Introduction">
+    <section class="brand-panel" id="brandPanel" aria-label="Syllora Brand Panel">
       
-      <!-- Subtle Floating Background Paper Shapes (20-30s ambient drift) -->
-      <div class="floating-papers-container" aria-hidden="true">
-        <div class="paper-sheet paper-1">
-          <svg viewBox="0 0 100 130" fill="currentColor">
-            <rect width="100" height="130" rx="8"/>
-            <line x1="16" y1="28" x2="68" y2="28" stroke="rgba(255,255,255,0.4)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="16" y1="44" x2="84" y2="44" stroke="rgba(255,255,255,0.3)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="16" y1="60" x2="74" y2="60" stroke="rgba(255,255,255,0.3)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="16" y1="76" x2="52" y2="76" stroke="rgba(255,255,255,0.25)" stroke-width="4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="paper-sheet paper-2">
-          <svg viewBox="0 0 90 120" fill="currentColor">
-            <rect width="90" height="120" rx="7"/>
-            <line x1="14" y1="24" x2="60" y2="24" stroke="rgba(255,255,255,0.4)" stroke-width="3" stroke-linecap="round"/>
-            <line x1="14" y1="38" x2="76" y2="38" stroke="rgba(255,255,255,0.3)" stroke-width="3" stroke-linecap="round"/>
-            <line x1="14" y1="52" x2="64" y2="52" stroke="rgba(255,255,255,0.3)" stroke-width="3" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="paper-sheet paper-3">
-          <svg viewBox="0 0 110 140" fill="currentColor">
-            <rect width="110" height="140" rx="9"/>
-            <circle cx="28" cy="30" r="8" fill="rgba(255,255,255,0.35)"/>
-            <line x1="44" y1="30" x2="90" y2="30" stroke="rgba(255,255,255,0.3)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="18" y1="56" x2="92" y2="56" stroke="rgba(255,255,255,0.25)" stroke-width="4" stroke-linecap="round"/>
-            <line x1="18" y1="72" x2="78" y2="72" stroke="rgba(255,255,255,0.25)" stroke-width="4" stroke-linecap="round"/>
-          </svg>
-        </div>
-        <div class="paper-sheet paper-4">
-          <svg viewBox="0 0 85 110" fill="currentColor">
-            <rect width="85" height="110" rx="6"/>
-            <line x1="14" y1="24" x2="56" y2="24" stroke="rgba(255,255,255,0.35)" stroke-width="3" stroke-linecap="round"/>
-            <line x1="14" y1="38" x2="70" y2="38" stroke="rgba(255,255,255,0.25)" stroke-width="3" stroke-linecap="round"/>
-          </svg>
-        </div>
+      <!-- 6 Ambient Decorative Paper Shapes (Drifting via ambient loop) -->
+      <div class="paper-shapes-layer" id="paperShapesLayer" aria-hidden="true">
+        <!-- Paper 0: [90, 110, 170, 220, -14°] -->
+        <div class="paper-item" data-index="0" data-left="90" data-top="110" data-w="170" data-h="220" data-rot="-14"></div>
+        <!-- Paper 1: [700, 80, 150, 200, 12°] -->
+        <div class="paper-item" data-index="1" data-left="700" data-top="80" data-w="150" data-h="200" data-rot="12"></div>
+        <!-- Paper 2: [620, 860, 190, 150, -8°] -->
+        <div class="paper-item" data-index="2" data-left="620" data-top="860" data-w="190" data-h="150" data-rot="-8"></div>
+        <!-- Paper 3: [60, 800, 140, 190, 16°] -->
+        <div class="paper-item" data-index="3" data-left="60" data-top="800" data-w="140" data-h="190" data-rot="16"></div>
+        <!-- Paper 4: [780, 470, 120, 160, -20°] -->
+        <div class="paper-item" data-index="4" data-left="780" data-top="470" data-w="120" data-h="160" data-rot="-20"></div>
+        <!-- Paper 5: [160, 430, 90, 120, 8°] -->
+        <div class="paper-item" data-index="5" data-left="160" data-top="430" data-w="90" data-h="120" data-rot="8"></div>
       </div>
 
-      <!-- Centered Brand Identity Block -->
-      <div class="brand-content-core">
-        
-        <!-- Large Animated Logo (Inline SVG with independent left page, right page & checkmark) -->
-        <div class="logo-hero-container">
-          <svg class="syllora-hero-svg" viewBox="0 0 260 180" width="180" height="125" aria-hidden="true">
-            <defs>
-              <linearGradient id="pageGradLeft" x1="100%" y1="0%" x2="0%" y2="100%">
-                <stop offset="0%" stop-color="#05807D"/>
-                <stop offset="100%" stop-color="#024A48"/>
-              </linearGradient>
-              <linearGradient id="pageGradRight" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#04716E"/>
-                <stop offset="100%" stop-color="#013A38"/>
-              </linearGradient>
-              <filter id="bookShadow" x="-10%" y="-10%" width="130%" height="130%">
-                <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="rgba(0,0,0,0.35)"/>
-              </filter>
-            </defs>
-
-            <!-- Book Container Group -->
-            <g class="book-group" filter="url(#bookShadow)">
-              <!-- Left Page (Opens from spine at x=130) -->
-              <path id="leftPagePath" 
-                    class="book-page page-left"
-                    d="M 126 30 C 104 30, 54 18, 38 20 C 31 21, 26 27, 26 34 L 26 126 C 26 133, 31 138, 38 139 C 56 142, 102 152, 126 154 Z" 
-                    fill="url(#pageGradLeft)"/>
-
-              <!-- Right Page (Opens from spine at x=130) -->
-              <path id="rightPagePath" 
-                    class="book-page page-right"
-                    d="M 134 30 C 156 30, 206 18, 222 20 C 229 21, 234 27, 234 34 L 234 126 C 234 133, 229 138, 222 139 C 204 142, 158 152, 134 154 Z" 
-                    fill="url(#pageGradRight)"/>
-
-              <!-- Spine Highlight Hairline -->
-              <line x1="130" y1="31" x2="130" y2="153" stroke="rgba(255,255,255,0.18)" stroke-width="2"/>
-
-              <!-- Center White Checkmark / Sprout (Self-drawing stroke) -->
-              <path id="heroCheckmark" 
-                    class="book-checkmark"
-                    d="M 72 88 C 86 102, 114 130, 130 140 C 148 118, 178 70, 200 46" 
-                    fill="none" 
-                    stroke="#FFFFFF" 
-                    stroke-width="16" 
-                    stroke-linecap="round" 
-                    stroke-linejoin="round"/>
-            </g>
-          </svg>
-
-          <!-- Staggered Animated Wordmark (Letter-by-letter slide up) -->
-          <h1 class="brand-wordmark" id="brandWordmark" aria-label="Syllora">
-            <span class="wm-letter" style="--i: 0">S</span>
-            <span class="wm-letter" style="--i: 1">y</span>
-            <span class="wm-letter" style="--i: 2">l</span>
-            <span class="wm-letter" style="--i: 3">l</span>
-            <span class="wm-letter" style="--i: 4">o</span>
-            <span class="wm-letter" style="--i: 5">r</span>
-            <span class="wm-letter" style="--i: 6">a</span>
-          </h1>
-        </div>
-
-        <!-- Tagline -->
-        <p class="brand-tagline" id="brandTagline">Your syllabus, simplified.</p>
-
-        <!-- Value Pillar Badges -->
-        <div class="brand-pillars">
-          <div class="pillar-chip">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <path d="M2 4h12M2 8h8M2 12h10"/>
-            </svg>
-            <span>Smart Modules</span>
-          </div>
-          <div class="pillar-chip">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <circle cx="8" cy="8" r="6"/>
-              <path d="M8 5v3l2 2"/>
-            </svg>
-            <span>Adaptive Pace</span>
-          </div>
-          <div class="pillar-chip">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
-              <path d="M8 2l2 4 4.5.5-3.25 3.25.75 4.75L8 12.25 4 14.5l.75-4.75L1.5 6.5 6 6z"/>
-            </svg>
-            <span>Mastery Tracking</span>
-          </div>
-        </div>
-
+      <!-- Taglines inside the Brand Panel -->
+      <div class="brand-texts-anchor">
+        <h2 class="brand-tagline" id="brandTagline">Your syllabus, simplified.</h2>
+        <p class="brand-subtagline" id="brandSubtagline">Plan, learn and track progress in one place.</p>
       </div>
 
-      <!-- Brand Panel Footer -->
-      <footer class="brand-panel-footer">
-        <span>&copy; 2026 Syllora Inc. All rights reserved.</span>
+      <!-- Bottom-Left Copyright -->
+      <footer class="brand-copyright" id="brandCopyright">
+        &copy; 2026 Syllora
       </footer>
+
     </section>
 
     <!-- ======================================================================
-         RIGHT 50%: LOGIN FORM PANEL
-         Warm off-white background (#FAFAF8) + 400px Form Card
+         CENTER-TO-LEFT INTRO LOGO (Floats above both panels during intro)
+         Starts at 50% x, 48% y (scale 1.0x, 620px wide) then glides to 25% x, 38% y (scale 0.6x)
          ====================================================================== -->
-    <main class="form-panel" id="mainContent">
+    <div class="intro-logo-rig" id="introLogoRig" aria-hidden="true">
+      <svg id="sylloraLogoSvg" viewBox="150 250 960 840" width="620" height="542.5" style="overflow:visible">
+        <defs>
+          <mask id="checkMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1300" height="1200">
+            <!-- Thick stroke that draws to reveal the checkmark cut-out -->
+            <path id="checkReveal" d="M 425 492 Q 560 600 626 730 Q 720 520 900 365"
+                  fill="none" stroke="#fff" stroke-width="110" stroke-linecap="round"
+                  pathLength="1" stroke-dasharray="1.02" stroke-dashoffset="1.02"/>
+          </mask>
+        </defs>
 
+        <!-- Thin spine line shown only at the very start (y: 410 to 762, center y 586) -->
+        <rect id="spine" x="623" y="410" width="7" height="352" rx="3.5" fill="#03605E"/>
 
+        <!-- Left page: scales from its spine edge (x=615, y=586) -->
+        <path id="pageLeft" fill="#03605E"
+              d="M 615 410 Q 560 300 312 274 Q 300 274 300 286 L 300 664 Q 300 676 312 676 Q 500 680 615 762 Z"/>
 
-      <!-- Form Card (Max-width 400px, rounded-2xl, soft shadow) -->
+        <!-- Right page: scales from its spine edge (x=638, y=586) -->
+        <path id="pageRight" fill="#03605E"
+              d="M 638 410 Q 693 300 941 274 Q 953 274 953 286 L 953 664 Q 953 676 941 676 Q 753 680 638 762 Z"/>
+
+        <!-- Checkmark cut-out: filled with background color, revealed by mask -->
+        <path id="check" fill="#FAFAF8" mask="url(#checkMask)"
+              d="M 432 494 Q 520 540 615 586 L 637 556 Q 760 455 884 372 Q 897 366 893 381 Q 760 520 682 618 Q 641 676 628 742 Q 610 690 590 660 Q 512 572 434 503 Q 427 497 432 494 Z"/>
+
+        <!-- Wordmark: 7 separate letters staggered in, Poppins 600, font-size 300, y=1008, centered on x=626.5 -->
+        <g id="wordmark">
+          <text class="wm-letter" data-letter="0" x="250" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">S</text>
+          <text class="wm-letter" data-letter="1" x="415" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">y</text>
+          <text class="wm-letter" data-letter="2" x="545" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">l</text>
+          <text class="wm-letter" data-letter="3" x="615" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">l</text>
+          <text class="wm-letter" data-letter="4" x="685" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">o</text>
+          <text class="wm-letter" data-letter="5" x="830" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">r</text>
+          <text class="wm-letter" data-letter="6" x="935" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#22272B">a</text>
+        </g>
+      </svg>
+    </div>
+
+    <!-- ======================================================================
+         RIGHT HALF: LOGIN CARD
+         Centered both ways on off-white background
+         ====================================================================== -->
+    <main class="login-panel" id="loginPanel">
+      
+      <!-- 460px Login Card with 8 Stagger Items -->
       <div class="login-card" id="loginCard">
+        
+        <!-- Stagger Item 0: Heading + Subtext -->
+        <div class="card-stagger-item item-header" data-stagger="0">
+          <h1 class="card-title">Welcome back</h1>
+          <p class="card-subtitle">Log in to continue learning</p>
+        </div>
 
-        <!-- Card Header -->
-        <header class="card-header-block">
-          <h2 class="card-heading" id="formHeading">Welcome back</h2>
-          <p class="card-subtext" id="formSubtext">Log in to continue learning</p>
-        </header>
-
-        <!-- Authentication Form -->
-        <form id="loginForm" class="login-form-element" novalidate autocomplete="on">
-
-          <!-- Full Name Field (Smoothly revealed if user toggles to Sign Up) -->
-          <div class="form-field-wrapper field-signup-only" id="nameFieldWrapper" style="display: none;">
-            <div class="floating-input-box">
-              <input 
-                type="text" 
-                id="nameInput" 
-                name="name" 
-                placeholder=" " 
-                autocomplete="name" 
-                class="floating-text-input">
-              <label for="nameInput" class="floating-field-label">Full name</label>
-              <span class="field-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17">
-                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </span>
-            </div>
-            <div class="field-error-msg" id="nameError" role="alert"></div>
+        <!-- Form Element -->
+        <form id="authForm" class="auth-form" novalidate autocomplete="on">
+          
+          <!-- Stagger Item 1: Email Input -->
+          <div class="card-stagger-item field-group" id="emailGroup" data-stagger="1">
+            <label for="emailInput" class="field-label">Email</label>
+            <input 
+              type="email" 
+              id="emailInput" 
+              name="email" 
+              class="form-input" 
+              placeholder="you@example.com" 
+              autocomplete="email" 
+              required>
+            <div class="field-error-text" id="emailError" role="alert" aria-live="polite"></div>
           </div>
 
-          <!-- Email Input with Floating Label -->
-          <div class="form-field-wrapper" id="emailFieldWrapper">
-            <div class="floating-input-box">
-              <input 
-                type="email" 
-                id="emailInput" 
-                name="email" 
-                placeholder=" " 
-                autocomplete="email" 
-                required 
-                class="floating-text-input">
-              <label for="emailInput" class="floating-field-label">Email address</label>
-              <span class="field-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="17" height="17">
-                  <rect width="20" height="16" x="2" y="4" rx="2"/>
-                  <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
-                </svg>
-              </span>
-            </div>
-            <div class="field-error-msg" id="emailError" role="alert"></div>
-          </div>
-
-          <!-- Password Input with Floating Label & Eye Toggle -->
-          <div class="form-field-wrapper" id="passwordFieldWrapper">
-            <div class="floating-input-box">
+          <!-- Stagger Item 2: Password Input with 22px Eye Icon 16px from Right -->
+          <div class="card-stagger-item field-group" id="passwordGroup" data-stagger="2">
+            <label for="passwordInput" class="field-label">Password</label>
+            <div class="input-relative-box">
               <input 
                 type="password" 
                 id="passwordInput" 
                 name="password" 
-                placeholder=" " 
+                class="form-input password-input" 
+                placeholder="••••••••" 
                 autocomplete="current-password" 
-                required 
-                class="floating-text-input">
-              <label for="passwordInput" class="floating-field-label">Password</label>
-              <!-- Show / Hide Password Toggle -->
+                required>
               <button 
                 type="button" 
-                class="btn-eye-toggle" 
+                class="password-eye-btn" 
                 id="togglePasswordBtn" 
-                aria-label="Show password" 
-                title="Show password">
-                <svg class="eye-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18">
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/>
+                aria-label="Toggle password visibility">
+                <!-- Eye Show Icon (22px, #9CA3AF) -->
+                <svg class="eye-icon-show" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#9CA3AF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
                   <circle cx="12" cy="12" r="3"/>
                 </svg>
-                <svg class="eye-hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18" style="display: none;">
-                  <path d="m15 18-.722-3.25"/>
-                  <path d="M2 8a10.645 10.645 0 0 0 20 0"/>
-                  <path d="m20 15-1.726-2.05"/>
-                  <path d="m4 15 1.726-2.05"/>
-                  <path d="m9 18 .722-3.25"/>
+                <!-- Eye Hide Icon -->
+                <svg class="eye-icon-hide" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#9CA3AF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                  <line x1="1" y1="1" x2="23" y2="23"/>
                 </svg>
               </button>
             </div>
-            <div class="field-error-msg" id="passwordError" role="alert"></div>
+            <div class="field-error-text" id="passwordError" role="alert" aria-live="polite"></div>
           </div>
 
-          <!-- Remember Me + Forgot Password Row -->
-          <div class="aux-options-row" id="auxRow">
-            <label class="custom-checkbox-container">
-              <input type="checkbox" id="rememberMeCheck" name="remember" checked>
+          <!-- Stagger Item 3: Remember me checkbox + Forgot password link -->
+          <div class="card-stagger-item aux-row" data-stagger="3">
+            <label class="checkbox-label-wrapper">
+              <input type="checkbox" id="rememberMe" name="remember" class="native-checkbox">
               <span class="custom-check-box" aria-hidden="true">
-                <svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="2.5 7 5.5 10 11.5 4"/>
+                <svg viewBox="0 0 12 10" width="10" height="9" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="1.5 5 4.5 8 10.5 1.5"/>
                 </svg>
               </span>
-              <span class="checkbox-text-label">Remember me</span>
+              <span class="checkbox-caption">Remember me</span>
             </label>
-
-            <a href="#forgot" class="forgot-password-link" id="forgotPasswordLink">Forgot password?</a>
+            <a href="#forgot" class="forgot-link" id="forgotLink">Forgot password?</a>
           </div>
 
-          <!-- Primary Log In Button (Morphs to spinner, then checkmark on success) -->
-          <div class="submit-button-container">
-            <button type="submit" class="btn-primary-login" id="loginBtn">
-              <!-- Default State Label -->
-              <span class="btn-caption" id="btnCaption">Log in</span>
+          <!-- Stagger Item 4: Primary "Log in" button (396px wide, centers in row to morph to 56px circle) -->
+          <div class="card-stagger-item button-row" data-stagger="4">
+            <button type="submit" class="btn-login" id="loginBtn" aria-busy="false">
+              <!-- Label "Log in" -->
+              <span class="btn-label-text" id="btnLabel">Log in</span>
               
-              <!-- Loading Circular Spinner -->
-              <span class="btn-spinner-icon" id="btnSpinner" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="20" height="20">
-                  <circle cx="12" cy="12" r="9" stroke-opacity="0.25"/>
-                  <path d="M12 3a9 9 0 0 1 9 9" stroke-linecap="round"/>
+              <!-- 28px Spinner: 3px track rgba(255,255,255,.3) + white 90° arc with round caps -->
+              <span class="btn-spinner" id="btnSpinner" aria-hidden="true">
+                <svg viewBox="0 0 32 32" width="28" height="28">
+                  <circle cx="16" cy="16" r="12.5" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="3"/>
+                  <path d="M 16 3.5 A 12.5 12.5 0 0 1 28.5 16" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round"/>
                 </svg>
               </span>
 
-              <!-- Success Morph Checkmark -->
-              <span class="btn-success-check" id="btnSuccessCheck" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
-                  <path id="btnSuccessCheckPath" d="M 5 12 L 10 17 L 19 7" />
+              <!-- White checkmark that draws itself: viewBox -15 -15 30 30, path M-8 0.5 L-2.5 6 L8.5 -6 -->
+              <span class="btn-checkmark-morph" id="btnCheckmarkMorph" aria-hidden="true">
+                <svg viewBox="-15 -15 30 30" width="30" height="30">
+                  <path id="morphCheckPath" d="M -8 0.5 L -2.5 6 L 8.5 -6" 
+                        fill="none" stroke="#FFFFFF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"
+                        pathLength="1" stroke-dasharray="1.02" stroke-dashoffset="1.02"/>
                 </svg>
               </span>
             </button>
@@ -297,74 +204,105 @@
 
         </form>
 
-        <!-- Divider Line -->
-        <div class="divider-box" role="separator">
-          <span class="divider-line"></span>
-          <span class="divider-label">or continue with</span>
-          <span class="divider-line"></span>
+        <!-- Stagger Item 5: Divider "or continue with" -->
+        <div class="card-stagger-item divider-row" data-stagger="5">
+          <span class="divider-hairline"></span>
+          <span class="divider-text">or continue with</span>
+          <span class="divider-hairline"></span>
         </div>
 
-        <!-- Google Sign-in Button -->
-        <div class="social-login-box">
-          <button type="button" class="btn-google-auth" id="googleLoginBtn">
-            <span class="google-svg-box">
-              <svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
-              </svg>
-            </span>
-            <span class="google-btn-text">Google</span>
+        <!-- Stagger Item 6: "Continue with Google" outline button (54px tall) -->
+        <div class="card-stagger-item google-row" data-stagger="6">
+          <button type="button" class="btn-google" id="googleBtn">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+            </svg>
+            <span>Continue with Google</span>
           </button>
         </div>
 
-        <!-- Footer: Don't have an account? Sign up -->
-        <footer class="card-footer">
-          <p class="footer-account-text">
-            <span id="footerPrompt">Don't have an account?</span>
-            <button type="button" class="footer-action-link" id="toggleModeBtn">Sign up</button>
+        <!-- Stagger Item 7: Footer "Don't have an account? Sign up" -->
+        <div class="card-stagger-item footer-row" data-stagger="7">
+          <p class="signup-prompt">
+            Don't have an account? <a href="#signup" class="signup-link" id="signUpLink">Sign up</a>
           </p>
-        </footer>
+        </div>
 
-      </div>
-
-      <!-- Trust & Security Micro-note -->
-      <div class="security-caption">
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" width="13" height="13">
-          <rect width="12" height="9" x="2" y="6" rx="2"/>
-          <path d="M5 6V4a3 3 0 0 1 6 0v2"/>
-        </svg>
-        <span>Protected by enterprise-grade TLS encryption</span>
       </div>
 
     </main>
+
   </div>
 
-  <!-- Recovery Modal (Forgot password) -->
-  <div class="modal-overlay" id="recoveryModal" role="dialog" aria-modal="true" aria-labelledby="recoveryTitle" style="display: none;">
-    <div class="modal-card-box">
-      <div class="modal-top">
-        <h3 id="recoveryTitle" class="modal-heading">Reset your password</h3>
-        <button type="button" class="modal-close" id="modalCloseBtn" aria-label="Close modal">&times;</button>
+  <!-- ======================================================================
+       SUCCESS: TEAL FLOOD OVERLAY (Expands as a circle from login button)
+       Houses the Welcome Screen and Dashboard Progress Bar
+       ====================================================================== -->
+  <div class="teal-flood-overlay" id="tealFloodOverlay" aria-hidden="true">
+    
+    <div class="welcome-screen-inner" id="welcomeScreenInner">
+      
+      <!-- Welcome Screen Replay Logo (White pages, teal checkmark cut-out #03605E, white wordmark) -->
+      <div class="welcome-logo-container" id="welcomeLogoContainer">
+        <svg id="welcomeLogoSvg" viewBox="150 250 960 840" width="341" height="298" style="overflow:visible">
+          <defs>
+            <mask id="welcomeCheckMask" maskUnits="userSpaceOnUse" x="0" y="0" width="1300" height="1200">
+              <path id="welcomeCheckReveal" d="M 425 492 Q 560 600 626 730 Q 720 520 900 365"
+                    fill="none" stroke="#fff" stroke-width="110" stroke-linecap="round"
+                    pathLength="1" stroke-dasharray="1.02" stroke-dashoffset="1.02"/>
+            </mask>
+          </defs>
+
+          <!-- Left page (White) -->
+          <path id="welcomePageLeft" fill="#FFFFFF"
+                d="M 615 410 Q 560 300 312 274 Q 300 274 300 286 L 300 664 Q 300 676 312 676 Q 500 680 615 762 Z"/>
+
+          <!-- Right page (White) -->
+          <path id="welcomePageRight" fill="#FFFFFF"
+                d="M 638 410 Q 693 300 941 274 Q 953 274 953 286 L 953 664 Q 953 676 941 676 Q 753 680 638 762 Z"/>
+
+          <!-- Checkmark cut-out (Filled with #03605E matching the teal panel) -->
+          <path id="welcomeCheck" fill="#03605E" mask="url(#welcomeCheckMask)"
+                d="M 432 494 Q 520 540 615 586 L 637 556 Q 760 455 884 372 Q 897 366 893 381 Q 760 520 682 618 Q 641 676 628 742 Q 610 690 590 660 Q 512 572 434 503 Q 427 497 432 494 Z"/>
+
+          <!-- Wordmark (White letters) -->
+          <g id="welcomeWordmark">
+            <text class="welcome-wm-letter" data-letter="0" x="250" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">S</text>
+            <text class="welcome-wm-letter" data-letter="1" x="415" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">y</text>
+            <text class="welcome-wm-letter" data-letter="2" x="545" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">l</text>
+            <text class="welcome-wm-letter" data-letter="3" x="615" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">l</text>
+            <text class="welcome-wm-letter" data-letter="4" x="685" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">o</text>
+            <text class="welcome-wm-letter" data-letter="5" x="830" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">r</text>
+            <text class="welcome-wm-letter" data-letter="6" x="935" y="1008" font-family="'Poppins', sans-serif" font-weight="600" font-size="300" fill="#FFFFFF">a</text>
+          </g>
+        </svg>
       </div>
-      <p class="modal-text">Enter your account email below. We'll send a secure password reset link directly to your inbox.</p>
-      <form id="recoveryForm" novalidate>
-        <div class="floating-input-box" style="margin-bottom: 12px;">
-          <input type="email" id="recoveryEmailInput" placeholder=" " required class="floating-text-input">
-          <label for="recoveryEmailInput" class="floating-field-label">Account email</label>
-        </div>
-        <button type="submit" class="btn-primary-login" style="padding: 12px; margin-top: 8px;">
-          <span>Send Reset Link</span>
-        </button>
-      </form>
+
+      <!-- Heading & Subtext -->
+      <h2 class="welcome-title" id="welcomeTitle">Welcome back!</h2>
+      <p class="welcome-sub" id="welcomeSub">Taking you to your dashboard…</p>
+
+      <!-- Progress Bar (200x4px, track rgba(255,255,255,.2), white fill) -->
+      <div class="welcome-progress-track" id="welcomeProgressTrack">
+        <div class="welcome-progress-fill" id="welcomeProgressFill"></div>
+      </div>
+
     </div>
+
   </div>
 
-  <!-- Toast Notification Center -->
-  <div class="toast-shelf" id="toastShelf" aria-live="polite"></div>
+  <!-- Discreet Intro Skip Hint (Visible only during intro) -->
+  <div class="intro-skip-hint" id="introSkipHint">
+    Press any key or click to skip
+  </div>
 
-  <!-- JavaScript Orchestration Engine -->
+  <!-- Client-side Audio / Interaction Notification -->
+  <div id="a11yAnnouncer" class="sr-only" aria-live="polite"></div>
+
+  <!-- Orchestration Script -->
   <script src="app.js"></script>
 </body>
 </html>

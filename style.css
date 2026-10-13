@@ -1,47 +1,38 @@
 /* ==========================================================================
-   SYLLORA AUTHENTICATION SYSTEM — SPECIFICATION STYLESHEET
-   Brand Palette: Deep Teal (#03605E), Warm Off-White (#FAFAF8), Charcoal (#22272B)
-   Typography: Outfit (Headings/Logo) & Inter (Body)
-   Layout: Desktop Split 50/50, Mobile Responsive Stack
+   SYLLORA AUTHENTICATION SYSTEM — EXACT SPECIFICATION STYLESHEET
+   Exact Tokens, Curves, Morphing Geometry, and 60fps GPU Orchestration
    ========================================================================== */
 
 /* --------------------------------------------------------------------------
-   1. Design System Tokens & Color Variables
+   1. Design Tokens & Cubic-Bezier Curves
    -------------------------------------------------------------------------- */
 :root {
-  /* Brand Specific Colors */
-  --color-primary-teal: #03605E;
-  --color-teal-hover: #024A48;
-  --color-teal-tint: #E6F2F1;
-  --color-charcoal-text: #22272B;
-  --color-muted-text: #6B7280;
-  --color-canvas-bg: #FAFAF8;
-  --color-error: #DC2626;
-  --color-error-bg: rgba(220, 38, 38, 0.08);
-
-  /* Functional Gradients & Tints */
-  --brand-gradient: linear-gradient(145deg, #03605E 0%, #024A48 100%);
-  --brand-gradient-hover: linear-gradient(145deg, #04706E 0%, #02403E 100%);
-  --teal-glow: 0 0 0 3.5px rgba(3, 96, 94, 0.2);
+  --teal: #03605E;
+  --teal-dark: #024A48;
+  --teal-light: #0A7A77;
+  --ink: #22272B;
+  --muted: #6B7280;
+  --bg: #FAFAF8;
+  --line: #E3E5E2;
+  --input-bg: #FBFCFB;
+  --error: #DC2626;
 
   /* Fonts */
-  --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-heading: 'Poppins', sans-serif;
+  --font-body: 'Inter', sans-serif;
 
-  /* Card and Border Styling */
-  --border-field: #E5E7EB;
-  --border-field-focus: #03605E;
-  --shadow-soft: 0 20px 40px -15px rgba(34, 39, 43, 0.07), 0 0 1px 1px rgba(34, 39, 43, 0.05);
-  --shadow-float: 0 12px 28px -6px rgba(3, 96, 94, 0.28);
+  /* Panel Gradient Spec */
+  --panel-gradient: radial-gradient(120% 90% at 30% 20%, #0A7A77 0%, #03605E 45%, #024A48 100%);
 
-  /* Smooth Curves */
-  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-bounce: cubic-bezier(0.34, 1.45, 0.64, 1);
-  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  /* Exact Bezier Easings from Spec */
+  --ease-out-cubic: cubic-bezier(0.33, 1, 0.68, 1);
+  --ease-in-out-cubic: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-in-flood: cubic-bezier(0.55, 0, 0.9, 0.4); /* p^2.2 acceleration */
 }
 
 /* --------------------------------------------------------------------------
-   2. Reset & Global Layout
+   2. Reset & App Stage
    -------------------------------------------------------------------------- */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -50,506 +41,366 @@
 }
 
 html, body {
-  min-height: 100dvh;
   width: 100%;
+  height: 100%;
+  min-height: 100dvh;
+  background-color: var(--bg);
   font-family: var(--font-body);
-  background-color: var(--color-canvas-bg);
-  color: var(--color-charcoal-text);
-  line-height: 1.5;
+  color: var(--ink);
+  overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  overflow-x: hidden;
 }
 
-/* Split Layout Container (50% Brand Panel, 50% Form Panel) */
-.split-layout-container {
+.app-stage {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
   display: flex;
-  min-height: 100dvh;
-  width: 100%;
+  overflow: hidden;
+}
+
+/* Screen reader utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* --------------------------------------------------------------------------
-   3. LEFT 50%: BRAND PANEL (Teal Gradient + Ambient Floating Papers)
+   3. LEFT 50%: BRAND PANEL
+   Initially hidden behind clip-path: circle(0 at logo center)
    -------------------------------------------------------------------------- */
 .brand-panel {
-  flex: 1;
   position: relative;
-  background: var(--brand-gradient);
+  width: 50vw;
+  height: 100vh;
+  background: var(--panel-gradient);
+  color: #ffffff;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 56px 48px;
-  overflow: hidden;
-  color: #ffffff;
+  justify-content: flex-end;
+  /* Circle reveal starts at logo spot */
+  clip-path: circle(0px at 50% 38%);
+  will-change: clip-path;
+  z-index: 5;
 }
 
-/* Floating Paper Sheets (20-30s ambient drift) */
-.floating-papers-container {
+/* 6 Decorative Paper Shapes */
+.paper-shapes-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  overflow: hidden;
   z-index: 1;
 }
 
-.paper-sheet {
+.paper-item {
   position: absolute;
+  border-radius: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  opacity: 0;
+  will-change: transform, opacity;
+  transform-origin: center center;
+}
+
+/* Brand Text Anchor in Left Panel */
+.brand-texts-anchor {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 67%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 0 40px;
+  z-index: 2;
+}
+
+.brand-tagline {
+  font-family: var(--font-heading);
+  font-size: 34px;
+  font-weight: 500;
   color: #ffffff;
+  letter-spacing: -0.02em;
+  opacity: 0;
+  transform: translateY(16px);
+  will-change: opacity, transform;
+}
+
+.brand-subtagline {
+  font-family: var(--font-body);
+  font-size: 19px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.72);
+  margin-top: 12px;
+  opacity: 0;
+  transform: translateY(16px);
+  will-change: opacity, transform;
+}
+
+.brand-copyright {
+  position: absolute;
+  bottom: 40px;
+  left: 48px;
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: rgba(255, 255, 255, 0.50);
+  opacity: 0;
+  transform: translateY(16px);
+  z-index: 2;
+  will-change: opacity, transform;
+}
+
+/* --------------------------------------------------------------------------
+   4. INTRO LOGO RIG (Flies from Screen Center to Brand Panel)
+   Intro size: 620px wide (scale 1.0x). Final panel size: 372px wide (scale 0.6x).
+   -------------------------------------------------------------------------- */
+.intro-logo-rig {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 620px;
+  height: 542.5px;
+  pointer-events: none;
+  z-index: 20;
+  /* Started centered on screen at 50% x, 48% y */
+  transform: translate(calc(50vw - 310px), calc(48vh - 271.25px)) scale(1);
+  transform-origin: center center;
   will-change: transform;
 }
 
-.paper-1 {
-  width: 95px;
-  top: 12%;
-  left: 10%;
-  opacity: 0.07;
-  animation: floatDrift1 26s infinite alternate ease-in-out;
-}
-
-.paper-2 {
-  width: 80px;
-  bottom: 22%;
-  left: 18%;
-  opacity: 0.06;
-  animation: floatDrift2 32s infinite alternate-reverse ease-in-out;
-}
-
-.paper-3 {
-  width: 110px;
-  top: 24%;
-  right: 12%;
-  opacity: 0.08;
-  animation: floatDrift3 28s infinite alternate ease-in-out;
-}
-
-.paper-4 {
-  width: 75px;
-  bottom: 14%;
-  right: 20%;
-  opacity: 0.05;
-  animation: floatDrift1 22s infinite alternate-reverse ease-in-out;
-}
-
-@keyframes floatDrift1 {
-  0% { transform: translate(0, 0) rotate(-6deg); }
-  50% { transform: translate(25px, -35px) rotate(4deg); }
-  100% { transform: translate(-20px, -60px) rotate(-12deg); }
-}
-
-@keyframes floatDrift2 {
-  0% { transform: translate(0, 0) rotate(14deg); }
-  50% { transform: translate(-30px, 30px) rotate(2deg); }
-  100% { transform: translate(20px, 50px) rotate(18deg); }
-}
-
-@keyframes floatDrift3 {
-  0% { transform: translate(0, 0) rotate(-18deg); }
-  50% { transform: translate(35px, 25px) rotate(-4deg); }
-  100% { transform: translate(-25px, 45px) rotate(-22deg); }
-}
-
-/* Brand Core Block */
-.brand-content-core {
-  position: relative;
-  z-index: 2;
-  margin: auto 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  max-width: 500px;
-  align-self: center;
-}
-
-/* --------------------------------------------------------------------------
-   4. LOGO INTRO ANIMATION (~1.6s orchestrated sequence)
-   -------------------------------------------------------------------------- */
-.logo-hero-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  margin-bottom: 18px;
-}
-
-.syllora-hero-svg {
-  overflow: visible;
-  filter: drop-shadow(0 14px 28px rgba(0, 0, 0, 0.25));
-}
-
-/* Book Pages: start closed (scaleX: 0 from spine) and unfold outward */
-.book-page.page-left {
-  transform-origin: 130px 92px;
-  transform: scaleX(0);
-  animation: openLeftPage 800ms var(--ease-bounce) forwards;
-  animation-delay: 180ms;
-}
-
-.book-page.page-right {
-  transform-origin: 130px 92px;
-  transform: scaleX(0);
-  animation: openRightPage 800ms var(--ease-bounce) forwards;
-  animation-delay: 180ms;
-}
-
-@keyframes openLeftPage {
-  0% { transform: scaleX(0); }
-  75% { transform: scaleX(1.06); }
-  100% { transform: scaleX(1); }
-}
-
-@keyframes openRightPage {
-  0% { transform: scaleX(0); }
-  75% { transform: scaleX(1.06); }
-  100% { transform: scaleX(1); }
-}
-
-/* White Checkmark / Sprout: self-drawing stroke animation */
-.book-checkmark {
-  stroke-dasharray: 240;
-  stroke-dashoffset: 240;
-  animation: drawCheckmarkStroke 650ms var(--ease-spring) forwards;
-  animation-delay: 720ms;
-}
-
-@keyframes drawCheckmarkStroke {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-/* Wordmark: letter by letter fade in + slide up 8px with 40ms stagger */
-.brand-wordmark {
-  font-family: var(--font-heading);
-  font-size: 3.2rem;
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  color: #ffffff;
-  margin-top: 12px;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.wm-letter {
-  display: inline-block;
-  opacity: 0;
-  transform: translateY(8px);
-  animation: letterFadeUp 420ms var(--ease-spring) forwards;
-  animation-delay: calc(1050ms + (var(--i) * 45ms));
-}
-
-@keyframes letterFadeUp {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Tagline */
-.brand-tagline {
-  font-family: var(--font-body);
-  font-size: 1.25rem;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.88);
-  letter-spacing: -0.01em;
-  margin-bottom: 32px;
-  opacity: 0;
-  transform: translateY(10px);
-  animation: taglineFadeIn 500ms var(--ease-spring) forwards;
-  animation-delay: 1400ms;
-}
-
-@keyframes taglineFadeIn {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* Brand Value Pillars */
-.brand-pillars {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  opacity: 0;
-  transform: translateY(12px);
-  animation: taglineFadeIn 500ms var(--ease-spring) forwards;
-  animation-delay: 1550ms;
-}
-
-.pillar-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 14px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: #ffffff;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.brand-panel-footer {
-  position: relative;
-  z-index: 2;
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.6);
-  text-align: center;
-}
-
-/* --------------------------------------------------------------------------
-   5. RIGHT 50%: FORM PANEL & 400px CARD
-   -------------------------------------------------------------------------- */
-.form-panel {
-  flex: 1;
-  background-color: var(--color-canvas-bg);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 24px;
-  position: relative;
-  overflow-y: auto;
-}
-
-/* Mobile compact bar (hidden on desktop) */
-
-
-/* --------------------------------------------------------------------------
-   6. FORM ENTRANCE & CARD STYLING
-   -------------------------------------------------------------------------- */
-.login-card {
+/* SVG Elements Setup */
+#sylloraLogoSvg {
+  display: block;
   width: 100%;
-  max-width: 400px;
-  background: #ffffff;
-  border-radius: 1.25rem; /* rounded-2xl */
-  padding: 38px 34px 34px;
-  box-shadow: var(--shadow-soft);
-  border: 1px solid rgba(229, 231, 235, 0.8);
-  
-  /* Entrance Animation: Fades in and slides up 20px after logo completes */
+  height: 100%;
+  overflow: visible;
+}
+
+/* Spine line: scales Y from center (x=626.5, y=586) */
+#spine {
+  transform-origin: 626.5px 586px;
+  transform: scaleY(0);
+  opacity: 1;
+  will-change: transform, opacity;
+}
+
+/* Left page: scales from its spine edge (x=615, y=586) */
+#pageLeft {
+  transform-origin: 615px 586px;
+  transform: scaleX(0) scaleY(0.9);
   opacity: 0;
-  transform: translateY(20px);
-  animation: formCardEntrance 650ms var(--ease-spring) forwards;
-  animation-delay: 1450ms;
+  will-change: transform, opacity, fill;
 }
 
-@keyframes formCardEntrance {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Right page: scales from its spine edge (x=638, y=586) */
+#pageRight {
+  transform-origin: 638px 586px;
+  transform: scaleX(0) scaleY(0.9);
+  opacity: 0;
+  will-change: transform, opacity, fill;
 }
 
-/* Error State: Gentle horizontal shake (3 cycles, 6px) */
-.login-card.has-error-shake {
-  animation: cardShake 450ms var(--ease-spring) forwards;
+/* Checkmark Mask Reveal: stroke-dashoffset 1.02 -> 0 */
+#checkReveal {
+  stroke-dasharray: 1.02;
+  stroke-dashoffset: 1.02;
+  will-change: stroke-dashoffset;
 }
 
-@keyframes cardShake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-6px); }
-  40%, 80% { transform: translateX(6px); }
+#check {
+  fill: #FAFAF8;
+  will-change: fill;
 }
 
-/* Card Header */
-.card-header-block {
-  margin-bottom: 26px;
-  text-align: left;
-}
-
-.card-heading {
+/* 7 Letters in Wordmark */
+.wm-letter {
+  opacity: 0;
+  transform: translateY(40px);
+  will-change: opacity, transform, fill;
   font-family: var(--font-heading);
-  font-size: 1.65rem;
-  font-weight: 700;
-  color: var(--color-charcoal-text);
-  letter-spacing: -0.025em;
-  margin-bottom: 5px;
+  letter-spacing: -6px;
 }
 
-.card-subtext {
-  font-size: 0.9rem;
-  color: var(--color-muted-text);
+/* --------------------------------------------------------------------------
+   5. RIGHT 50%: LOGIN PANEL & 460px CARD
+   -------------------------------------------------------------------------- */
+.login-panel {
+  position: relative;
+  width: 50vw;
+  height: 100vh;
+  background-color: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  z-index: 10;
+}
+
+.login-card {
+  width: 460px;
+  background: #ffffff;
+  border-radius: 24px;
+  padding: 44px 32px 36px;
+  border: 1px solid #EEF0EE;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 24px 60px -12px rgba(3, 96, 94, 0.18);
+  opacity: 0;
+  transform: translateY(40px);
+  will-change: opacity, transform;
+}
+
+/* Card Stagger Items (8 items stagger in) */
+.card-stagger-item {
+  opacity: 0;
+  transform: translateY(14px);
+  will-change: opacity, transform;
+}
+
+/* Item 0: Header */
+.item-header {
+  margin-bottom: 24px;
+}
+
+.card-title {
+  font-family: var(--font-heading);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.6px;
+  color: var(--ink);
+  line-height: 1.2;
+}
+
+.card-subtitle {
+  font-family: var(--font-body);
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 6px;
   line-height: 1.4;
 }
 
-/* --------------------------------------------------------------------------
-   7. INPUTS WITH FLOATING LABELS & FIELD STAGGER
-   -------------------------------------------------------------------------- */
-.login-form-element {
+/* Form */
+.auth-form {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* Form fields staggered entrance (60ms apart) */
-.form-field-wrapper {
+/* Field Groups */
+.field-group {
   display: flex;
   flex-direction: column;
-  opacity: 0;
-  transform: translateY(12px);
-  animation: fieldStaggerIn 450ms var(--ease-spring) forwards;
 }
 
-.form-field-wrapper:nth-child(1) { animation-delay: 1550ms; }
-.form-field-wrapper:nth-child(2) { animation-delay: 1610ms; }
-.form-field-wrapper:nth-child(3) { animation-delay: 1670ms; }
-.aux-options-row { animation-delay: 1730ms; }
-.submit-button-container { animation-delay: 1790ms; }
-.divider-box { animation-delay: 1850ms; }
-.social-login-box { animation-delay: 1910ms; }
-.card-footer { animation-delay: 1970ms; }
-
-.aux-options-row,
-.submit-button-container,
-.divider-box,
-.social-login-box,
-.card-footer {
-  opacity: 0;
-  transform: translateY(12px);
-  animation: fieldStaggerIn 450ms var(--ease-spring) forwards;
+.field-label {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 8px;
 }
 
-@keyframes fieldStaggerIn {
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+/* Inputs */
+.form-input {
+  width: 100%;
+  height: 54px;
+  border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: var(--input-bg);
+  padding: 0 16px;
+  font-family: var(--font-body);
+  font-size: 17px;
+  color: var(--ink);
+  outline: none;
+  caret-color: var(--teal);
+  transition: border-color 180ms var(--ease-out-cubic),
+              background-color 180ms var(--ease-out-cubic),
+              box-shadow 180ms var(--ease-out-cubic);
 }
 
-/* Floating Input Box */
-.floating-input-box {
+.form-input::placeholder {
+  color: #A0A6AD;
+  font-weight: 400;
+}
+
+/* Input Focus Specification */
+.form-input:focus {
+  border-color: var(--teal);
+  background-color: #FFFFFF;
+  box-shadow: 0 0 0 4px rgba(3, 96, 94, 0.14);
+}
+
+.password-input {
+  padding-right: 52px;
+}
+
+.password-input[type="password"] {
+  letter-spacing: 3px;
+}
+
+.input-relative-box {
   position: relative;
   display: flex;
   align-items: center;
-  width: 100%;
 }
 
-.floating-text-input {
-  width: 100%;
-  height: 52px;
-  padding: 18px 44px 6px 14px;
-  font-family: var(--font-body);
-  font-size: 0.95rem;
-  color: var(--color-charcoal-text);
-  background: #ffffff;
-  border: 1.5px solid var(--border-field);
-  border-radius: 12px;
-  outline: none;
-  transition: border-color 220ms ease, box-shadow 220ms ease;
-}
-
-.floating-text-input::placeholder {
-  opacity: 0; /* Important for :placeholder-shown floating label pattern */
-}
-
-/* Floating Label */
-.floating-field-label {
+/* Eye Show/Hide Button (22px icon, 16px from right edge) */
+.password-eye-btn {
   position: absolute;
-  left: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 0.92rem;
-  color: var(--color-muted-text);
-  pointer-events: none;
-  transition: transform 200ms var(--ease-spring), font-size 200ms var(--ease-spring), color 200ms var(--ease-spring);
-  transform-origin: left top;
-}
-
-/* Floating Label on Focus or Filled */
-.floating-text-input:focus ~ .floating-field-label,
-.floating-text-input:not(:placeholder-shown) ~ .floating-field-label {
-  transform: translateY(-24px) scale(0.82);
-  color: var(--color-primary-teal);
-  font-weight: 500;
-}
-
-/* Input Focus Glow Ring */
-.floating-text-input:focus {
-  border-color: var(--border-field-focus);
-  box-shadow: var(--teal-glow);
-}
-
-/* Leading or Trailing Icon */
-.field-icon {
-  position: absolute;
-  right: 14px;
-  color: var(--color-muted-text);
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  transition: color 200ms ease;
-}
-
-.floating-text-input:focus ~ .field-icon {
-  color: var(--color-primary-teal);
-}
-
-/* Eye Toggle Button */
-.btn-eye-toggle {
-  position: absolute;
-  right: 8px;
-  width: 36px;
-  height: 36px;
+  right: 16px;
   background: transparent;
   border: none;
-  color: var(--color-muted-text);
   cursor: pointer;
-  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 180ms ease, background-color 180ms ease;
+  padding: 4px;
 }
 
-.btn-eye-toggle:hover {
-  color: var(--color-charcoal-text);
-  background: rgba(0, 0, 0, 0.04);
-}
-
-/* Error States */
-.form-field-wrapper.is-invalid .floating-text-input {
-  border-color: var(--color-error);
-  box-shadow: 0 0 0 3.5px var(--color-error-bg);
-}
-
-.form-field-wrapper.is-invalid .floating-field-label {
-  color: var(--color-error);
-}
-
-.field-error-msg {
-  font-size: 0.78rem;
-  color: var(--color-error);
-  margin-top: 4px;
-  padding-left: 2px;
-  overflow: hidden;
+/* Error Text slide down */
+.field-error-text {
+  font-size: 14px;
+  color: var(--error);
+  margin-top: 0;
   max-height: 0;
   opacity: 0;
-  transition: max-height 260ms var(--ease-spring), opacity 260ms ease, margin-top 260ms ease;
+  overflow: hidden;
+  transform: translateY(-6px);
+  transition: max-height 220ms var(--ease-out-cubic),
+              opacity 220ms var(--ease-out-cubic),
+              transform 220ms var(--ease-out-cubic),
+              margin-top 220ms ease;
 }
 
-.form-field-wrapper.is-invalid .field-error-msg {
-  max-height: 40px;
+.field-group.has-error .form-input {
+  border-color: var(--error);
+}
+
+.field-group.has-error .field-error-text {
+  max-height: 28px;
   opacity: 1;
+  transform: translateY(0);
+  margin-top: 6px;
 }
 
-/* --------------------------------------------------------------------------
-   8. REMEMBER ME & FORGOT PASSWORD ROW
-   -------------------------------------------------------------------------- */
-.aux-options-row {
+/* Item 3: Remember me & Forgot password */
+.aux-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-top: -2px;
+  margin-top: 2px;
 }
 
-.custom-checkbox-container {
+.checkbox-label-wrapper {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -557,7 +408,7 @@ html, body {
   user-select: none;
 }
 
-.custom-checkbox-container input[type="checkbox"] {
+.native-checkbox {
   position: absolute;
   opacity: 0;
   pointer-events: none;
@@ -567,443 +418,432 @@ html, body {
   width: 18px;
   height: 18px;
   border-radius: 5px;
-  border: 1.5px solid var(--border-field);
-  background: #ffffff;
+  border: 1.5px solid var(--line);
+  background: var(--input-bg);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #ffffff;
-  transition: all 180ms ease;
+  transition: all 160ms var(--ease-out-cubic);
 }
 
-.custom-check-box svg {
-  width: 12px;
-  height: 12px;
-  opacity: 0;
-  transform: scale(0.6);
-  transition: all 180ms var(--ease-spring);
+.native-checkbox:checked + .custom-check-box {
+  background: var(--teal);
+  border-color: var(--teal);
 }
 
-.custom-checkbox-container input:checked + .custom-check-box {
-  background: var(--color-primary-teal);
-  border-color: var(--color-primary-teal);
+.checkbox-caption {
+  font-size: 15px;
+  color: var(--muted);
 }
 
-.custom-checkbox-container input:checked + .custom-check-box svg {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.custom-checkbox-container input:focus-visible + .custom-check-box {
-  box-shadow: var(--teal-glow);
-}
-
-.checkbox-text-label {
-  font-size: 0.84rem;
-  color: var(--color-charcoal-text);
-  font-weight: 500;
-}
-
-.forgot-password-link {
-  font-size: 0.84rem;
+.forgot-link {
+  font-size: 15px;
   font-weight: 600;
-  color: var(--color-primary-teal);
+  color: var(--teal);
   text-decoration: none;
-  transition: color 180ms ease;
+  transition: color 150ms ease;
 }
 
-.forgot-password-link:hover {
-  color: var(--color-teal-hover);
+.forgot-link:hover {
+  color: var(--teal-dark);
   text-decoration: underline;
 }
 
-/* --------------------------------------------------------------------------
-   9. PRIMARY LOGIN BUTTON (Hover lift, spinner morph, success check)
-   -------------------------------------------------------------------------- */
-.submit-button-container {
-  margin-top: 8px;
+/* Item 4: Login Button Row */
+.button-row {
   display: flex;
   justify-content: center;
+  align-items: center;
+  margin-top: 6px;
+  min-height: 56px;
 }
 
-.btn-primary-login {
-  position: relative;
-  width: 100%;
-  height: 48px;
-  background: var(--color-primary-teal);
+.btn-login {
+  width: 396px;
+  height: 56px;
+  border-radius: 14px;
+  background-color: var(--teal);
   color: #ffffff;
   border: none;
-  border-radius: 12px;
   font-family: var(--font-body);
-  font-size: 0.95rem;
+  font-size: 18px;
   font-weight: 600;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(3, 96, 94, 0.22);
-  transition: background-color 220ms ease, transform 220ms var(--ease-spring), box-shadow 220ms ease, width 320ms var(--ease-spring), border-radius 320ms var(--ease-spring);
+  box-shadow: 0 10px 24px -10px rgba(3, 96, 94, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
   overflow: hidden;
+  transform-origin: center center;
+  transition: background-color 150ms var(--ease-out-cubic),
+              transform 150ms var(--ease-out-cubic),
+              box-shadow 150ms var(--ease-out-cubic);
+  will-change: width, border-radius, background-color, transform;
 }
 
-/* Hover: translateY -2px & darker teal */
-.btn-primary-login:hover:not(:disabled) {
-  background: var(--color-teal-hover);
+/* Button Hover */
+.btn-login:hover:not(:disabled):not(.is-loading):not(.is-success) {
+  background-color: var(--teal-dark);
   transform: translateY(-2px);
-  box-shadow: var(--shadow-float);
+  box-shadow: 0 16px 34px -10px rgba(3, 96, 94, 0.75);
 }
 
-.btn-primary-login:active:not(:disabled) {
-  transform: translateY(0);
+/* Button Press (scale 1 -> 0.965 -> 1) */
+.btn-login:active:not(:disabled):not(.is-loading):not(.is-success) {
+  transform: scale(0.965);
 }
 
-.btn-caption {
-  transition: opacity 180ms ease, transform 180ms ease;
+.btn-label-text {
+  opacity: 1;
+  transition: opacity 160ms linear;
+  will-change: opacity;
 }
 
-/* Loading State: Shrinks into a circular spinner */
-.btn-primary-login.is-loading {
-  width: 48px;
-  border-radius: 50%;
-  cursor: default;
-  pointer-events: none;
-}
-
-.btn-primary-login.is-loading .btn-caption {
-  opacity: 0;
-  transform: scale(0.6);
+/* Loading Spinner (28px ring) */
+.btn-spinner {
   position: absolute;
-}
-
-.btn-spinner-icon {
+  width: 28px;
+  height: 28px;
   display: none;
-  animation: spinnerRotate 700ms linear infinite;
-  color: #ffffff;
+  opacity: 0;
+  animation: spinnerSpin 857ms linear infinite; /* 420 deg/sec */
 }
 
-.btn-primary-login.is-loading .btn-spinner-icon {
-  display: flex;
-}
-
-@keyframes spinnerRotate {
+@keyframes spinnerSpin {
   to { transform: rotate(360deg); }
 }
 
-/* Success State: Morph spinner to self-drawing white checkmark */
-.btn-primary-login.is-success {
-  width: 48px;
-  border-radius: 50%;
-  background: #02807D !important;
-  pointer-events: none;
-}
-
-.btn-primary-login.is-success .btn-caption,
-.btn-primary-login.is-success .btn-spinner-icon {
+/* Success Checkmark Inside Button Circle */
+.btn-checkmark-morph {
+  position: absolute;
+  width: 30px;
+  height: 30px;
   display: none;
+  transform-origin: center center;
 }
 
-.btn-success-check {
-  display: none;
-}
-
-.btn-primary-login.is-success .btn-success-check {
-  display: flex;
-}
-
-#btnSuccessCheckPath {
-  stroke-dasharray: 40;
-  stroke-dashoffset: 40;
-  animation: drawBtnCheck 420ms var(--ease-spring) forwards;
-}
-
-@keyframes drawBtnCheck {
-  to { stroke-dashoffset: 0; }
-}
-
-/* --------------------------------------------------------------------------
-   10. DIVIDER & GOOGLE SSO BUTTON
-   -------------------------------------------------------------------------- */
-.divider-box {
+/* Item 5: Divider */
+.divider-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 4px 0;
+  margin: 8px 0;
 }
 
-.divider-line {
+.divider-hairline {
   flex: 1;
   height: 1px;
-  background: #E5E7EB;
+  background-color: var(--line);
 }
 
-.divider-label {
-  font-size: 0.78rem;
-  color: var(--color-muted-text);
-  font-weight: 500;
-  text-transform: lowercase;
+.divider-text {
+  font-size: 14px;
+  color: #9CA3AF;
+  font-weight: 400;
 }
 
-.btn-google-auth {
+/* Item 6: Google SSO Button */
+.google-row {
+  display: flex;
+}
+
+.btn-google {
   width: 100%;
-  height: 46px;
-  background: #ffffff;
-  border: 1.5px solid var(--border-field);
+  height: 54px;
   border-radius: 12px;
+  border: 1.5px solid var(--line);
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 12px;
   font-family: var(--font-body);
-  font-size: 0.9rem;
+  font-size: 16px;
   font-weight: 600;
-  color: var(--color-charcoal-text);
+  color: var(--ink);
   cursor: pointer;
-  transition: all 180ms ease;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
 }
 
-.btn-google-auth:hover {
-  background: #F9FAFB;
+.btn-google:hover {
+  background-color: #FAFAFA;
   border-color: #D1D5DB;
   transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-.btn-google-auth:active {
-  transform: translateY(0);
-}
-
-.google-svg-box {
-  display: flex;
-  align-items: center;
-}
-
-/* --------------------------------------------------------------------------
-   11. FOOTER & SWITCH TO SIGN UP
-   -------------------------------------------------------------------------- */
-.card-footer {
-  margin-top: 20px;
-  padding-top: 18px;
-  border-top: 1px solid #F3F4F6;
+/* Item 7: Footer Row */
+.footer-row {
   text-align: center;
+  margin-top: 6px;
 }
 
-.footer-account-text {
-  font-size: 0.88rem;
-  color: var(--color-muted-text);
+.signup-prompt {
+  font-size: 15px;
+  color: var(--muted);
 }
 
-.footer-action-link {
-  background: none;
-  border: none;
-  color: var(--color-primary-teal);
-  font-family: var(--font-body);
-  font-size: 0.88rem;
-  font-weight: 700;
-  cursor: pointer;
-  margin-left: 4px;
-  transition: color 180ms ease;
+.signup-link {
+  color: var(--teal);
+  font-weight: 600;
+  text-decoration: none;
 }
 
-.footer-action-link:hover {
-  color: var(--color-teal-hover);
+.signup-link:hover {
   text-decoration: underline;
 }
 
-/* Trust caption beneath card */
-.security-caption {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 24px;
-  font-size: 0.76rem;
-  color: var(--color-muted-text);
+/* Card Error Shake Animation (0.4s) */
+.login-card.shake {
+  animation: cardShakeAnim 400ms var(--ease-out-cubic);
+}
+
+@keyframes cardShakeAnim {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
 }
 
 /* --------------------------------------------------------------------------
-   12. RECOVERY MODAL & TOAST SHELF
+   6. TEAL FLOOD OVERLAY & WELCOME SCREEN
+   clip-path expands from button center R: 0 -> 2400px
    -------------------------------------------------------------------------- */
-.modal-overlay {
+.teal-flood-overlay {
   position: fixed;
   inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--panel-gradient);
   z-index: 100;
-  background: rgba(34, 39, 43, 0.65);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  pointer-events: none;
+  clip-path: circle(0px at 50% 50%);
+  will-change: clip-path;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
-  animation: fadeInModal 200ms ease;
 }
 
-@keyframes fadeInModal {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.teal-flood-overlay.active {
+  pointer-events: auto;
 }
 
-.modal-card-box {
+.welcome-screen-inner {
+  position: relative;
   width: 100%;
-  max-width: 380px;
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 28px 24px;
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.35);
-  animation: scaleUpModal 250ms var(--ease-spring);
-}
-
-@keyframes scaleUpModal {
-  from { transform: scale(0.95) translateY(8px); }
-  to { transform: scale(1) translateY(0); }
-}
-
-.modal-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.modal-heading {
-  font-family: var(--font-heading);
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: var(--color-charcoal-text);
-}
-
-.modal-close {
-  background: transparent;
-  border: none;
-  font-size: 1.6rem;
-  line-height: 1;
-  color: var(--color-muted-text);
-  cursor: pointer;
-}
-
-.modal-text {
-  font-size: 0.86rem;
-  color: var(--color-muted-text);
-  line-height: 1.5;
-  margin-bottom: 20px;
-}
-
-/* Toast Shelf */
-.toast-shelf {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  z-index: 200;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  pointer-events: none;
-}
-
-.toast-bubble {
-  pointer-events: auto;
-  min-width: 280px;
-  max-width: 380px;
-  padding: 13px 18px;
-  background: #ffffff;
-  border-radius: 12px;
-  box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.22);
-  border-left: 4px solid var(--color-primary-teal);
-  font-size: 0.86rem;
-  color: var(--color-charcoal-text);
-  display: flex;
   align-items: center;
-  gap: 10px;
-  animation: toastEntrance 300ms var(--ease-spring);
-  transition: opacity 250ms ease, transform 250ms ease;
 }
 
-@keyframes toastEntrance {
-  from {
-    opacity: 0;
-    transform: translateY(18px) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+/* Welcome Logo centered at 50% x, 37% y, scale 0.55x */
+.welcome-logo-container {
+  position: absolute;
+  left: 50%;
+  top: 37%;
+  transform: translate(-50%, -50%) scale(0.55);
+  transform-origin: center center;
 }
 
-.toast-bubble.toast-success {
-  border-left-color: #059669;
+#welcomeLogoSvg {
+  display: block;
 }
 
-.toast-bubble.toast-error {
-  border-left-color: var(--color-error);
+#welcomeCheckReveal {
+  stroke-dasharray: 1.02;
+  stroke-dashoffset: 1.02;
+}
+
+#welcomePageLeft {
+  transform-origin: 615px 586px;
+  transform: scaleX(0);
+}
+
+#welcomePageRight {
+  transform-origin: 638px 586px;
+  transform: scaleX(0);
+}
+
+.welcome-wm-letter {
+  opacity: 0;
+  transform: translateY(40px);
+  font-family: var(--font-heading);
+}
+
+/* "Welcome back!" Poppins 600, 46px, white, ~64% height */
+.welcome-title {
+  position: absolute;
+  top: 64%;
+  left: 50%;
+  transform: translate(-50%, 18px);
+  font-family: var(--font-heading);
+  font-size: 46px;
+  font-weight: 600;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  opacity: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* "Taking you to your dashboard…" Inter 20px, white 75% */
+.welcome-sub {
+  position: absolute;
+  top: calc(64% + 56px);
+  left: 50%;
+  transform: translate(-50%, 18px);
+  font-family: var(--font-body);
+  font-size: 20px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.75);
+  opacity: 0;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* Progress Bar (200x4px, radius 4px) */
+.welcome-progress-track {
+  position: absolute;
+  top: calc(64% + 104px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 200px;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.20);
+  overflow: hidden;
+  opacity: 0;
+}
+
+.welcome-progress-fill {
+  width: 0%;
+  height: 100%;
+  background: #ffffff;
+  border-radius: 4px;
 }
 
 /* --------------------------------------------------------------------------
-   13. MOBILE RESPONSIVE ADAPTATIONS (Single Column)
+   7. DISCREET SKIP HINT
+   -------------------------------------------------------------------------- */
+.intro-skip-hint {
+  position: fixed;
+  bottom: 24px;
+  right: 28px;
+  z-index: 50;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: rgba(34, 39, 43, 0.45);
+  background: rgba(255, 255, 255, 0.7);
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  backdrop-filter: blur(8px);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+
+.intro-skip-hint.visible {
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------------------
+   8. MOBILE RESPONSIVE ADAPTATION (<900px)
+   No split. Panel becomes top band ~40vh, logo sits in it, card overlaps below.
    -------------------------------------------------------------------------- */
 @media (max-width: 900px) {
-  .split-layout-container {
+  .app-stage {
     flex-direction: column;
+    overflow-y: auto;
+    height: auto;
     min-height: 100dvh;
   }
 
   .brand-panel {
-    display: none; /* Hide large desktop brand panel on small mobile viewports */
+    width: 100vw;
+    height: 40vh;
+    min-height: 280px;
   }
 
-  .form-panel {
-    padding: 36px 18px 48px;
-    justify-content: flex-start;
+  .brand-texts-anchor {
+    top: auto;
+    bottom: 24px;
+  }
+
+  .brand-tagline {
+    font-size: 26px;
+  }
+
+  .brand-subtagline {
+    font-size: 16px;
+  }
+
+  .brand-copyright {
+    display: none;
+  }
+
+  .intro-logo-rig {
+    /* Mobile final spot: centered at top */
+    transform: translate(calc(50vw - 310px), calc(18vh - 271.25px)) scale(0.45);
+  }
+
+  .login-panel {
+    width: 100vw;
+    height: auto;
+    min-height: 60vh;
+    padding: 24px 16px 40px;
+    align-items: flex-start;
   }
 
   .login-card {
-    border-radius: 16px;
-    padding: 32px 24px 28px;
-    margin-top: 12px;
-  }
-
-  .card-heading {
-    font-size: 1.5rem;
-  }
-
-  .toast-shelf {
-    left: 16px;
-    right: 16px;
-    bottom: 16px;
-  }
-
-  .toast-bubble {
     width: 100%;
-    min-width: auto;
+    max-width: 440px;
+    padding: 32px 24px 28px;
+    margin-top: -30px; /* Slight overlap */
+    z-index: 15;
+  }
+
+  .card-title {
+    font-size: 28px;
+  }
+
+  .btn-login {
+    width: 100%;
   }
 }
 
 /* --------------------------------------------------------------------------
-   14. ACCESSIBILITY: PREFERS-REDUCED-MOTION
+   9. PREFERS-REDUCED-MOTION
    -------------------------------------------------------------------------- */
 @media (prefers-reduced-motion: reduce) {
-  .book-page.page-left,
-  .book-page.page-right,
-  .book-checkmark,
-  .wm-letter,
+  .brand-panel {
+    clip-path: none !important;
+  }
+
+  .intro-logo-rig {
+    display: none !important;
+  }
+
+  .paper-item {
+    opacity: 0.1 !important;
+    animation: none !important;
+  }
+
   .brand-tagline,
-  .brand-pillars,
-  .paper-sheet,
+  .brand-subtagline,
+  .brand-copyright,
   .login-card,
-  .form-field-wrapper,
-  .aux-options-row,
-  .submit-button-container,
-  .divider-box,
-  .social-login-box,
-  .card-footer {
-    animation: none !important;
-    transform: none !important;
+  .card-stagger-item {
     opacity: 1 !important;
-    stroke-dashoffset: 0 !important;
+    transform: none !important;
+    transition: none !important;
   }
 
-  .login-card.has-error-shake {
+  .login-card.shake {
     animation: none !important;
   }
 
-  .btn-primary-login {
-    transition: none !important;
+  .intro-skip-hint {
+    display: none !important;
   }
 }
