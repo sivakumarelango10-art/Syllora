@@ -1,7 +1,9 @@
 """Syllora local AI API: Ollama connectivity, upload-time PDF indexing, and RAG."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import logging
 import os
 import re
 import uuid
@@ -15,6 +17,7 @@ from app.config import (
     MAX_CHUNKS_PER_DOCUMENT,
     MAX_PDF_PAGES,
     MAX_UPLOAD_BYTES,
+    EMBEDDING_DIM,
     OLLAMA_MODEL,
     validate_environment,
 )
@@ -32,13 +35,16 @@ from app.rag.search import SearchMode, has_sufficient_evidence, invalidate_index
 from app.rag.store import (
     UPLOAD_DIR,
     count_chunks,
+    claim_next_pending_document,
     delete_document as delete_document_record,
     document_hash_exists,
+    fail_document_index,
     get_document,
     get_document_pages,
     insert_document,
     list_documents,
     update_document_status,
+    retry_document_index,
 )
 from app.storage import get_storage_adapter
 from app.storage.local_storage import LocalStorageAdapter
@@ -72,6 +78,8 @@ from app.api.v1 import (
     viva_router,
     faculty_router,
 )
+
+logger = logging.getLogger(__name__)
 
 INSUFFICIENT_EVIDENCE_MESSAGE = (
     "I couldn't find enough evidence in the uploaded materials to answer this reliably. "
@@ -191,6 +199,121 @@ def _get_storage():
     if isinstance(adapter, LocalStorageAdapter) and adapter.upload_dir != UPLOAD_DIR:
         adapter.upload_dir = UPLOAD_DIR
     return adapter
+
+
+async def _process_document_index(document: dict[str, Any]) -> None:
+    """Process one persisted PDF job after the upload receipt has been committed."""
+    document_id = str(document["id"])
+    user_id = str(document["user_id"])
+    storage_path = str(document.get("storage_path") or document["storage_filename"])
+    storage_adapter = _get_storage()
+    pdf_bytes = await asyncio.to_thread(storage_adapter.get_file, storage_path)
+    if not pdf_bytes:
+        raise RuntimeError("The stored PDF could not be retrieved for indexing.")
+    if hashlib.sha256(pdf_bytes).hexdigest() != document["sha256"]:
+        raise RuntimeError("Stored PDF integrity check failed.")
+
+    page_count, pdf_pages, pdf_chunks = await asyncio.to_thread(
+        extract_pdf_pages_and_chunks,
+        pdf_bytes,
+        max_pages=MAX_PDF_PAGES,
+        max_chunks=MAX_CHUNKS_PER_DOCUMENT,
+    )
+    chunk_texts = [chunk.text for chunk in pdf_chunks]
+    vectors: list[list[float]] = []
+    async with inference_concurrency_guard():
+        for start in range(0, len(chunk_texts), 32):
+            vectors.extend(
+                await embed_texts(
+                    chunk_texts[start:start + 32],
+                    purpose="document",
+                    model=OLLAMA_EMBED_MODEL,
+                )
+            )
+    if len(vectors) != len(pdf_chunks):
+        raise RuntimeError("The embedding model returned an incomplete result.")
+    if any(len(vector) != EMBEDDING_DIM for vector in vectors):
+        raise RuntimeError(
+            f"The embedding model must return {EMBEDDING_DIM}-dimensional vectors."
+        )
+
+    chunks = [
+        {
+            "id": str(uuid.uuid4()),
+            "page_number": chunk.page_number,
+            "chunk_index": chunk.chunk_index,
+            "text": chunk.text,
+            "embedding": vectors[index],
+            "embedding_model": OLLAMA_EMBED_MODEL,
+            "metadata": {"char_count": len(chunk.text)},
+        }
+        for index, chunk in enumerate(pdf_chunks)
+    ]
+    indexed_document = {
+        **document,
+        "page_count": page_count,
+        "chunk_count": len(chunks),
+        "index_status": "indexed",
+        "index_error": None,
+        "mime_type": "application/pdf",
+    }
+    await asyncio.to_thread(
+        insert_document,
+        indexed_document,
+        chunks,
+        pdf_pages,
+        user_id,
+    )
+    invalidate_index_cache()
+
+
+async def _document_index_worker() -> None:
+    """Claim and process persisted jobs with one bounded worker."""
+    while True:
+        try:
+            document = await asyncio.to_thread(claim_next_pending_document)
+        except Exception:
+            logger.exception("Could not claim a pending document indexing job.")
+            await asyncio.sleep(5)
+            continue
+        if document is None:
+            await asyncio.sleep(2)
+            continue
+
+        try:
+            await _process_document_index(document)
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.exception("Document indexing failed for %s.", document.get("id"))
+            try:
+                await asyncio.to_thread(
+                    fail_document_index,
+                    str(document["id"]),
+                    str(document["user_id"]),
+                    str(exc),
+                )
+            except Exception:
+                logger.exception(
+                    "Could not persist the indexing failure for %s.", document.get("id")
+                )
+
+
+@app.on_event("startup")
+async def start_document_index_worker() -> None:
+    if os.getenv("SYLLORA_ENABLE_DOCUMENT_INDEX_WORKER", "true").strip().lower() in ("true", "1"):
+        app.state.document_index_worker = asyncio.create_task(_document_index_worker())
+
+
+@app.on_event("shutdown")
+async def stop_document_index_worker() -> None:
+    worker = getattr(app.state, "document_index_worker", None)
+    if worker is not None:
+        worker.cancel()
+        try:
+            await worker
+        except asyncio.CancelledError:
+            pass
 
 
 @app.get("/health", tags=["health"])
@@ -362,13 +485,13 @@ async def get_documents(request: Request) -> dict[str, Any]:
     return {"documents": docs, "count": len(docs)}
 
 
-@app.post("/api/v1/documents", status_code=201, tags=["documents"])
+@app.post("/api/v1/documents", status_code=202, tags=["documents"])
 async def upload_document(
     request: Request,
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
 ) -> dict[str, Any]:
-    """Upload a text-based PDF and complete storage + extraction + embedding before returning."""
+    """Persist a PDF and queue durable indexing before returning an upload receipt."""
     user_id = get_current_user_id(request)
     ai_rate_limiter.check(user_id)
     display_filename = _safe_filename(file.filename)
@@ -402,55 +525,17 @@ async def upload_document(
     if document_hash_exists(file_hash, user_id=user_id):
         raise HTTPException(status_code=409, detail="This exact PDF has already been uploaded.")
 
-    try:
-        page_count, pdf_pages, pdf_chunks = extract_pdf_pages_and_chunks(
-            pdf_bytes, max_pages=MAX_PDF_PAGES, max_chunks=MAX_CHUNKS_PER_DOCUMENT
-        )
-    except PdfProcessingError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
     document_id = str(uuid.uuid4())
     storage_adapter = _get_storage()
     storage_path = storage_adapter.build_path(user_id, document_id)
 
-    # 1. Upload raw PDF binary to Storage
     try:
         storage_filename = storage_adapter.save_file(
             storage_path, pdf_bytes, content_type="application/pdf", auth_token=auth_token
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to save PDF to storage provider: {exc}"
-        ) from exc
+        raise HTTPException(status_code=503, detail="PDF storage could not confirm the upload.") from exc
 
-    # 2. Generate vector embeddings for chunked passages
-    embedding_model = OLLAMA_EMBED_MODEL
-    chunk_texts = [chunk.text for chunk in pdf_chunks]
-    try:
-        vectors: list[list[float]] = []
-        async with inference_concurrency_guard():
-            for start in range(0, len(chunk_texts), 32):
-                vectors.extend(
-                    await embed_texts(chunk_texts[start:start + 32], purpose="document", model=embedding_model)
-                )
-    except OllamaServiceError as exc:
-        # Clean up storage object on failure so dangling files are prevented
-        try:
-            storage_adapter.delete_file(storage_path, auth_token=auth_token)
-        except Exception:
-            pass
-        raise HTTPException(status_code=503, detail=f"Embedding model unavailable: {exc}") from exc
-
-    if len(vectors) != len(pdf_chunks):
-        storage_adapter.delete_file(storage_path, auth_token=auth_token)
-        raise HTTPException(status_code=502, detail="Embedding count did not match the PDF chunk count.")
-
-    dimensions = {len(vector) for vector in vectors}
-    if len(dimensions) != 1 or 0 in dimensions:
-        storage_adapter.delete_file(storage_path, auth_token=auth_token)
-        raise HTTPException(status_code=502, detail="The embedding model returned inconsistent vector dimensions.")
-
-    # 3. Persist document, page text, and chunk embeddings atomically in database
     timestamp = _now_iso()
     doc_title = (title or Path(display_filename).stem).strip()[:240] or Path(display_filename).stem
     document = {
@@ -461,59 +546,65 @@ async def upload_document(
         "storage_path": storage_path,
         "sha256": file_hash,
         "size_bytes": len(pdf_bytes),
-        "page_count": page_count,
+        "page_count": 0,
+        "chunk_count": 0,
         "mime_type": "application/pdf",
-        "index_status": "completed",
+        "index_status": "pending",
         "created_at": timestamp,
         "user_id": user_id,
     }
-    chunks = [
-        {
-            "id": str(uuid.uuid4()),
-            "page_number": chunk.page_number,
-            "chunk_index": chunk.chunk_index,
-            "text": chunk.text,
-            "embedding": vectors[index],
-            "embedding_model": embedding_model,
-            "metadata": {"char_count": len(chunk.text)},
-        }
-        for index, chunk in enumerate(pdf_chunks)
-    ]
 
     try:
-        insert_document(document, chunks, pages=pdf_pages, user_id=user_id)
-        try:
-            from app.services.figure_service import get_figure_service
-            get_figure_service().extract_figures_from_pdf(user_id, document_id, pdf_bytes)
-        except Exception:
-            pass
+        insert_document(document, [], user_id=user_id)
     except Exception as exc:
         try:
             storage_adapter.delete_file(storage_path, auth_token=auth_token)
-        except Exception:
-            pass
-        raise HTTPException(status_code=500, detail=f"Could not persist indexed PDF in database: {exc}") from exc
-
-    invalidate_index_cache()
-    try:
-        from app.rag.search import _get_index
-        _get_index(embedding_model, user_id=user_id)
-    except Exception:
-        pass
+        except Exception as cleanup_exc:
+            logger.warning(
+                "Could not remove uncommitted upload %s from storage: %s",
+                document_id,
+                cleanup_exc,
+            )
+        raise HTTPException(
+            status_code=500,
+            detail="The PDF was stored, but its document record could not be committed.",
+        ) from exc
 
     return {
         "id": document_id,
         "filename": display_filename,
         "title": doc_title,
-        "page_count": page_count,
-        "chunk_count": len(pdf_chunks),
+        "page_count": 0,
+        "chunk_count": 0,
         "size_bytes": len(pdf_bytes),
         "storage_path": storage_path,
-        "embedding_model": embedding_model,
-        "status": "indexed",
-        "index_status": "completed",
-        "message": "PDF uploaded, extracted, indexed, and persisted in Supabase.",
+        "status": "pending",
+        "index_status": "pending",
+        "message": "PDF stored successfully. AI indexing is queued.",
     }
+
+
+@app.get("/api/v1/documents/{document_id}", tags=["documents"])
+async def get_document_status(document_id: str, request: Request) -> dict[str, Any]:
+    """Return persisted document and indexing status to its authenticated owner."""
+    user_id = get_current_user_id(request)
+    document = get_document(document_id, user_id=user_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    return document
+
+
+@app.post("/api/v1/documents/{document_id}/retry", status_code=202, tags=["documents"])
+async def retry_document_indexing(document_id: str, request: Request) -> dict[str, str]:
+    user_id = get_current_user_id(request)
+    document = get_document(document_id, user_id=user_id)
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if document.get("index_status") != "failed":
+        raise HTTPException(status_code=409, detail="Only failed document indexing can be retried.")
+    if not retry_document_index(document_id, user_id):
+        raise HTTPException(status_code=409, detail="The document is no longer available for retry.")
+    return {"id": document_id, "status": "pending"}
 
 
 @app.get("/api/v1/documents/{document_id}/download", tags=["documents"])

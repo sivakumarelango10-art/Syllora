@@ -44,8 +44,11 @@ class SQLiteAdapter(DatabaseAdapter):
                     chunk_count INTEGER NOT NULL,
                     index_status TEXT NOT NULL DEFAULT 'completed',
                     index_error TEXT,
+                    index_attempts INTEGER NOT NULL DEFAULT 0,
+                    next_attempt_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     mime_type TEXT NOT NULL DEFAULT 'application/pdf',
-                    created_at TEXT NOT NULL
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
                 CREATE TABLE IF NOT EXISTS document_pages (
                     id TEXT PRIMARY KEY,
@@ -357,6 +360,23 @@ class SQLiteAdapter(DatabaseAdapter):
                 CREATE INDEX IF NOT EXISTS idx_faculty_q_user ON faculty_questions(user_id, course_id);
                 """
             )
+            document_columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(documents)")
+            }
+            if "index_attempts" not in document_columns:
+                connection.execute(
+                    "ALTER TABLE documents ADD COLUMN index_attempts INTEGER NOT NULL DEFAULT 0"
+                )
+            if "next_attempt_at" not in document_columns:
+                connection.execute("ALTER TABLE documents ADD COLUMN next_attempt_at TEXT")
+                connection.execute(
+                    "UPDATE documents SET next_attempt_at = CURRENT_TIMESTAMP WHERE next_attempt_at IS NULL"
+                )
+            if "updated_at" not in document_columns:
+                connection.execute("ALTER TABLE documents ADD COLUMN updated_at TEXT")
+                connection.execute(
+                    "UPDATE documents SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP) WHERE updated_at IS NULL"
+                )
             # Idempotently ensure phone_number column exists if table was created previously
             try:
                 connection.execute("ALTER TABLE profiles ADD COLUMN phone_number TEXT;")
@@ -397,7 +417,10 @@ class SQLiteAdapter(DatabaseAdapter):
                    ON CONFLICT(id) DO UPDATE SET
                    user_id=excluded.user_id, filename=excluded.filename, title=excluded.title, storage_filename=excluded.storage_filename,
                    chunk_count=excluded.chunk_count, page_count=excluded.page_count,
-                   index_status=excluded.index_status, index_error=excluded.index_error, mime_type=excluded.mime_type""",
+                   index_status=excluded.index_status, index_error=excluded.index_error, mime_type=excluded.mime_type,
+                   updated_at=CURRENT_TIMESTAMP,
+                   index_attempts=CASE WHEN excluded.index_status = 'pending' THEN 0 ELSE documents.index_attempts END,
+                   next_attempt_at=CASE WHEN excluded.index_status = 'pending' THEN CURRENT_TIMESTAMP ELSE documents.next_attempt_at END""",
                 (
                     document["id"],
                     uid,
@@ -465,14 +488,79 @@ class SQLiteAdapter(DatabaseAdapter):
         with self._connect() as connection:
             if user_id:
                 connection.execute(
-                    "UPDATE documents SET index_status = ?, index_error = ? WHERE id = ? AND user_id = ?",
+                    "UPDATE documents SET index_status = ?, index_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND user_id = ?",
                     (status, error, document_id, user_id),
                 )
             else:
                 connection.execute(
-                    "UPDATE documents SET index_status = ?, index_error = ? WHERE id = ?",
+                    "UPDATE documents SET index_status = ?, index_error = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
                     (status, error, document_id),
                 )
+
+    def claim_next_pending_document(self) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                """SELECT id, user_id, filename, title, storage_filename, sha256,
+                          size_bytes, page_count, chunk_count, mime_type, created_at,
+                          index_attempts
+                   FROM documents
+                   WHERE (index_status = 'pending' AND datetime(next_attempt_at) <= datetime('now')
+                          AND index_attempts < 3)
+                      OR (index_status = 'processing' AND datetime(updated_at) <= datetime('now', '-10 minutes')
+                          AND index_attempts < 3)
+                   ORDER BY created_at ASC
+                   LIMIT 1"""
+            ).fetchone()
+            if row is None:
+                return None
+            connection.execute(
+                """UPDATE documents
+                   SET index_status = 'processing', index_error = NULL,
+                       index_attempts = index_attempts + 1, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ? AND user_id = ?""",
+                (row["id"], row["user_id"]),
+            )
+            claimed = dict(row)
+            claimed["index_attempts"] += 1
+            return claimed
+
+    def fail_document_index(self, document_id: str, user_id: str, error: str) -> None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT index_attempts FROM documents WHERE id = ? AND user_id = ?",
+                (document_id, user_id),
+            ).fetchone()
+            if row is None:
+                return
+            attempts = int(row["index_attempts"])
+            if attempts >= 3:
+                connection.execute(
+                    """UPDATE documents
+                       SET index_status = 'failed', index_error = ?, updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ? AND user_id = ?""",
+                    (error[:1000], document_id, user_id),
+                )
+                return
+            delay_seconds = 30 if attempts == 1 else 120
+            connection.execute(
+                """UPDATE documents
+                   SET index_status = 'pending', index_error = ?,
+                       next_attempt_at = datetime('now', ?), updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ? AND user_id = ?""",
+                (error[:1000], f"+{delay_seconds} seconds", document_id, user_id),
+            )
+
+    def retry_document_index(self, document_id: str, user_id: str) -> bool:
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """UPDATE documents
+                   SET index_status = 'pending', index_error = NULL, index_attempts = 0,
+                       next_attempt_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = ? AND user_id = ? AND index_status = 'failed'""",
+                (document_id, user_id),
+            )
+            return cursor.rowcount > 0
 
     def get_document_pages(
         self, document_id: str, user_id: str | None = None

@@ -20,6 +20,7 @@ Covers:
 """
 from __future__ import annotations
 
+import asyncio
 import fitz
 import hashlib
 import json
@@ -56,6 +57,18 @@ def make_sample_pdf(text: str, pages: int = 1) -> bytes:
     data = doc.tobytes()
     doc.close()
     return data
+
+
+def process_pending_document(document_id: str) -> Exception | None:
+    claimed = main.claim_next_pending_document()
+    assert claimed is not None
+    assert claimed["id"] == document_id
+    try:
+        asyncio.run(main._process_document_index(claimed))
+    except Exception as exc:
+        main.fail_document_index(document_id, claimed["user_id"], str(exc))
+        return exc
+    return None
 
 
 class InMemorySupabaseStorageMock(StorageAdapter):
@@ -96,7 +109,7 @@ class InMemorySupabaseStorageMock(StorageAdapter):
 # ---------------------------------------------------------------------------
 
 def test_01_upload_valid_pdf(monkeypatch) -> None:
-    """1. Upload a valid PDF and verify 201 Created with metadata."""
+    """1. Upload a valid PDF and verify the durable 202 receipt and later indexing."""
     async def fake_embed(texts, *, purpose, model=None):
         return [[0.01 * (i % 10) for i in range(768)] for _ in texts]
 
@@ -110,12 +123,18 @@ def test_01_upload_valid_pdf(monkeypatch) -> None:
         files={"file": ("lecture1.pdf", pdf_bytes, "application/pdf")},
         data={"title": "Lecture 1"},
     )
-    assert res.status_code == 201, res.text
+    assert res.status_code == 202, res.text
     data = res.json()
     assert data["filename"] == "lecture1.pdf"
     assert data["title"] == "Lecture 1"
-    assert data["page_count"] == 1
-    assert data["chunk_count"] >= 1
+    assert data["index_status"] == "pending"
+    indexed_error = process_pending_document(data["id"])
+    assert indexed_error is None
+    indexed = get_document(data["id"], user_id=DEFAULT_DEMO_USER_ID)
+    assert indexed is not None
+    assert indexed["index_status"] == "indexed"
+    assert indexed["page_count"] == 1
+    assert indexed["chunk_count"] >= 1
 
 
 def test_02_reject_invalid_file() -> None:
@@ -149,7 +168,7 @@ def test_03_confirm_pdf_exists_in_supabase_storage(monkeypatch) -> None:
         "/api/v1/documents",
         files={"file": ("bankers.pdf", pdf_bytes, "application/pdf")},
     )
-    assert res.status_code == 201
+    assert res.status_code == 202
     doc_id = res.json()["id"]
 
     # Verify storage path exists in mock storage
@@ -177,7 +196,7 @@ def test_04_confirm_database_record_contains_correct_storage_path_and_metadata(m
         files={"file": ("vm_chapter.pdf", pdf_bytes, "application/pdf")},
         data={"title": "Virtual Memory Chapter"},
     )
-    assert res.status_code == 201
+    assert res.status_code == 202
     doc_id = res.json()["id"]
 
     doc_record = get_document(doc_id, user_id=DEFAULT_DEMO_USER_ID)
@@ -203,8 +222,9 @@ def test_05_confirm_extracted_page_content_and_chunks_persisted(monkeypatch) -> 
         "/api/v1/documents",
         files={"file": ("semaphores.pdf", pdf_bytes, "application/pdf")},
     )
-    assert res.status_code == 201
+    assert res.status_code == 202
     doc_id = res.json()["id"]
+    assert process_pending_document(doc_id) is None
 
     pages = get_document_pages(doc_id, user_id=DEFAULT_DEMO_USER_ID)
     assert len(pages) == 1
@@ -229,7 +249,8 @@ def test_06_confirm_embeddings_are_stored_and_retrievable(monkeypatch) -> None:
         "/api/v1/documents",
         files={"file": ("deadlocks.pdf", pdf_bytes, "application/pdf")},
     )
-    assert res.status_code == 201
+    assert res.status_code == 202
+    assert process_pending_document(res.json()["id"]) is None
 
     search_res = client.post(
         "/api/v1/search",
@@ -255,16 +276,19 @@ def test_07_confirm_document_is_marked_completed_only_after_successful_indexing(
         "/api/v1/documents",
         files={"file": ("os_arch.pdf", pdf_bytes, "application/pdf")},
     )
-    assert res.status_code == 201
+    assert res.status_code == 202
     data = res.json()
-    assert data["status"] in ("completed", "indexed")
+    assert data["index_status"] == "pending"
 
     record = get_document(data["id"], user_id=DEFAULT_DEMO_USER_ID)
-    assert record["status"] in ("completed", "indexed")
+    assert record["index_status"] == "pending"
+    assert process_pending_document(data["id"]) is None
+    record = get_document(data["id"], user_id=DEFAULT_DEMO_USER_ID)
+    assert record["index_status"] == "indexed"
 
 
-def test_08_confirm_database_or_storage_failure_results_in_failed_state(monkeypatch) -> None:
-    """8. Confirm storage or embedding failure cleans up and returns appropriate failure."""
+def test_08_confirm_indexing_failure_is_persisted_for_retry(monkeypatch) -> None:
+    """8. Confirm an indexing failure leaves the stored PDF queued with an error."""
     from app.services.ollama_client import OllamaServiceError
 
     async def broken_embed(texts, *, purpose, model=None):
@@ -279,10 +303,15 @@ def test_08_confirm_database_or_storage_failure_results_in_failed_state(monkeypa
         "/api/v1/documents",
         files={"file": ("fail_doc.pdf", pdf_bytes, "application/pdf")},
     )
-    assert res.status_code == 503
-    assert "Embedding model unavailable" in res.json()["detail"]
-    # Verify no dangling file remained in storage
-    assert len(mock_storage.objects) == 0
+    assert res.status_code == 202, res.text
+    document_id = res.json()["id"]
+    failure = process_pending_document(document_id)
+    assert failure is not None
+    record = get_document(document_id, user_id=DEFAULT_DEMO_USER_ID)
+    assert record is not None
+    assert record["index_status"] == "pending"
+    assert "Ollama connection timed out" in record["index_error"]
+    assert len(mock_storage.objects) == 1
 
 
 def test_09_confirm_retrying_ingestion_does_not_create_duplicate_records(monkeypatch) -> None:
@@ -299,8 +328,9 @@ def test_09_confirm_retrying_ingestion_does_not_create_duplicate_records(monkeyp
         "/api/v1/documents",
         files={"file": ("sockets.pdf", pdf_bytes, "application/pdf")},
     )
-    assert res1.status_code == 201
+    assert res1.status_code == 202
     doc_id = res1.json()["id"]
+    assert process_pending_document(doc_id) is None
 
     initial_count = count_chunks(user_id=DEFAULT_DEMO_USER_ID)
 
@@ -330,7 +360,8 @@ def test_10_confirm_document_listing_works_after_backend_restart(monkeypatch) ->
         "/api/v1/documents",
         files={"file": ("locking.pdf", pdf_bytes, "application/pdf")},
     )
-    assert upload_res.status_code == 201
+    assert upload_res.status_code == 202
+    assert process_pending_document(upload_res.json()["id"]) is None
 
     # Simulate backend restart by resetting memory caches
     from app.rag.search import invalidate_index_cache
@@ -359,10 +390,12 @@ def test_11_confirm_document_retrieval_and_citations_use_persisted_data(monkeypa
     monkeypatch.setattr(main, "_get_storage", lambda: mock_storage)
 
     pdf_bytes = make_sample_pdf("Two-phase locking guarantees conflict serializability.")
-    client.post(
+    upload_res = client.post(
         "/api/v1/documents",
         files={"file": ("db_concurrency.pdf", pdf_bytes, "application/pdf")},
     )
+    assert upload_res.status_code == 202
+    assert process_pending_document(upload_res.json()["id"]) is None
 
     ask_res = client.post(
         "/api/v1/ask",
@@ -390,7 +423,7 @@ def test_12_confirm_deletion_cleans_up_associated_resources(monkeypatch) -> None
         "/api/v1/documents",
         files={"file": ("to_delete.pdf", pdf_bytes, "application/pdf")},
     )
-    assert upload_res.status_code == 201
+    assert upload_res.status_code == 202
     doc_id = upload_res.json()["id"]
 
     del_res = client.delete(f"/api/v1/documents/{doc_id}")
@@ -424,7 +457,7 @@ def test_13_confirm_user_a_cannot_access_user_b_documents(monkeypatch) -> None:
         "/api/v1/documents",
         files={"file": ("secret_user_a.pdf", pdf_bytes, "application/pdf")},
     )
-    assert res.status_code == 201
+    assert res.status_code == 202
     doc_id = res.json()["id"]
 
     # Attempt to access as User B

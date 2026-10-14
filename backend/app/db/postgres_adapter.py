@@ -259,7 +259,7 @@ class PostgresAdapter(DatabaseAdapter):
                         index_status = EXCLUDED.index_status,
                         index_error = EXCLUDED.index_error,
                         mime_type = EXCLUDED.mime_type,
-                        updated_at = EXCLUDED.updated_at
+                        updated_at = now()
                     """,
                     (
                         doc_id,
@@ -364,6 +364,89 @@ class PostgresAdapter(DatabaseAdapter):
                     (status, error, doc_id, uid),
                 )
             conn.commit()
+
+    def claim_next_pending_document(self) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    WITH candidate AS (
+                        SELECT id, user_id
+                        FROM public.study_documents
+                        WHERE (
+                            index_status = 'pending'
+                            AND next_attempt_at <= now()
+                            AND index_attempts < 3
+                        ) OR (
+                            index_status = 'processing'
+                            AND updated_at <= now() - interval '10 minutes'
+                            AND index_attempts < 3
+                        )
+                        ORDER BY created_at ASC
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    UPDATE public.study_documents AS document
+                    SET index_status = 'processing',
+                        index_error = NULL,
+                        index_attempts = document.index_attempts + 1,
+                        updated_at = now()
+                    FROM candidate
+                    WHERE document.id = candidate.id
+                      AND document.user_id = candidate.user_id
+                    RETURNING document.id::text AS id, document.user_id::text AS user_id,
+                              document.filename, document.title, document.storage_path AS storage_filename,
+                              document.storage_path, document.sha256, document.size_bytes,
+                              document.page_count, document.chunk_count, document.mime_type,
+                              document.created_at::text AS created_at, document.index_attempts
+                    """
+                )
+                row = cur.fetchone()
+            conn.commit()
+        return dict(row) if row else None
+
+    def fail_document_index(self, document_id: str, user_id: str, error: str) -> None:
+        uid = _to_valid_uuid(user_id)
+        doc_id = _to_valid_uuid(document_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE public.study_documents
+                    SET index_status = CASE WHEN index_attempts >= 3 THEN 'failed' ELSE 'pending' END,
+                        index_error = %s,
+                        next_attempt_at = CASE
+                            WHEN index_attempts >= 3 THEN next_attempt_at
+                            ELSE now() + CASE WHEN index_attempts = 1
+                                THEN interval '30 seconds'
+                                ELSE interval '120 seconds'
+                            END
+                        END,
+                        updated_at = now()
+                    WHERE id = %s AND user_id = %s
+                    """,
+                    (error[:1000], doc_id, uid),
+                )
+            conn.commit()
+
+    def retry_document_index(self, document_id: str, user_id: str) -> bool:
+        uid = _to_valid_uuid(user_id)
+        doc_id = _to_valid_uuid(document_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                self._set_auth_context(cur, uid)
+                cur.execute(
+                    """
+                    UPDATE public.study_documents
+                    SET index_status = 'pending', index_error = NULL, index_attempts = 0,
+                        next_attempt_at = now(), updated_at = now()
+                    WHERE id = %s AND user_id = %s AND index_status = 'failed'
+                    """,
+                    (doc_id, uid),
+                )
+                changed = cur.rowcount > 0
+            conn.commit()
+        return changed
 
     def get_document_pages(
         self, document_id: str, user_id: str | None = None

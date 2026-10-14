@@ -94,7 +94,10 @@ class WorkspaceStore {
     }
     try {
       // 1. Fetch real courses from PostgreSQL
-      const coursesRes = await sylloraApi.listCourses().catch(() => []);
+      const coursesRes = await sylloraApi.listCourses();
+      if (!Array.isArray(coursesRes)) {
+        throw new Error('The courses response was invalid.');
+      }
       const courses = Array.isArray(coursesRes) ? coursesRes : [];
       this.state.courses = courses;
       if (courses.length > 0) {
@@ -112,7 +115,10 @@ class WorkspaceStore {
       }
 
       // 2. Fetch real documents from PostgreSQL & Storage
-      const docsRes = await sylloraApi.listDocuments().catch(() => ({ documents: [] }));
+      const docsRes = await sylloraApi.listDocuments();
+      if (!docsRes || (!Array.isArray(docsRes.documents) && !Array.isArray(docsRes))) {
+        throw new Error('The study materials response was invalid.');
+      }
       const rawDocs = Array.isArray(docsRes.documents) ? docsRes.documents : (Array.isArray(docsRes) ? docsRes : []);
       this.state.documents = rawDocs.map(d => ({
         id: d.id,
@@ -129,7 +135,10 @@ class WorkspaceStore {
       }));
 
       // 3. Fetch real topics from PostgreSQL
-      const topicsRes = await sylloraApi.listTopics().catch(() => []);
+      const topicsRes = await sylloraApi.listTopics();
+      if (!Array.isArray(topicsRes)) {
+        throw new Error('The syllabus topics response was invalid.');
+      }
       const rawTopics = Array.isArray(topicsRes) ? topicsRes : [];
       this.state.topics = rawTopics.map(t => ({
         id: t.id,
@@ -142,7 +151,10 @@ class WorkspaceStore {
       }));
 
       // 4. Fetch real misconceptions from PostgreSQL
-      const miscRes = await sylloraApi.listMisconceptions().catch(() => []);
+      const miscRes = await sylloraApi.listMisconceptions();
+      if (!Array.isArray(miscRes)) {
+        throw new Error('The misconceptions response was invalid.');
+      }
       const rawMisc = Array.isArray(miscRes) ? miscRes : [];
       this.state.misconceptions = rawMisc.map(m => ({
         id: m.id,
@@ -156,7 +168,10 @@ class WorkspaceStore {
       }));
 
       // 5. Fetch real revision tasks from PostgreSQL
-      const revRes = await sylloraApi.listRevisionTasks().catch(() => []);
+      const revRes = await sylloraApi.listRevisionTasks();
+      if (!Array.isArray(revRes)) {
+        throw new Error('The revision tasks response was invalid.');
+      }
       const rawTasks = Array.isArray(revRes) ? revRes : [];
       this.state.revisionTasks = rawTasks.map(tsk => ({
         id: tsk.id,
@@ -230,6 +245,14 @@ class WorkspaceStore {
   addDocument(doc) {
     this.state.documents.unshift(doc);
     this.save();
+  }
+
+  updateDocument(docId, updates) {
+    const doc = this.state.documents.find(d => d.id === docId);
+    if (doc) {
+      Object.assign(doc, updates);
+      this.save();
+    }
   }
 
   deleteDocument(docId) {

@@ -20,7 +20,7 @@ class SupabaseStorageAdapter(StorageAdapter):
         service_key: str | None = None,
         bucket_name: str = "syllora-study-pdfs",
         api_key: str | None = None,
-        timeout_seconds: float = 30.0,
+        timeout_seconds: float = 180.0,
     ) -> None:
         self.supabase_url = supabase_url.rstrip("/")
         self.service_key = service_key or ""

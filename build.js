@@ -76,6 +76,12 @@ let normalizedSupabaseUrl = rawSupabaseUrl ? rawSupabaseUrl.trim().replace(/\/+$
 
 const publicSupabaseKey = getEnv('PUBLIC_SUPABASE_PUBLISHABLE_KEY', getEnv('SUPABASE_PUBLISHABLE_KEY', 'sb_publishable_AasSK22U-NcZhWk4e-7VAA_FFAUyQIU'));
 const publicStorageBucket = getEnv('SUPABASE_STORAGE_BUCKET', 'syllora-study-pdfs');
+const configuredUploadMb = Number(getEnv('MAX_UPLOAD_MB', getEnv('SYLLORA_MAX_UPLOAD_MB', '20')));
+const configuredUploadBytes = configuredUploadMb * 1024 * 1024;
+if (!Number.isSafeInteger(configuredUploadMb) || configuredUploadMb < 1 || !Number.isSafeInteger(configuredUploadBytes)) {
+  console.error('[Syllora Build] ❌ MAX_UPLOAD_MB must be a positive whole number representable in bytes.');
+  process.exit(1);
+}
 
 // Production Validation: enforce secure HTTPS API endpoint; reject localhost, 127.0.0.1, private IPs, tunnels, and static frontend origins
 if (isProductionBuild) {
@@ -140,7 +146,8 @@ const publicConfig = {
   PUBLIC_API_BASE_URL: normalizedApiBase,
   PUBLIC_SUPABASE_URL: normalizedSupabaseUrl,
   PUBLIC_SUPABASE_PUBLISHABLE_KEY: publicSupabaseKey,
-  SUPABASE_STORAGE_BUCKET: publicStorageBucket
+  SUPABASE_STORAGE_BUCKET: publicStorageBucket,
+  MAX_UPLOAD_BYTES: configuredUploadBytes
 };
 
 console.log('[Syllora Build] Public runtime configuration resolved:');

@@ -9,8 +9,9 @@
 import { router } from '../router.js';
 import { workspaceStore } from '../state.js';
 import { Toast, Modal, lockBodyScroll, unlockBodyScroll } from '../components/modal.js';
-import { getApiBase } from '../services/aiApi.js';
-import { getAuthToken } from '../services/supabase.js';
+import { MAX_UPLOAD_BYTES, requestApi, sylloraApi } from '../services/aiApi.js';
+
+const MAX_UPLOAD_MIB = Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024));
 
 function escapeHtml(str) {
   if (typeof str !== 'string') return str || '';
@@ -18,18 +19,7 @@ function escapeHtml(str) {
 }
 
 async function apiFetch(endpoint, options = {}) {
-  const apiBase = getApiBase();
-  const token = getAuthToken();
-  const headers = { ...(options.headers || {}) };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  const response = await fetch(`${apiBase}${endpoint}`, { ...options, headers });
-  if (!response.ok) {
-    const errData = await response.json().catch(() => ({}));
-    throw new Error(errData.detail || `HTTP ${response.status}`);
-  }
-  return response.json();
+  return requestApi(endpoint, options);
 }
 
 export function renderExams(mountPoint) {
@@ -487,7 +477,7 @@ export function renderExams(mountPoint) {
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
                 </svg>
                 <span class="pyq-file-dropzone-title">Click to browse or drag &amp; drop PDF here</span>
-                <span class="pyq-file-dropzone-hint">Strictly PDF files up to 50MB</span>
+                <span class="pyq-file-dropzone-hint">PDF files up to ${MAX_UPLOAD_MIB} MiB</span>
               </div>
 
               <div class="pyq-file-selected-pill" id="pyqSelectedFilePill" style="display: none;">
@@ -597,9 +587,8 @@ export function renderExams(mountPoint) {
         return;
       }
 
-      const maxSize = 50 * 1024 * 1024; // 50MB
-      if (file.size > maxSize) {
-        showError(`Selected file is ${formatBytes(file.size)}, which exceeds the 50MB upload limit.`);
+      if (file.size > MAX_UPLOAD_BYTES) {
+        showError(`Selected file is ${formatBytes(file.size)}, which exceeds the ${MAX_UPLOAD_MIB} MiB upload limit.`);
         return;
       }
 
@@ -698,37 +687,29 @@ export function renderExams(mountPoint) {
         Extracting Questions...
       `;
 
-      const formData = new FormData();
-      formData.append('title', title);
-      formData.append('exam_year', yearInput.value.trim());
-      formData.append('semester', semesterSelect.value);
-      formData.append('exam_type', examTypeSelect.value);
-      formData.append('file', selectedPdfFile);
-
+      let backendReachable = false;
       try {
-        const apiBase = getApiBase();
-        const token = getAuthToken();
-        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-        const res = await fetch(`${apiBase}/api/v1/exams/papers`, {
-          method: 'POST',
-          headers,
-          body: formData,
+        await sylloraApi.health();
+        backendReachable = true;
+        const data = await sylloraApi.uploadExamPaper({
+          file: selectedPdfFile,
+          title,
+          examYear: yearVal,
+          semester: semesterSelect.value,
+          examType: examTypeSelect.value,
+          courseId: workspaceStore.getState().course?.id
         });
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || `Upload failed (HTTP ${res.status})`);
-        }
-
-        const data = await res.json();
         Toast.show(`Successfully extracted ${data.questions_extracted || 0} questions!`, 'success');
         isUploading = false;
         close();
         loadData();
       } catch (err) {
-        const errMsg = err.message || 'Error processing question paper PDF';
+        const errMsg = err.code === 'API_NETWORK_ERROR' && !backendReachable
+          ? 'AI service is temporarily unreachable. Your question paper has not been uploaded. Please retry.'
+          : err.code === 'API_NETWORK_ERROR'
+          ? 'AI service is temporarily unreachable. The upload could not be confirmed; check Exam Intelligence before retrying.'
+          : err.message || 'Error processing question paper PDF';
         showError(errMsg);
-        Toast.show(errMsg, 'error');
 
         // Re-enable form controls without discarding user data
         isUploading = false;

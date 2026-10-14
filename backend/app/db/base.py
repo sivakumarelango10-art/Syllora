@@ -51,6 +51,23 @@ class DatabaseAdapter(abc.ABC):
         ...
 
     @abc.abstractmethod
+    def claim_next_pending_document(self) -> dict[str, Any] | None:
+        """Atomically claim one durable document-indexing job for a worker."""
+        ...
+
+    @abc.abstractmethod
+    def fail_document_index(
+        self, document_id: str, user_id: str, error: str
+    ) -> None:
+        """Schedule a bounded retry or mark a document indexing job failed."""
+        ...
+
+    @abc.abstractmethod
+    def retry_document_index(self, document_id: str, user_id: str) -> bool:
+        """Reset a failed document-indexing job for an owner-authorized retry."""
+        ...
+
+    @abc.abstractmethod
     def get_document_pages(
         self, document_id: str, user_id: str | None = None
     ) -> list[dict[str, Any]]:

@@ -55,6 +55,18 @@ def update_document_status(
     """Update document lifecycle status and optional error details."""
     _get_adapter().update_document_status(document_id, status, error=error, user_id=user_id)
 
+def claim_next_pending_document() -> dict[str, Any] | None:
+    """Atomically claim the next persisted document-indexing job."""
+    return _get_adapter().claim_next_pending_document()
+
+def fail_document_index(document_id: str, user_id: str, error: str) -> None:
+    """Schedule a retry or persist a terminal indexing failure."""
+    _get_adapter().fail_document_index(document_id, user_id, error)
+
+def retry_document_index(document_id: str, user_id: str) -> bool:
+    """Reset a failed indexing job for its authenticated owner."""
+    return _get_adapter().retry_document_index(document_id, user_id)
+
 
 def get_document_pages(
     document_id: str, user_id: str | None = None

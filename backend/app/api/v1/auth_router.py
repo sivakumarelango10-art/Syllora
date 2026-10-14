@@ -14,13 +14,15 @@ async def get_my_profile(request: Request) -> UserProfileResponse:
     user_id = get_current_user_id(request)
     repo = get_academic_repository()
     profile = repo.get_profile(user_id)
+    created_at = profile.get("created_at")
+    updated_at = profile.get("updated_at")
     return UserProfileResponse(
         user_id=user_id,
         display_name=profile.get("display_name", "Student"),
         phone_number=profile.get("phone_number"),
         avatar_path=profile.get("avatar_path"),
-        created_at=profile.get("created_at"),
-        updated_at=profile.get("updated_at"),
+        created_at=created_at.isoformat() if hasattr(created_at, "isoformat") else (str(created_at) if created_at else None),
+        updated_at=updated_at.isoformat() if hasattr(updated_at, "isoformat") else (str(updated_at) if updated_at else None),
     )
 
 
@@ -36,11 +38,13 @@ async def update_my_profile(
         phone_number=body.phone_number,
         avatar_path=body.avatar_path,
     )
+    created_at = updated.get("created_at")
+    updated_at = updated.get("updated_at")
     return UserProfileResponse(
         user_id=user_id,
         display_name=updated.get("display_name", "Student"),
         phone_number=updated.get("phone_number"),
         avatar_path=updated.get("avatar_path"),
-        created_at=updated.get("created_at"),
-        updated_at=updated.get("updated_at"),
+        created_at=created_at.isoformat() if hasattr(created_at, "isoformat") else (str(created_at) if created_at else None),
+        updated_at=updated_at.isoformat() if hasattr(updated_at, "isoformat") else (str(updated_at) if updated_at else None),
     )

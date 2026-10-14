@@ -1,5 +1,13 @@
 import { getAuthToken, refreshSession } from "./supabase.js";
 
+const SUPABASE_BUCKET_UPLOAD_LIMIT_BYTES = 20 * 1024 * 1024;
+const configuredUploadBytes = Number(
+  typeof window !== "undefined" ? window.__SYLLORA_CONFIG__?.MAX_UPLOAD_BYTES : 0
+);
+export const MAX_UPLOAD_BYTES = Number.isSafeInteger(configuredUploadBytes) && configuredUploadBytes > 0
+  ? Math.min(configuredUploadBytes, SUPABASE_BUCKET_UPLOAD_LIMIT_BYTES)
+  : SUPABASE_BUCKET_UPLOAD_LIMIT_BYTES;
+
 /**
  * Strictly approved API origin whitelist.
  * Bearer tokens and sensitive student requests will NEVER be sent to
@@ -143,7 +151,11 @@ async function request(path, options = {}) {
       headers,
     });
   } catch (netErr) {
-    throw new Error(`Network error communicating with API (${activeBase}): ${netErr.message || 'Connection failed'}`);
+    const error = new Error("AI service is temporarily unreachable.");
+    error.name = "ApiNetworkError";
+    error.code = "API_NETWORK_ERROR";
+    error.cause = netErr;
+    throw error;
   }
 
   // If 401 Unauthorized, attempt session refresh once without entering an infinite loop
@@ -185,6 +197,10 @@ async function request(path, options = {}) {
   return data;
 }
 
+export function requestApi(path, options = {}) {
+  return request(path, options);
+}
+
 export const sylloraApi = {
   health() {
     return request("/health");
@@ -209,8 +225,29 @@ export const sylloraApi = {
     });
   },
 
+  uploadExamPaper({ file, title, examYear, semester, examType, courseId }) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("title", title);
+    form.append("exam_year", String(examYear));
+    form.append("semester", semester);
+    form.append("exam_type", examType);
+    if (courseId) form.append("course_id", courseId);
+
+    return request("/api/v1/exams/papers", {
+      method: "POST",
+      body: form
+    });
+  },
+
   getDocument(documentId) {
     return request(`/api/v1/documents/${encodeURIComponent(documentId)}`);
+  },
+
+  retryDocumentIndex(documentId) {
+    return request(`/api/v1/documents/${encodeURIComponent(documentId)}/retry`, {
+      method: "POST"
+    });
   },
 
   getDocumentPages(documentId) {
@@ -555,4 +592,3 @@ export const sylloraApi = {
     return request(`/api/v1/conflicts${q}`);
   }
 };
-

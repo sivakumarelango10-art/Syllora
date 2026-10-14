@@ -14,8 +14,8 @@ class UserProfileResponse(BaseModel):
     email: str | None = None
     phone_number: str | None = None
     avatar_path: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
+    created_at: Any | None = None
+    updated_at: Any | None = None
 
 
 class UserProfileUpdateRequest(BaseModel):

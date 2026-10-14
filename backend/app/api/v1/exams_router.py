@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import uuid
+import asyncio
 from typing import Any
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -9,6 +10,7 @@ from pydantic import BaseModel, Field
 from app.auth import get_current_user_id
 from app.rate_limiter import standard_rate_limiter, ai_rate_limiter
 from app.config import MAX_UPLOAD_BYTES
+from app.storage import get_storage_adapter
 from app.services.exam_service import get_exam_service
 from app.repositories.academic_repository import get_academic_repository
 
@@ -37,25 +39,53 @@ async def upload_exam_paper(
     user_id = get_current_user_id(request)
     ai_rate_limiter.check(user_id)
 
-    if not file.filename.lower().endswith(".pdf"):
+    filename = file.filename or ""
+    if not filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=415, detail="Only PDF exam papers are supported.")
 
     pdf_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
     if len(pdf_bytes) > MAX_UPLOAD_BYTES:
         raise HTTPException(status_code=413, detail="Exam paper PDF exceeds upload limit.")
+    if not pdf_bytes or not pdf_bytes.startswith(b"%PDF-"):
+        raise HTTPException(status_code=422, detail="The uploaded file does not look like a valid PDF.")
+
+    auth_header = request.headers.get("authorization", "")
+    auth_token = auth_header.split(" ", 1)[1].strip() if " " in auth_header else None
+    storage_adapter = get_storage_adapter()
+    storage_path = storage_adapter.build_path(user_id, f"exams/{uuid.uuid4()}")
+    try:
+        await asyncio.to_thread(
+            storage_adapter.save_file,
+            storage_path,
+            pdf_bytes,
+            content_type="application/pdf",
+            auth_token=auth_token,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Question-paper storage could not confirm the upload.",
+        ) from exc
 
     exam_svc = get_exam_service()
-    result = exam_svc.process_pyq_pdf(
-        user_id=user_id,
-        pdf_bytes=pdf_bytes,
-        filename=file.filename,
-        title=title,
-        exam_year=exam_year,
-        semester=semester,
-        exam_type=exam_type,
-        course_id=course_id,
-    )
-    return result
+    try:
+        return await asyncio.to_thread(
+            exam_svc.process_pyq_pdf,
+            user_id=user_id,
+            pdf_bytes=pdf_bytes,
+            filename=filename,
+            title=title,
+            exam_year=exam_year,
+            semester=semester,
+            exam_type=exam_type,
+            course_id=course_id,
+            storage_path=storage_path,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="The question paper was stored, but question extraction did not complete.",
+        ) from exc
 
 
 @router.get("/papers")

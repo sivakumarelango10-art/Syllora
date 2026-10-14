@@ -4,7 +4,7 @@
  * ============================================================================
  * - List and Grid view switching
  * - Search, type/status filtering, and sorting
- * - Drag-and-drop 20MB PDF upload dialog with queue & duplicate validation
+ * - Drag-and-drop PDF upload dialog with queue & duplicate validation
  * - Clear "LOCAL PREVIEW" labelling for newly added files
  * - Rename, Bookmark, Delete with confirmation
  * - Embedded PDF Document Reader
@@ -15,13 +15,79 @@ import { workspaceStore } from '../state.js';
 import { PdfReader } from '../components/pdfViewer.js';
 import { Modal, Toast } from '../components/modal.js';
 import { savePdfBlob } from '../storage.js';
-import { sylloraApi } from '../services/aiApi.js';
+import { MAX_UPLOAD_BYTES, sylloraApi } from '../services/aiApi.js';
+
+const MAX_UPLOAD_MIB = Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024));
 
 export function renderMaterials(container, queryParams = {}) {
   let viewMode = 'list'; // 'list' | 'grid'
   let searchQuery = '';
   let statusFilter = 'all'; // 'all' | 'indexed' | 'local_preview'
   let sortKey = 'newest'; // 'newest' | 'name' | 'pages'
+  let viewActive = true;
+  let statusPollTimer = null;
+
+  function hasPendingIndexing() {
+    return workspaceStore.getState().documents.some(doc =>
+      doc.backendDocument && ['pending', 'processing'].includes(doc.status)
+    );
+  }
+
+  function scheduleStatusPoll(delay = 4000) {
+    if (!viewActive || statusPollTimer !== null || !hasPendingIndexing()) return;
+    statusPollTimer = window.setTimeout(async () => {
+      statusPollTimer = null;
+      if (!viewActive) return;
+      try {
+        const result = await sylloraApi.listDocuments();
+        const serverDocs = Array.isArray(result.documents) ? result.documents : null;
+        if (!serverDocs) throw new Error('The study materials response was invalid.');
+        for (const serverDoc of serverDocs) {
+          const existing = workspaceStore.getState().documents.find(doc => doc.id === serverDoc.id);
+          workspaceStore.updateDocument(serverDoc.id, {
+            status: serverDoc.index_status || serverDoc.status || 'pending',
+            pageCount: Number(serverDoc.page_count) || null,
+            backendChunkCount: Number(serverDoc.chunk_count) || 0,
+            indexError: serverDoc.index_error || null
+          });
+          if (!existing) {
+            workspaceStore.addDocument({
+              id: serverDoc.id,
+              title: serverDoc.title || serverDoc.filename,
+              filename: serverDoc.filename,
+              author: 'Uploaded Document',
+              pageCount: Number(serverDoc.page_count) || null,
+              fileSize: serverDoc.size_bytes ? `${(serverDoc.size_bytes / 1024).toFixed(1)} KB` : 'Unknown',
+              uploadedAt: serverDoc.created_at ? serverDoc.created_at.split('T')[0] : new Date().toISOString().split('T')[0],
+              status: serverDoc.index_status || serverDoc.status || 'pending',
+              backendDocument: true,
+              backendChunkCount: Number(serverDoc.chunk_count) || 0,
+              indexError: serverDoc.index_error || null,
+              isBookmarked: false
+            });
+          }
+        }
+        updateResultsMount();
+      } catch (error) {
+        console.warn('[Study Materials] Could not refresh processing status:', error);
+      }
+      scheduleStatusPoll(hasPendingIndexing() ? 8000 : 4000);
+    }, delay);
+  }
+
+  function statusBadge(doc) {
+    if (!doc.backendDocument) {
+      return '<span class="pill-badge pill-amber">Local Preview</span>';
+    }
+    const status = doc.status || 'pending';
+    if (status === 'indexed' || status === 'completed') {
+      return '<span class="pill-badge pill-green">Ready</span>';
+    }
+    if (status === 'failed') {
+      return '<span class="pill-badge pill-red" title="AI indexing failed">Failed</span>';
+    }
+    return '<span class="pill-badge pill-amber" title="The PDF is stored and indexing is queued or in progress">Processing</span>';
+  }
 
   function getFilteredDocs() {
     const state = workspaceStore.getState();
@@ -35,8 +101,14 @@ export function renderMaterials(container, queryParams = {}) {
       }
     }
 
-    if (statusFilter !== 'all') {
-      docs = docs.filter(d => d.status === statusFilter);
+    if (statusFilter === 'indexed') {
+      docs = docs.filter(d => d.status === 'indexed' || d.status === 'completed');
+    } else if (statusFilter === 'processing') {
+      docs = docs.filter(d => ['pending', 'processing'].includes(d.status));
+    } else if (statusFilter === 'failed') {
+      docs = docs.filter(d => d.status === 'failed');
+    } else if (statusFilter === 'local_preview') {
+      docs = docs.filter(d => !d.backendDocument);
     }
 
     // Apply sorting
@@ -60,7 +132,7 @@ export function renderMaterials(container, queryParams = {}) {
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
           </svg>
           <h3>No study materials uploaded yet</h3>
-          <p style="color: var(--color-text-muted); margin-bottom: 20px;">Upload your course syllabus, lecture slides, or textbook chapters in PDF format (up to 20MB) to start AI indexing and citation tracking.</p>
+          <p style="color: var(--color-text-muted); margin-bottom: 20px;">Upload course syllabi, lecture slides, or textbook chapters in PDF format (up to ${MAX_UPLOAD_MIB} MiB per file).</p>
           <button type="button" class="btn btn-primary" id="emptyUploadBtn">Upload your first PDF</button>
         </div>
       `;
@@ -116,16 +188,15 @@ export function renderMaterials(container, queryParams = {}) {
                     <td>${typeof doc.pageCount === 'number' && doc.pageCount > 0 ? `${doc.pageCount} pp` : '<span class="text-muted" title="Page count unavailable">Unavailable</span>'}</td>
                     <td class="text-muted">${doc.fileSize}</td>
                     <td>
-                      ${doc.status === 'indexed' ? `
-                        <span class="pill-badge pill-green">Indexed</span>
-                      ` : `
-                        <span class="pill-badge pill-amber" title="Newly selected local preview (not semantically indexed)">LOCAL PREVIEW</span>
-                      `}
+                      ${statusBadge(doc)}
                     </td>
                     <td class="text-right actions-cell">
                       <button type="button" class="btn btn-secondary btn-xs open-reader-btn" data-doc-id="${doc.id}">
                         Read
                       </button>
+                      ${doc.backendDocument && doc.status === 'failed' ? `
+                        <button type="button" class="btn btn-secondary btn-xs retry-index-btn" data-doc-id="${doc.id}">Retry</button>
+                      ` : ''}
                       <button type="button" class="btn-action-icon bookmark-doc-btn ${doc.isBookmarked ? 'bookmarked' : ''}" data-doc-id="${doc.id}" title="${doc.isBookmarked ? 'Remove bookmark' : 'Bookmark document'}" aria-label="Bookmark">
                         <svg viewBox="0 0 20 20" width="14" height="14" fill="${doc.isBookmarked ? '#0F766E' : 'none'}" stroke="currentColor" stroke-width="2">
                           <path d="M5 3a2 2 0 0 0-2 2v14l7-4 7 4V5a2 2 0 0 0-2-2H5z"/>
@@ -162,11 +233,7 @@ export function renderMaterials(container, queryParams = {}) {
                 </svg>
               </div>
               <div class="grid-card-badges">
-                ${doc.status === 'indexed' ? `
-                  <span class="pill-badge pill-green">Indexed</span>
-                ` : `
-                  <span class="pill-badge pill-amber">Local Preview</span>
-                `}
+                ${statusBadge(doc)}
                 ${doc.isBookmarked ? `<span class="bookmark-star-badge">★</span>` : ''}
               </div>
             </div>
@@ -184,6 +251,9 @@ export function renderMaterials(container, queryParams = {}) {
               <button type="button" class="btn btn-secondary btn-xs open-reader-btn" data-doc-id="${doc.id}">
                 Open Reader
               </button>
+              ${doc.backendDocument && doc.status === 'failed' ? `
+                <button type="button" class="btn btn-secondary btn-xs retry-index-btn" data-doc-id="${doc.id}">Retry</button>
+              ` : ''}
               <div class="grid-footer-icons">
                 <button type="button" class="btn-action-icon bookmark-doc-btn ${doc.isBookmarked ? 'bookmarked' : ''}" data-doc-id="${doc.id}" title="Bookmark" aria-label="Bookmark">
                   ${doc.isBookmarked ? '★' : '☆'}
@@ -207,7 +277,10 @@ export function renderMaterials(container, queryParams = {}) {
 
     const emptyBtn = mount.querySelector('#emptyUploadBtn');
     if (emptyBtn) {
-      emptyBtn.addEventListener('click', () => openUploadModal(renderView));
+      emptyBtn.addEventListener('click', () => openUploadModal(() => {
+        renderView();
+        scheduleStatusPoll();
+      }));
     }
 
     const clearBtn = mount.querySelector('#clearFiltersBtn');
@@ -275,7 +348,9 @@ export function renderMaterials(container, queryParams = {}) {
               <label class="control-label" for="statusFilterSelect">Status:</label>
               <select id="statusFilterSelect" class="filter-select">
                 <option value="all" ${statusFilter === 'all' ? 'selected' : ''}>All Sources</option>
-                <option value="indexed" ${statusFilter === 'indexed' ? 'selected' : ''}>Indexed</option>
+                <option value="indexed" ${statusFilter === 'indexed' ? 'selected' : ''}>Ready</option>
+                <option value="processing" ${statusFilter === 'processing' ? 'selected' : ''}>Processing</option>
+                <option value="failed" ${statusFilter === 'failed' ? 'selected' : ''}>Failed</option>
                 <option value="local_preview" ${statusFilter === 'local_preview' ? 'selected' : ''}>Local Previews</option>
               </select>
             </div>
@@ -427,7 +502,10 @@ export function renderMaterials(container, queryParams = {}) {
     }
 
     if (openUploadModalBtn) {
-      openUploadModalBtn.addEventListener('click', () => openUploadModal(renderView));
+      openUploadModalBtn.addEventListener('click', () => openUploadModal(() => {
+        renderView();
+        scheduleStatusPoll();
+      }));
     }
 
     if (compareVersionsBtn) {
@@ -510,6 +588,23 @@ export function renderMaterials(container, queryParams = {}) {
         );
       });
     });
+
+    container.querySelectorAll('.retry-index-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const docId = btn.getAttribute('data-doc-id');
+        btn.disabled = true;
+        try {
+          await sylloraApi.retryDocumentIndex(docId);
+          workspaceStore.updateDocument(docId, { status: 'pending', indexError: null });
+          Toast.show('AI search preparation restarted.', 'info');
+          updateResultsMount();
+          scheduleStatusPoll();
+        } catch (error) {
+          Toast.show(`Could not retry indexing: ${error.message}`, 'error', 6000);
+          btn.disabled = false;
+        }
+      });
+    });
   }
 
   // Initial render
@@ -517,17 +612,34 @@ export function renderMaterials(container, queryParams = {}) {
 
   // Synchronize latest document library from Supabase backend
   workspaceStore.syncWithBackend().then(() => {
+    if (!viewActive) return;
     updateResultsMount();
-  }).catch(() => {});
+    scheduleStatusPoll();
+  }).catch(error => {
+    console.warn('[Study Materials] Initial library sync failed:', error);
+  });
 
   // Trigger modal if queryParams has upload flag
   if (queryParams.upload === '1') {
-    setTimeout(() => openUploadModal(renderView), 100);
+    window.setTimeout(() => {
+      if (viewActive) {
+        openUploadModal(() => {
+          renderView();
+          scheduleStatusPoll();
+        });
+      }
+    }, 100);
   }
+
+  return () => {
+    viewActive = false;
+    if (statusPollTimer !== null) window.clearTimeout(statusPollTimer);
+  };
 }
 
 export function openUploadModal(onSuccess) {
   let uploadQueue = [];
+  let isUploading = false;
 
   const modalContent = `
     <div class="upload-dialog-inner">
@@ -536,15 +648,11 @@ export function openUploadModal(onSuccess) {
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/>
         </svg>
         <h4>Drag & Drop academic PDF here</h4>
-        <p class="text-muted text-sm">Strictly PDF files up to 20MB per file.</p>
+        <p class="text-muted text-sm">PDF files up to ${MAX_UPLOAD_MIB} MiB per file.</p>
         <input type="file" id="modalFileInput" accept=".pdf,application/pdf" multiple style="display:none;">
         <div class="dropzone-actions mt-2">
           <button type="button" class="btn btn-secondary btn-sm" id="triggerFileSelectBtn">Browse local files</button>
         </div>
-      </div>
-
-      <div class="upload-validation-banner pill-amber" id="uploadNoticeBanner">
-        <strong>AI indexing:</strong> PDFs are uploaded to your local Syllora AI backend. Text extraction and indexing finish before the upload is marked complete.
       </div>
 
       <div class="upload-queue-container" id="uploadQueueContainer" style="display:none;">
@@ -558,24 +666,42 @@ export function openUploadModal(onSuccess) {
     'Upload Study Materials',
     modalContent,
     async () => {
+      if (isUploading) return false;
       if (uploadQueue.length === 0) {
         Toast.show('No valid PDFs in upload queue. Please select or drag a PDF first.', 'error');
         return false;
       }
 
+      isUploading = true;
       const results = [];
       const failures = [];
 
+      try {
+        await sylloraApi.health();
+      } catch (error) {
+        isUploading = false;
+        Toast.show(
+          'AI service is temporarily unreachable. Your files have not been uploaded. Please retry.',
+          'error',
+          6000
+        );
+        return false;
+      }
+
+      let uploadStatusUnknown = false;
       for (const file of uploadQueue) {
         try {
           const title = file.name.replace(/\.pdf$/i, '').replace(/_/g, ' ');
-          // The server extracts the PDF and computes embeddings before this resolves.
-          // If this exact PDF was already indexed through Swagger, reuse its existing record by filename.
           let backendDoc;
           try {
             backendDoc = await sylloraApi.uploadDocument(file, title);
           } catch (uploadError) {
             const message = String(uploadError && uploadError.message || '');
+            if (uploadError.code === 'API_NETWORK_ERROR') {
+              uploadStatusUnknown = true;
+              failures.push({ file, error: uploadError });
+              break;
+            }
             if (!/already been uploaded|HTTP 409|409/i.test(message)) throw uploadError;
             const listing = await sylloraApi.listDocuments();
             const serverDocs = Array.isArray(listing.documents) ? listing.documents : [];
@@ -602,9 +728,10 @@ export function openUploadModal(onSuccess) {
             pageCount: Number(backendDoc.page_count) || null,
             fileSize: `${((backendDoc.size_bytes ?? file.size) / 1024).toFixed(1)} KB`,
             uploadedAt: new Date().toISOString().split('T')[0],
-            status: 'indexed',
+            status: backendDoc.index_status || backendDoc.status || 'pending',
             backendDocument: true,
             backendChunkCount: Number(backendDoc.chunk_count) || 0,
+            indexError: backendDoc.index_error || null,
             embeddingModel: backendDoc.embedding_model || null,
             isPersistent,
             isBookmarked: false,
@@ -612,25 +739,35 @@ export function openUploadModal(onSuccess) {
           });
           results.push({ file, isPersistent, backendDoc });
         } catch (err) {
-          console.error('[Upload] AI indexing failed for:', file.name, err);
+          console.error('[Upload] Could not store PDF:', file.name, err);
           failures.push({ file, error: err });
-          Toast.show(`Could not index "${file.name}": ${err.message}`, 'error', 6000);
         }
       }
 
       if (results.length === 0) {
-        Toast.show('No PDF was indexed. Check that the Syllora AI backend is running and try again.', 'error', 6000);
+        const firstFailure = failures[0] && failures[0].error;
+        Toast.show(
+          uploadStatusUnknown
+            ? 'AI service is temporarily unreachable. Upload status could not be confirmed; check Study Materials before retrying.'
+            : `No PDF was stored. ${firstFailure ? firstFailure.message : 'Please retry.'}`,
+          'error',
+          6000
+        );
+        isUploading = false;
         return false;
       }
 
       const savedLocally = results.filter(r => r.isPersistent).length;
       const memoryOnly = results.length - savedLocally;
-      Toast.show(
-        `Syllora AI indexed ${results.length} PDF(s) and prepared their passages. ` +
-        (memoryOnly ? `${memoryOnly} PDF file(s) may not reopen after this browser session.` : 'PDF copies are saved in this browser for citation viewing.'),
-        failures.length ? 'warning' : 'success',
-        6000
+      const stillProcessing = results.some(result =>
+        ['pending', 'processing'].includes(
+          result.backendDoc.index_status || result.backendDoc.status
+        )
       );
+      const summary = `${results.length} PDF(s) saved to Study Materials.` +
+        (stillProcessing ? ' AI search preparation is in progress.' : ' Ready for AI search.') +
+        (failures.length ? ` ${failures.length} upload(s) could not be confirmed.` : '');
+      Toast.show(summary, failures.length || uploadStatusUnknown ? 'warning' : 'success', 6000);
 
       if (typeof onSuccess === 'function') onSuccess();
       return true;
@@ -658,9 +795,9 @@ export function openUploadModal(onSuccess) {
           return;
         }
 
-        // Validation: 20MB limit
-        if (file.size > 20 * 1024 * 1024) {
-          Toast.show(`"${file.name}" rejected: Exceeds 20MB maximum file size limit.`, 'error');
+        // Enforce the configured private-storage upload ceiling.
+        if (file.size > MAX_UPLOAD_BYTES) {
+          Toast.show(`"${file.name}" rejected: Exceeds ${MAX_UPLOAD_MIB} MiB maximum file size limit.`, 'error');
           return;
         }
 
@@ -787,5 +924,3 @@ export function openUploadModal(onSuccess) {
       'Close Comparison'
     );
   }
-
-
