@@ -4295,9 +4295,10 @@ tr.overview-topic-row:hover td {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.45);
-  backdrop-filter: blur(2px);
-  z-index: 100;
+  background-color: rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4365,12 +4366,269 @@ tr.overview-topic-row:hover td {
   border-radius: 0 0 var(--ws-card-radius) var(--ws-card-radius);
 }
 
+/* PYQ Exam Intelligence Modal & Form System */
+.pyq-modal-card {
+  width: 100%;
+  max-width: 540px;
+  width: calc(100vw - 32px);
+  max-height: 90dvh;
+  border-radius: 16px;
+  background-color: #FFFFFF;
+  border: 1px solid var(--ws-border, #E2E8EE);
+  box-shadow: 0 20px 48px -10px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalPopIn 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pyq-evidence-card {
+  width: 100%;
+  max-width: 640px;
+  width: calc(100vw - 32px);
+  max-height: 90dvh;
+  border-radius: 16px;
+  background-color: #FFFFFF;
+  border: 1px solid var(--ws-border, #E2E8EE);
+  box-shadow: 0 20px 48px -10px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(15, 23, 42, 0.05);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalPopIn 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pyq-modal-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--ws-border-light, #EEF2F6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: #FFFFFF;
+}
+
+.pyq-modal-title {
+  font-family: var(--font-heading, 'Poppins', sans-serif);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ws-text-main, #14212B);
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pyq-modal-body {
+  padding: 22px 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background-color: #FFFFFF;
+  box-sizing: border-box;
+}
+
+.pyq-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pyq-form-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1E293B;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pyq-form-label .required-star {
+  color: var(--ws-coral, #E11D48);
+}
+
+.pyq-form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 540px) {
+  .pyq-form-row-2 {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+}
+
+.pyq-form-control {
+  width: 100%;
+  height: 44px;
+  padding: 10px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #1E293B;
+  background-color: #FFFFFF;
+  border: 1px solid #CBD5E1;
+  border-radius: 8px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.pyq-form-control:focus {
+  outline: none;
+  border-color: var(--ws-primary, #006B6B);
+  box-shadow: 0 0 0 3px rgba(0, 107, 107, 0.15);
+}
+
+.pyq-form-control::placeholder {
+  color: #94A3B8;
+}
+
+.pyq-file-dropzone {
+  border: 2px dashed #CBD5E1;
+  border-radius: 12px;
+  padding: 22px 18px;
+  background-color: #F8FAFC;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.pyq-file-dropzone:hover,
+.pyq-file-dropzone:focus-visible,
+.pyq-file-dropzone.drag-over {
+  border-color: var(--ws-primary, #006B6B);
+  background-color: #F0FDFA;
+  outline: none;
+}
+
+.pyq-file-dropzone-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--ws-primary, #006B6B);
+}
+
+.pyq-file-dropzone-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1E293B;
+}
+
+.pyq-file-dropzone-hint {
+  font-size: 12.5px;
+  color: #64748B;
+}
+
+.pyq-file-selected-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background-color: #E6F4F2;
+  border: 1px solid #B4E3DA;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #03605E;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+
+.pyq-file-selected-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  flex: 1;
+}
+
+.pyq-file-selected-name {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pyq-file-selected-size {
+  font-size: 12px;
+  color: #0F766E;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.pyq-file-remove-btn {
+  background: none;
+  border: none;
+  color: #0F766E;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pyq-file-remove-btn:hover {
+  background-color: rgba(15, 118, 110, 0.12);
+  color: #BE123C;
+}
+
+.pyq-error-banner {
+  padding: 10px 14px;
+  border-radius: 8px;
+  background-color: #FEF2F2;
+  border: 1px solid #FECACA;
+  color: #991B1B;
+  font-size: 13px;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pyq-modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid var(--ws-border-light, #EEF2F6);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  background-color: #F8FAFC;
+  border-radius: 0 0 16px 16px;
+}
+
+.btn:disabled,
+.btn[disabled] {
+  opacity: 0.65;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none !important;
+}
+
+.spinner-sm {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: arcSpin 0.7s linear infinite;
+  display: inline-block;
+  vertical-align: middle;
+}
+
 /* Toast Container */
 .toast-container {
   position: fixed;
   bottom: 24px;
   right: 24px;
-  z-index: 200;
+  z-index: 2000;
   display: flex;
   flex-direction: column;
   gap: 8px;

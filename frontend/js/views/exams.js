@@ -8,7 +8,7 @@
 
 import { router } from '../router.js';
 import { workspaceStore } from '../state.js';
-import { Toast, Modal } from '../components/modal.js';
+import { Toast, Modal, lockBodyScroll, unlockBodyScroll } from '../components/modal.js';
 import { getApiBase } from '../services/aiApi.js';
 import { getAuthToken } from '../services/supabase.js';
 
@@ -293,52 +293,108 @@ export function renderExams(mountPoint) {
   }
 
   async function showEvidenceModal(questionId) {
-    const modalEl = document.createElement('div');
-    modalEl.className = 'modal-backdrop';
-    modalEl.innerHTML = `
-      <div class="modal" style="max-width: 650px; width: 90%;">
-        <div class="modal-header">
-          <h3 class="modal-title">Supporting Notes Evidence</h3>
-          <button type="button" class="modal-close" id="closeEvidenceModal">&times;</button>
+    if (document.getElementById('evidenceModalOverlay')) return;
+    const previousFocus = document.activeElement;
+    lockBodyScroll();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'evidenceModalOverlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'evidenceModalTitle');
+
+    overlay.innerHTML = `
+      <div class="modal-card pyq-evidence-card">
+        <div class="pyq-modal-header">
+          <h3 id="evidenceModalTitle" class="pyq-modal-title">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--ws-primary, #006B6B); flex-shrink: 0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Supporting Notes Evidence
+          </h3>
+          <button type="button" class="modal-close-btn" id="closeEvidenceModalBtn" aria-label="Close dialog">&times;</button>
         </div>
-        <div class="modal-body" id="evidenceModalBody">
-          <div style="text-align: center; padding: 20px; color: #64748B;">Searching your uploaded study materials...</div>
+        <div class="pyq-modal-body" id="evidenceModalBody">
+          <div style="text-align: center; padding: 28px 16px; color: var(--ws-text-muted, #64748B);">
+            <div class="spinner-sm" style="border-top-color: var(--ws-primary, #006B6B); border-color: rgba(0, 107, 107, 0.2); width: 22px; height: 22px; margin-bottom: 8px;"></div>
+            <div>Searching your uploaded study materials...</div>
+          </div>
         </div>
-        <div class="modal-footer">
+        <div class="pyq-modal-footer">
           <button type="button" class="btn btn-secondary" id="closeEvidenceBtn">Close</button>
         </div>
       </div>
     `;
-    document.body.appendChild(modalEl);
+    document.body.appendChild(overlay);
 
     const close = () => {
-      modalEl.remove();
+      window.removeEventListener('keydown', keydownHandler);
+      overlay.remove();
+      unlockBodyScroll();
+      if (previousFocus && typeof previousFocus.focus === 'function') {
+        previousFocus.focus();
+      }
     };
-    modalEl.querySelector('#closeEvidenceModal').addEventListener('click', close);
-    modalEl.querySelector('#closeEvidenceBtn').addEventListener('click', close);
+
+    const keydownHandler = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusables = overlay.querySelectorAll(
+          'button:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', keydownHandler);
+
+    const closeBtn = overlay.querySelector('#closeEvidenceModalBtn');
+    const footerCloseBtn = overlay.querySelector('#closeEvidenceBtn');
+
+    closeBtn.addEventListener('click', close);
+    footerCloseBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+
+    setTimeout(() => {
+      closeBtn.focus();
+    }, 50);
 
     try {
-      // Trigger live link evidence scan
       const res = await apiFetch(`/api/v1/exams/questions/${encodeURIComponent(questionId)}/evidence`, { method: 'POST' });
       const evidence = res.evidence || [];
-      const body = modalEl.querySelector('#evidenceModalBody');
+      const body = overlay.querySelector('#evidenceModalBody');
+
+      if (!body) return;
 
       if (evidence.length === 0) {
         body.innerHTML = `
-          <div style="text-align: center; padding: 20px; color: #64748B;">
-            <p style="margin-bottom: 8px;">No matching passages found in your uploaded study notes for this question.</p>
-            <p style="font-size: 12.5px; color: #94A3B8;">Upload relevant lecture slides or notes in Study Materials to generate page citations.</p>
+          <div style="text-align: center; padding: 24px 16px; color: var(--ws-text-muted, #64748B);">
+            <p style="margin: 0 0 8px; font-weight: 500; font-size: 14px; color: var(--ws-text-main, #1E293B);">No matching passages found in your uploaded study notes for this question.</p>
+            <p style="font-size: 13px; color: #94A3B8; margin: 0;">Upload relevant lecture slides or textbooks in Study Materials to generate verified citations.</p>
           </div>
         `;
       } else {
         body.innerHTML = `
-          <div style="font-size: 13px; color: #475569; margin-bottom: 12px;">Top verified passages retrieved from your personal study notes:</div>
-          <div style="display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto;">
-            ${evidence.map((e, idx) => `
-              <div style="padding: 12px; background: #F8FAFC; border: 1px solid #E2E8EE; border-radius: 8px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                  <span style="font-weight: 600; font-size: 12.5px; color: #03605E;">${escapeHtml(e.document_title || e.filename)}</span>
-                  <span class="badge" style="background: #E2E8F0; color: #334155; font-size: 11px;">Page ${e.page_number}</span>
+          <div style="font-size: 13.5px; font-weight: 500; color: #475569; margin-bottom: 8px;">Top verified passages retrieved from your personal study notes:</div>
+          <div style="display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; padding-right: 4px;">
+            ${evidence.map((e) => `
+              <div style="padding: 14px; background: #F8FAFC; border: 1px solid #E2E8EE; border-radius: 10px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px;">
+                  <span style="font-weight: 600; font-size: 13px; color: #03605E;">${escapeHtml(e.document_title || e.filename)}</span>
+                  <span class="badge" style="background: #E2E8F0; color: #334155; font-size: 11px; padding: 2px 8px; border-radius: 12px; font-weight: 600;">Page ${e.page_number}</span>
                 </div>
                 <p style="font-size: 13px; color: #334155; margin: 0; line-height: 1.5; font-style: italic;">"${escapeHtml(e.excerpt)}"</p>
               </div>
@@ -347,34 +403,59 @@ export function renderExams(mountPoint) {
         `;
       }
     } catch (err) {
-      modalEl.querySelector('#evidenceModalBody').innerHTML = `<div style="color: #E11D48; text-align: center; padding: 20px;">Failed to retrieve evidence: ${escapeHtml(err.message)}</div>`;
+      const body = overlay.querySelector('#evidenceModalBody');
+      if (body) {
+        body.innerHTML = `<div style="color: #E11D48; text-align: center; padding: 24px; font-size: 13.5px;">Failed to retrieve evidence: ${escapeHtml(err.message)}</div>`;
+      }
     }
   }
 
   // Upload PYQ Modal
   function showUploadPyqModal() {
-    const modalEl = document.createElement('div');
-    modalEl.className = 'modal-backdrop';
-    modalEl.innerHTML = `
-      <div class="modal" style="max-width: 520px; width: 90%;">
-        <div class="modal-header">
-          <h3 class="modal-title">Upload Past-Year Question Paper</h3>
-          <button type="button" class="modal-close" id="closePyqModal">&times;</button>
+    if (document.getElementById('uploadPyqModalOverlay')) return;
+    const previousFocus = document.activeElement;
+    lockBodyScroll();
+
+    let selectedPdfFile = null;
+    let isUploading = false;
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'uploadPyqModalOverlay';
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'uploadPyqModalTitle');
+
+    overlay.innerHTML = `
+      <div class="modal-card pyq-modal-card">
+        <div class="pyq-modal-header">
+          <h3 id="uploadPyqModalTitle" class="pyq-modal-title">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--ws-primary, #006B6B); flex-shrink: 0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            Upload Past-Year Question Paper
+          </h3>
+          <button type="button" class="modal-close-btn" id="closePyqModalBtn" aria-label="Close dialog">&times;</button>
         </div>
-        <form id="uploadPyqForm">
-          <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px;">
-            <div>
-              <label class="label" style="font-size: 13px; font-weight: 600;">Paper Title / Subject</label>
-              <input type="text" name="title" class="input" placeholder="e.g. Operating Systems End-Semester 2024" required style="width: 100%;" />
+        <form id="uploadPyqForm" novalidate>
+          <div class="pyq-modal-body">
+            <div class="pyq-form-group">
+              <label for="pyqTitleInput" class="pyq-form-label">
+                Paper Title / Subject <span class="required-star">*</span>
+              </label>
+              <input type="text" id="pyqTitleInput" name="title" class="pyq-form-control" placeholder="e.g. Operating Systems End-Semester 2024" required />
             </div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-              <div>
-                <label class="label" style="font-size: 13px; font-weight: 600;">Exam Year</label>
-                <input type="number" name="exam_year" class="input" value="${new Date().getFullYear()}" min="2000" max="2030" required style="width: 100%;" />
+
+            <div class="pyq-form-row-2">
+              <div class="pyq-form-group">
+                <label for="pyqYearInput" class="pyq-form-label">
+                  Exam Year <span class="required-star">*</span>
+                </label>
+                <input type="number" id="pyqYearInput" name="exam_year" class="pyq-form-control" value="${new Date().getFullYear()}" min="2000" max="2035" required />
               </div>
-              <div>
-                <label class="label" style="font-size: 13px; font-weight: 600;">Semester</label>
-                <select name="semester" class="input" style="width: 100%;">
+              <div class="pyq-form-group">
+                <label for="pyqSemesterInput" class="pyq-form-label">
+                  Semester <span class="required-star">*</span>
+                </label>
+                <select id="pyqSemesterInput" name="semester" class="pyq-form-control">
                   <option value="Spring">Spring</option>
                   <option value="Fall">Fall</option>
                   <option value="Winter">Winter</option>
@@ -382,41 +463,248 @@ export function renderExams(mountPoint) {
                 </select>
               </div>
             </div>
-            <div>
-              <label class="label" style="font-size: 13px; font-weight: 600;">Exam Type</label>
-              <select name="exam_type" class="input" style="width: 100%;">
+
+            <div class="pyq-form-group">
+              <label for="pyqExamTypeInput" class="pyq-form-label">
+                Exam Type <span class="required-star">*</span>
+              </label>
+              <select id="pyqExamTypeInput" name="exam_type" class="pyq-form-control">
                 <option value="End-Semester">End-Semester</option>
                 <option value="Mid-Semester">Mid-Semester</option>
                 <option value="Internal">Internal Assessment</option>
                 <option value="Model">Model Question Paper</option>
               </select>
             </div>
-            <div>
-              <label class="label" style="font-size: 13px; font-weight: 600;">Question Paper PDF</label>
-              <input type="file" name="file" accept=".pdf" class="input" required style="width: 100%;" />
+
+            <div class="pyq-form-group">
+              <label class="pyq-form-label">
+                Question Paper PDF <span class="required-star">*</span>
+              </label>
+              <input type="file" id="pyqFileInput" name="file" accept=".pdf,application/pdf" style="display: none;" required />
+              
+              <div class="pyq-file-dropzone" id="pyqDropzone" role="button" tabindex="0" aria-label="Upload question paper PDF">
+                <svg class="pyq-file-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <span class="pyq-file-dropzone-title">Click to browse or drag &amp; drop PDF here</span>
+                <span class="pyq-file-dropzone-hint">Strictly PDF files up to 50MB</span>
+              </div>
+
+              <div class="pyq-file-selected-pill" id="pyqSelectedFilePill" style="display: none;">
+                <div class="pyq-file-selected-info">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="color: #0F766E; flex-shrink: 0;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span class="pyq-file-selected-name" id="pyqSelectedFileName"></span>
+                  <span class="pyq-file-selected-size" id="pyqSelectedFileSize"></span>
+                </div>
+                <button type="button" class="pyq-file-remove-btn" id="pyqRemoveFileBtn" title="Remove selected file" aria-label="Remove selected file">&times;</button>
+              </div>
             </div>
+
+            <div class="pyq-error-banner" id="pyqErrorBanner" style="display: none;" role="alert"></div>
           </div>
-          <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 10px;">
+          <div class="pyq-modal-footer">
             <button type="button" class="btn btn-secondary" id="cancelPyqBtn">Cancel</button>
             <button type="submit" class="btn btn-primary" id="submitPyqBtn">Upload &amp; Extract</button>
           </div>
         </form>
       </div>
     `;
-    document.body.appendChild(modalEl);
+    document.body.appendChild(overlay);
 
-    const close = () => modalEl.remove();
-    modalEl.querySelector('#closePyqModal').addEventListener('click', close);
-    modalEl.querySelector('#cancelPyqBtn').addEventListener('click', close);
+    const close = () => {
+      if (isUploading) return;
+      window.removeEventListener('keydown', keydownHandler);
+      overlay.remove();
+      unlockBodyScroll();
+      if (previousFocus && typeof previousFocus.focus === 'function') {
+        previousFocus.focus();
+      }
+    };
 
-    const form = modalEl.querySelector('#uploadPyqForm');
+    const keydownHandler = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        close();
+        return;
+      }
+      if (e.key === 'Tab') {
+        const focusables = overlay.querySelectorAll(
+          'button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusables.length === 0) return;
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    window.addEventListener('keydown', keydownHandler);
+
+    const closeBtn = overlay.querySelector('#closePyqModalBtn');
+    const cancelBtn = overlay.querySelector('#cancelPyqBtn');
+    const submitBtn = overlay.querySelector('#submitPyqBtn');
+    const form = overlay.querySelector('#uploadPyqForm');
+    const titleInput = overlay.querySelector('#pyqTitleInput');
+    const yearInput = overlay.querySelector('#pyqYearInput');
+    const semesterSelect = overlay.querySelector('#pyqSemesterInput');
+    const examTypeSelect = overlay.querySelector('#pyqExamTypeInput');
+    const fileInput = overlay.querySelector('#pyqFileInput');
+    const dropzone = overlay.querySelector('#pyqDropzone');
+    const selectedPill = overlay.querySelector('#pyqSelectedFilePill');
+    const selectedNameEl = overlay.querySelector('#pyqSelectedFileName');
+    const selectedSizeEl = overlay.querySelector('#pyqSelectedFileSize');
+    const removeFileBtn = overlay.querySelector('#pyqRemoveFileBtn');
+    const errorBanner = overlay.querySelector('#pyqErrorBanner');
+
+    closeBtn.addEventListener('click', close);
+    cancelBtn.addEventListener('click', close);
+    overlay.addEventListener('click', (e) => {
+      if (e.target === overlay) close();
+    });
+
+    const formatBytes = (bytes) => {
+      if (!bytes || bytes <= 0) return '0 B';
+      if (bytes < 1024) return bytes + ' B';
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+      return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    };
+
+    const showError = (msg) => {
+      errorBanner.innerHTML = `
+        <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink: 0; margin-top: 1px;"><circle cx="10" cy="10" r="8"/><line x1="10" y1="6" x2="10" y2="10"/><circle cx="10" cy="14" r="0.5"/></svg>
+        <span>${escapeHtml(msg)}</span>
+      `;
+      errorBanner.style.display = 'flex';
+    };
+
+    const clearError = () => {
+      errorBanner.innerHTML = '';
+      errorBanner.style.display = 'none';
+    };
+
+    const applyFile = (file) => {
+      clearError();
+      if (!file) return;
+
+      const isPdf = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
+      if (!isPdf) {
+        showError('Invalid file format. Please select a PDF question paper.');
+        return;
+      }
+
+      const maxSize = 50 * 1024 * 1024; // 50MB
+      if (file.size > maxSize) {
+        showError(`Selected file is ${formatBytes(file.size)}, which exceeds the 50MB upload limit.`);
+        return;
+      }
+
+      selectedPdfFile = file;
+      selectedNameEl.textContent = file.name;
+      selectedSizeEl.textContent = `(${formatBytes(file.size)})`;
+      selectedPill.style.display = 'flex';
+      dropzone.style.display = 'none';
+
+      // Auto-populate Title if currently blank
+      if (!titleInput.value.trim()) {
+        const autoTitle = file.name.replace(/\.pdf$/i, '').replace(/[-_]+/g, ' ').trim();
+        titleInput.value = autoTitle;
+      }
+    };
+
+    const clearSelectedFile = () => {
+      selectedPdfFile = null;
+      fileInput.value = '';
+      selectedPill.style.display = 'none';
+      dropzone.style.display = 'flex';
+    };
+
+    removeFileBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearSelectedFile();
+    });
+
+    dropzone.addEventListener('click', () => fileInput.click());
+    dropzone.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        fileInput.click();
+      }
+    });
+
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files && fileInput.files[0]) {
+        applyFile(fileInput.files[0]);
+      }
+    });
+
+    // Drag and drop handlers
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('drag-over');
+    });
+    dropzone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+    });
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('drag-over');
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]) {
+        applyFile(e.dataTransfer.files[0]);
+      }
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const submitBtn = modalEl.querySelector('#submitPyqBtn');
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Extracting Questions...';
+      clearError();
 
-      const formData = new FormData(form);
+      const title = titleInput.value.trim();
+      if (!title) {
+        showError('Please enter a paper title or subject name.');
+        titleInput.focus();
+        return;
+      }
+
+      const yearVal = parseInt(yearInput.value, 10);
+      if (isNaN(yearVal) || yearVal < 2000 || yearVal > 2035) {
+        showError('Please enter a valid exam year between 2000 and 2035.');
+        yearInput.focus();
+        return;
+      }
+
+      if (!selectedPdfFile) {
+        showError('Please select a question paper PDF to upload.');
+        dropzone.focus();
+        return;
+      }
+
+      isUploading = true;
+      submitBtn.disabled = true;
+      cancelBtn.disabled = true;
+      closeBtn.disabled = true;
+      titleInput.disabled = true;
+      yearInput.disabled = true;
+      semesterSelect.disabled = true;
+      examTypeSelect.disabled = true;
+      removeFileBtn.style.display = 'none';
+
+      submitBtn.innerHTML = `
+        <span class="spinner-sm" style="margin-right: 6px;"></span>
+        Extracting Questions...
+      `;
+
+      const formData = new FormData();
+      formData.append('title', title);
+      formData.append('exam_year', yearInput.value.trim());
+      formData.append('semester', semesterSelect.value);
+      formData.append('exam_type', examTypeSelect.value);
+      formData.append('file', selectedPdfFile);
+
       try {
         const apiBase = getApiBase();
         const token = getAuthToken();
@@ -429,19 +717,37 @@ export function renderExams(mountPoint) {
 
         if (!res.ok) {
           const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || 'Failed to upload paper');
+          throw new Error(errData.detail || `Upload failed (HTTP ${res.status})`);
         }
 
         const data = await res.json();
-        Toast.success(`Successfully extracted ${data.questions_extracted || 0} questions!`);
+        Toast.show(`Successfully extracted ${data.questions_extracted || 0} questions!`, 'success');
+        isUploading = false;
         close();
         loadData();
       } catch (err) {
-        Toast.error(err.message || 'Error processing question paper PDF');
+        const errMsg = err.message || 'Error processing question paper PDF';
+        showError(errMsg);
+        Toast.show(errMsg, 'error');
+
+        // Re-enable form controls without discarding user data
+        isUploading = false;
         submitBtn.disabled = false;
-        submitBtn.textContent = 'Upload & Extract';
+        submitBtn.innerHTML = 'Upload &amp; Extract';
+        cancelBtn.disabled = false;
+        closeBtn.disabled = false;
+        titleInput.disabled = false;
+        yearInput.disabled = false;
+        semesterSelect.disabled = false;
+        examTypeSelect.disabled = false;
+        removeFileBtn.style.display = 'inline-flex';
       }
     });
+
+    // Initial keyboard focus
+    setTimeout(() => {
+      titleInput.focus();
+    }, 60);
   }
 
   // Event Listeners
