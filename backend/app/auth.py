@@ -17,6 +17,22 @@ logger = logging.getLogger(__name__)
 _jwk_client = None
 
 
+def _get_supabase_issuer() -> str:
+    supabase_url = os.getenv("SUPABASE_URL", os.getenv("PUBLIC_SUPABASE_URL", "")).rstrip("/")
+    if not supabase_url:
+        return ""
+    return f"{supabase_url}/auth/v1"
+
+
+def _is_legacy_hs256_secret(secret_name: str, secret_value: str | None) -> bool:
+    if not secret_value:
+        return False
+    if secret_name in {"SUPABASE_SECRET_KEY", "SUPABASE_SERVICE_ROLE_KEY"}:
+        return False
+    if secret_value.startswith("sb_secret_") or secret_value.startswith("sbp_"):
+        return False
+    return True
+
 
 def _get_jwk_client():
     global _jwk_client
@@ -39,41 +55,68 @@ def verify_supabase_jwt(token: str) -> dict[str, Any]:
     Cryptographically verify a Supabase JWT token.
     Enforces signature verification, expiry, audience, and valid subject claims.
     Rejects tampered, forged, or expired tokens.
+
+    Security requirements:
+    - Prefer Supabase's JWKS for RS256/ES256 JWTs
+    - Never treat Supabase service-role keys as JWT signing secrets
+    - Only accept explicit legacy HS256 secrets via SUPABASE_JWT_SECRET
     """
     import jwt
 
     payload = None
     last_error: Exception | None = None
+    issuer = _get_supabase_issuer()
 
-    # 1. Asymmetric verification via Supabase JWKS (.well-known/jwks.json)
+    def _decode_with_options(secret: str, algorithms: list[str]) -> dict[str, Any]:
+        kwargs: dict[str, Any] = {
+            "algorithms": algorithms,
+            "audience": "authenticated",
+            "options": {"verify_signature": True, "verify_aud": True, "verify_exp": True, "verify_iss": False},
+        }
+        if issuer:
+            # Some legacy/local tokens do not carry an iss claim. Only enforce issuer when the
+            # claim exists and matches the configured Supabase issuer.
+            unverified = jwt.decode(token, options={"verify_signature": False, "verify_aud": False, "verify_exp": False, "verify_iss": False})
+            if isinstance(unverified, dict) and "iss" in unverified and unverified.get("iss"):
+                kwargs["issuer"] = issuer
+                kwargs["options"]["verify_iss"] = True
+        payload = jwt.decode(token, secret, **kwargs)
+        if issuer and payload.get("iss") and payload.get("iss") != issuer:
+            raise jwt.InvalidIssuerError(f"Invalid issuer: {payload.get('iss')}")
+        return payload
+
+    # 1. Preferred asymmetric validation via Supabase JWKS.
     jwk_client = _get_jwk_client()
     if jwk_client:
         try:
             signing_key = jwk_client.get_signing_key_from_jwt(token)
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=["RS256", "ES256"],
-                audience="authenticated",
-                options={"verify_signature": True, "verify_aud": True, "verify_exp": True},
-            )
+            kwargs: dict[str, Any] = {
+                "algorithms": ["RS256", "ES256"],
+                "audience": "authenticated",
+                "options": {"verify_signature": True, "verify_aud": True, "verify_exp": True},
+            }
+            if issuer:
+                kwargs["issuer"] = issuer
+                kwargs["options"]["verify_iss"] = True
+            payload = jwt.decode(token, signing_key.key, **kwargs)
         except Exception as exc:
             last_error = exc
 
-    # 2. Symmetric verification fallback if SUPABASE_JWT_SECRET is configured
+    # 2. Allow explicit legacy HS256 secrets only when they are configured as a JWT secret,
+    #    never when they come from a Supabase service-role or secret API key.
     if payload is None:
-        jwt_secret = os.getenv("SUPABASE_JWT_SECRET") or os.getenv("SUPABASE_SECRET_KEY")
-        if jwt_secret and not jwt_secret.startswith("sb_secret_vZCnc"):
+        legacy_secret = os.getenv("SUPABASE_JWT_SECRET")
+        if _is_legacy_hs256_secret("SUPABASE_JWT_SECRET", legacy_secret):
             try:
-                payload = jwt.decode(
-                    token,
-                    jwt_secret,
-                    algorithms=["HS256"],
-                    audience="authenticated",
-                    options={"verify_signature": True, "verify_aud": True, "verify_exp": True},
-                )
+                payload = _decode_with_options(legacy_secret, ["HS256"])
             except Exception as exc:
                 last_error = exc
+
+    if os.getenv("SUPABASE_SECRET_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY"):
+        logger.warning(
+            "Ignoring SUPABASE_SECRET_KEY/SUPABASE_SERVICE_ROLE_KEY for JWT verification; "
+            "use SUPABASE_JWT_SECRET only for explicit legacy HS256 tokens."
+        )
 
     if payload is None:
         err_msg = f"Cryptographic JWT verification failed: {last_error}" if last_error else "No valid trusted signing keys or secret configured."
