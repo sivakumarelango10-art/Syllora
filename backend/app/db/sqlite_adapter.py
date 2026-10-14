@@ -398,6 +398,28 @@ class SQLiteAdapter(DatabaseAdapter):
                 row = connection.execute("SELECT 1 FROM documents WHERE sha256 = ?", (sha256,)).fetchone()
             return row is not None
 
+    def get_document_by_hash(self, sha256: str, user_id: str | None = None) -> dict[str, Any] | None:
+        with self._connect() as connection:
+            if user_id:
+                row = connection.execute(
+                    """SELECT id, user_id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count,
+                              index_status, index_error, mime_type, created_at
+                       FROM documents WHERE sha256 = ? AND user_id = ?""",
+                    (sha256, user_id),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """SELECT id, user_id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count,
+                              index_status, index_error, mime_type, created_at
+                       FROM documents WHERE sha256 = ?""",
+                    (sha256,),
+                ).fetchone()
+        if not row:
+            return None
+        document = dict(row)
+        document["status"] = document.get("index_status", "completed")
+        return document
+
     def insert_document(
         self,
         document: dict[str, Any],

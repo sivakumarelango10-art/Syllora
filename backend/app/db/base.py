@@ -29,6 +29,11 @@ class DatabaseAdapter(abc.ABC):
         ...
 
     @abc.abstractmethod
+    def get_document_by_hash(self, sha256: str, user_id: str | None = None) -> dict[str, Any] | None:
+        """Retrieve a document by SHA-256 hash, scoped to its owner when supplied."""
+        ...
+
+    @abc.abstractmethod
     def insert_document(
         self,
         document: dict[str, Any],

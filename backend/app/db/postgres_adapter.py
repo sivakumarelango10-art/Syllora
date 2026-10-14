@@ -225,6 +225,29 @@ class PostgresAdapter(DatabaseAdapter):
                 row = cur.fetchone()
                 return row is not None
 
+    def get_document_by_hash(self, sha256: str, user_id: str | None = None) -> dict[str, Any] | None:
+        uid = _to_valid_uuid(user_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                self._set_auth_context(cur, uid)
+                cur.execute(
+                    """
+                    SELECT id::text, filename, title, storage_path, sha256, size_bytes,
+                           page_count, chunk_count, index_status, index_error, mime_type,
+                           created_at::text, updated_at::text
+                    FROM public.study_documents
+                    WHERE user_id = %s AND sha256 = %s
+                    """,
+                    (uid, sha256),
+                )
+                row = cur.fetchone()
+        if not row:
+            return None
+        document = dict(row)
+        document["storage_filename"] = document.get("storage_path", "")
+        document["status"] = document.get("index_status", "completed")
+        return document
+
     def insert_document(
         self,
         document: dict[str, Any],

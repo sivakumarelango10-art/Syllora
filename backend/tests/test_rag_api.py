@@ -74,7 +74,7 @@ def test_upload_indexes_pdf_and_ask_returns_real_page_citation(monkeypatch) -> N
     assert result["citations"][0]["page_number"] == 1
 
 
-def test_duplicate_pdf_is_rejected(monkeypatch) -> None:
+def test_duplicate_pdf_returns_existing_owner_document_and_status(monkeypatch) -> None:
     async def fake_embeddings(texts, *, purpose, model=None):
         return [[1.0] + [0.0] * (main.EMBEDDING_DIM - 1) for _ in texts]
 
@@ -83,7 +83,14 @@ def test_duplicate_pdf_is_rejected(monkeypatch) -> None:
     first = client.post("/api/v1/documents", files={"file": ("notes.pdf", pdf_bytes, "application/pdf")})
     assert first.status_code == 202, first.text
     second = client.post("/api/v1/documents", files={"file": ("copy.pdf", pdf_bytes, "application/pdf")})
-    assert second.status_code == 409
+    assert second.status_code == 200, second.text
+    duplicate = second.json()
+    assert duplicate["duplicate"] is True
+    assert duplicate["id"] == first.json()["id"]
+    assert duplicate["index_status"] == first.json()["index_status"]
+    stored_documents = main.list_documents()
+    assert len(stored_documents) == 1
+    assert stored_documents[0]["id"] == first.json()["id"]
 
 
 def test_model_abstention_is_returned_as_insufficient_evidence_without_citations(monkeypatch) -> None:

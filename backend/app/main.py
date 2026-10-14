@@ -23,7 +23,7 @@ from app.config import (
 )
 
 import httpx
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -40,6 +40,7 @@ from app.rag.store import (
     document_hash_exists,
     fail_document_index,
     get_document,
+    get_document_by_hash,
     get_document_pages,
     insert_document,
     list_documents,
@@ -177,6 +178,24 @@ def _safe_filename(filename: str | None) -> str:
     # Strip any path components sent by a client; use only the display name.
     cleaned = Path(filename or "study-material.pdf").name.replace("\x00", "").strip()
     return cleaned[:240] or "study-material.pdf"
+
+
+def _document_upload_receipt(document: dict[str, Any], *, duplicate: bool) -> dict[str, Any]:
+    status = document.get("index_status") or document.get("status") or "pending"
+    return {
+        "id": document["id"],
+        "filename": document["filename"],
+        "title": document.get("title") or document["filename"],
+        "page_count": document.get("page_count") or 0,
+        "chunk_count": document.get("chunk_count") or 0,
+        "size_bytes": document.get("size_bytes") or 0,
+        "sha256": document["sha256"],
+        "status": status,
+        "index_status": status,
+        "index_error": document.get("index_error"),
+        "duplicate": duplicate,
+        "message": "This exact PDF is already in Study Materials." if duplicate else "PDF stored successfully. AI indexing is queued.",
+    }
 
 
 async def _ollama_get(path: str) -> dict[str, Any]:
@@ -488,6 +507,7 @@ async def get_documents(request: Request) -> dict[str, Any]:
 @app.post("/api/v1/documents", status_code=202, tags=["documents"])
 async def upload_document(
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
 ) -> dict[str, Any]:
@@ -522,8 +542,10 @@ async def upload_document(
         raise HTTPException(status_code=422, detail="The uploaded file does not look like a valid PDF.")
 
     file_hash = hashlib.sha256(pdf_bytes).hexdigest()
-    if document_hash_exists(file_hash, user_id=user_id):
-        raise HTTPException(status_code=409, detail="This exact PDF has already been uploaded.")
+    existing_document = get_document_by_hash(file_hash, user_id=user_id)
+    if existing_document:
+        response.status_code = 200
+        return _document_upload_receipt(existing_document, duplicate=True)
 
     document_id = str(uuid.uuid4())
     storage_adapter = _get_storage()
@@ -558,6 +580,24 @@ async def upload_document(
         insert_document(document, [], user_id=user_id)
     except Exception as exc:
         try:
+            existing_document = get_document_by_hash(file_hash, user_id=user_id)
+        except Exception:
+            existing_document = None
+            logger.exception("Could not resolve a concurrent upload for document hash %s.", file_hash)
+
+        if existing_document:
+            try:
+                storage_adapter.delete_file(storage_path, auth_token=auth_token)
+            except Exception as cleanup_exc:
+                logger.warning(
+                    "Could not remove concurrent duplicate upload %s from storage: %s",
+                    document_id,
+                    cleanup_exc,
+                )
+            response.status_code = 200
+            return _document_upload_receipt(existing_document, duplicate=True)
+
+        try:
             storage_adapter.delete_file(storage_path, auth_token=auth_token)
         except Exception as cleanup_exc:
             logger.warning(
@@ -570,18 +610,7 @@ async def upload_document(
             detail="The PDF was stored, but its document record could not be committed.",
         ) from exc
 
-    return {
-        "id": document_id,
-        "filename": display_filename,
-        "title": doc_title,
-        "page_count": 0,
-        "chunk_count": 0,
-        "size_bytes": len(pdf_bytes),
-        "storage_path": storage_path,
-        "status": "pending",
-        "index_status": "pending",
-        "message": "PDF stored successfully. AI indexing is queued.",
-    }
+    return _document_upload_receipt(document, duplicate=False)
 
 
 @app.get("/api/v1/documents/{document_id}", tags=["documents"])

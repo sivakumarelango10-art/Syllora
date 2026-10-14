@@ -334,12 +334,15 @@ def test_09_confirm_retrying_ingestion_does_not_create_duplicate_records(monkeyp
 
     initial_count = count_chunks(user_id=DEFAULT_DEMO_USER_ID)
 
-    # Retry exact upload
+    # Retry exact upload resolves to the original indexed document.
     res2 = client.post(
         "/api/v1/documents",
         files={"file": ("sockets_copy.pdf", pdf_bytes, "application/pdf")},
     )
-    assert res2.status_code == 409
+    assert res2.status_code == 200
+    assert res2.json()["duplicate"] is True
+    assert res2.json()["id"] == doc_id
+    assert res2.json()["index_status"] == "indexed"
 
     # Verify no duplicate chunks created
     post_count = count_chunks(user_id=DEFAULT_DEMO_USER_ID)

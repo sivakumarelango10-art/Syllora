@@ -35,6 +35,10 @@ def document_hash_exists(sha256: str, user_id: str | None = None) -> bool:
     """Check if document with matching SHA-256 hash exists in active database."""
     return _get_adapter().document_hash_exists(sha256, user_id=user_id)
 
+def get_document_by_hash(sha256: str, user_id: str | None = None) -> dict[str, Any] | None:
+    """Retrieve the owner-scoped document with matching SHA-256 hash."""
+    return _get_adapter().get_document_by_hash(sha256, user_id=user_id)
+
 
 def insert_document(
     document: dict[str, Any],
