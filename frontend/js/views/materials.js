@@ -515,6 +515,11 @@ export function renderMaterials(container, queryParams = {}) {
   // Initial render
   renderView();
 
+  // Synchronize latest document library from Supabase backend
+  workspaceStore.syncWithBackend().then(() => {
+    updateResultsMount();
+  }).catch(() => {});
+
   // Trigger modal if queryParams has upload flag
   if (queryParams.upload === '1') {
     setTimeout(() => openUploadModal(renderView), 100);

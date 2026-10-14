@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from app.config import DATABASE_URL, DB_PATH, DB_PROVIDER
+from app.config import APP_ENV, DB_PATH
 from app.db.base import DatabaseAdapter, DEFAULT_DEMO_USER_ID
 from app.db.sqlite_adapter import SQLiteAdapter
 
@@ -21,6 +21,11 @@ def get_db_adapter(force_reload: bool = False) -> DatabaseAdapter:
     provider = os.getenv("SYLLORA_DB_PROVIDER", "sqlite").strip().lower()
 
     if provider in ("sqlite", ""):
+        if APP_ENV == "production":
+            raise ValueError(
+                "SQLite cannot be used as the persistent database in production. "
+                "Configure DATABASE_URL and set SYLLORA_DB_PROVIDER=postgres."
+            )
         db_path_env = os.getenv("SYLLORA_DB_PATH")
         db_path = Path(db_path_env) if db_path_env else DB_PATH
         adapter = SQLiteAdapter(db_path)
@@ -29,7 +34,7 @@ def get_db_adapter(force_reload: bool = False) -> DatabaseAdapter:
         if not db_url:
             raise ValueError(
                 "SYLLORA_DB_PROVIDER is set to 'postgres', but DATABASE_URL environment variable is missing. "
-                "Set DATABASE_URL or switch to SYLLORA_DB_PROVIDER=sqlite."
+                "Set DATABASE_URL or configure PostgreSQL credentials."
             )
         from app.db.postgres_adapter import PostgresAdapter
 

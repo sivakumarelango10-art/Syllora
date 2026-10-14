@@ -25,11 +25,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.auth import get_current_user_id
+from app.db import get_db_adapter
 from app.rate_limiter import ai_rate_limiter, standard_rate_limiter, inference_concurrency_guard
-from app.rag.pdf_processing import PdfProcessingError, extract_pdf_chunks
+from app.rag.pdf_processing import PdfProcessingError, extract_pdf_chunks, extract_pdf_pages_and_chunks
 from app.rag.search import SearchMode, has_sufficient_evidence, invalidate_index_cache, search_passages
-from app.rag.store import UPLOAD_DIR, count_chunks, delete_document as delete_document_record
-from app.rag.store import document_hash_exists, get_document, insert_document, list_documents
+from app.rag.store import (
+    UPLOAD_DIR,
+    count_chunks,
+    delete_document as delete_document_record,
+    document_hash_exists,
+    get_document,
+    get_document_pages,
+    insert_document,
+    list_documents,
+    update_document_status,
+)
 from app.storage import get_storage_adapter
 from app.storage.local_storage import LocalStorageAdapter
 from app.services.ollama_client import (
@@ -186,12 +196,29 @@ def _get_storage():
 @app.get("/health", tags=["health"])
 async def health() -> dict[str, Any]:
     env_status = validate_environment()
+    db_connected = False
+    try:
+        count_chunks()
+        db_connected = True
+    except Exception:
+        db_connected = False
+
+    storage_connected = False
+    try:
+        adapter = _get_storage()
+        storage_connected = adapter is not None
+    except Exception:
+        storage_connected = False
+
+    overall_ok = env_status["valid"] and db_connected and storage_connected
     return {
-        "status": "ok" if env_status["valid"] else "degraded",
+        "status": "ok" if overall_ok else "degraded",
         "service": APP_NAME,
         "version": app.version,
         "environment": env_status["app_env"],
+        "database_connected": db_connected,
         "database_provider": env_status["db_provider"],
+        "storage_connected": storage_connected,
         "storage_provider": env_status["storage_provider"],
         "require_auth": env_status["require_auth"],
     }
@@ -219,30 +246,88 @@ async def llm_status(request: Request) -> dict[str, Any]:
 
 @app.get("/api/v1/rag/status", tags=["rag"])
 async def rag_status(request: Request) -> dict[str, Any]:
-    """Report required models and local index size before attempting an upload."""
+    """Report real database, storage, embedding, and model connectivity states."""
     user_id = get_current_user_id(request)
-    docs = list_documents(user_id=user_id)
-    chunks_count = count_chunks(user_id=user_id)
+    db_connected = False
+    docs: list[dict[str, Any]] = []
+    chunks_count = 0
+    try:
+        docs = list_documents(user_id=user_id)
+        chunks_count = count_chunks(user_id=user_id)
+        db_connected = True
+    except Exception:
+        db_connected = False
+
+    storage_connected = False
+    storage_provider = "unknown"
+    storage_bucket = ""
+    try:
+        adapter = _get_storage()
+        storage_provider = adapter.provider_name
+        storage_bucket = getattr(adapter, "bucket_name", "local")
+        storage_connected = True
+    except Exception:
+        storage_connected = False
+
+    chat_installed = False
+    embed_installed = False
+    ollama_reachable = False
     try:
         payload = await _ollama_get("/api/tags")
+        ollama_reachable = True
         names = [item.get("name", "") for item in payload.get("models", [])]
         chat_installed = any(name == OLLAMA_MODEL or name.startswith(f"{OLLAMA_MODEL}:") for name in names)
         embed_installed = any(
             name == OLLAMA_EMBED_MODEL or name.startswith(f"{OLLAMA_EMBED_MODEL}:") for name in names
         )
-        return {
-            "available": True,
-            "chat_model": OLLAMA_MODEL,
-            "chat_model_installed": chat_installed,
-            "embedding_model": OLLAMA_EMBED_MODEL,
-            "embedding_model_installed": embed_installed,
-            "documents": len(docs),
-            "chunks": chunks_count,
-            "message": "Ready for document ingestion." if chat_installed and embed_installed
-                       else f"Install missing model(s). For embeddings run: ollama pull {OLLAMA_EMBED_MODEL}",
-        }
-    except HTTPException as exc:
-        return {"available": False, "message": exc.detail, "documents": len(docs), "chunks": chunks_count}
+    except Exception:
+        ollama_reachable = False
+
+    is_ready = db_connected and storage_connected and chat_installed and embed_installed
+    messages: list[str] = []
+    if not db_connected:
+        messages.append("Database is unreachable.")
+    if not storage_connected:
+        messages.append("Storage provider is uninitialized.")
+    if not ollama_reachable:
+        messages.append(f"Ollama is unreachable at {OLLAMA_BASE_URL}.")
+    elif not embed_installed:
+        messages.append(f"Run `ollama pull {OLLAMA_EMBED_MODEL}`.")
+    elif not chat_installed:
+        messages.append(f"Run `ollama pull {OLLAMA_MODEL}`.")
+
+    if not messages:
+        messages.append("System is fully ready for document ingestion and semantic search.")
+
+    return {
+        "available": is_ready,
+        "database": {
+            "connected": db_connected,
+            "provider": getattr(get_db_adapter(), "provider_name", "unknown"),
+        },
+        "storage": {
+            "connected": storage_connected,
+            "provider": storage_provider,
+            "bucket": storage_bucket,
+        },
+        "embedding": {
+            "model": OLLAMA_EMBED_MODEL,
+            "reachable": ollama_reachable,
+            "installed": embed_installed,
+        },
+        "chat": {
+            "model": OLLAMA_MODEL,
+            "reachable": ollama_reachable,
+            "installed": chat_installed,
+        },
+        "chat_model": OLLAMA_MODEL,
+        "chat_model_installed": chat_installed,
+        "embedding_model": OLLAMA_EMBED_MODEL,
+        "embedding_model_installed": embed_installed,
+        "documents": len(docs),
+        "chunks": chunks_count,
+        "message": " ".join(messages),
+    }
 
 
 @app.post("/api/v1/llm/test", response_model=ModelTestResponse, tags=["llm"])
@@ -283,12 +368,15 @@ async def upload_document(
     file: UploadFile = File(...),
     title: str | None = Form(default=None),
 ) -> dict[str, Any]:
-    """Upload a text-based PDF and complete extraction + embedding before returning."""
+    """Upload a text-based PDF and complete storage + extraction + embedding before returning."""
     user_id = get_current_user_id(request)
     ai_rate_limiter.check(user_id)
     display_filename = _safe_filename(file.filename)
     if Path(display_filename).suffix.casefold() != ".pdf":
-        raise HTTPException(status_code=415, detail="Only PDF files are supported in this phase.")
+        raise HTTPException(status_code=415, detail="Only PDF files are supported.")
+
+    auth_header = request.headers.get("authorization", "")
+    auth_token = auth_header.split(" ", 1)[1].strip() if " " in auth_header else (auth_header.strip() if auth_header else None)
 
     content_length = request.headers.get("content-length")
     if content_length:
@@ -307,92 +395,124 @@ async def upload_document(
             status_code=413,
             detail=f"File is too large. The current upload limit is {MAX_UPLOAD_BYTES // (1024 * 1024)} MB.",
         )
+    if not pdf_bytes or not pdf_bytes.startswith(b"%PDF-"):
+        raise HTTPException(status_code=422, detail="The uploaded file does not look like a valid PDF.")
+
     file_hash = hashlib.sha256(pdf_bytes).hexdigest()
     if document_hash_exists(file_hash, user_id=user_id):
         raise HTTPException(status_code=409, detail="This exact PDF has already been uploaded.")
 
     try:
-        page_count, pdf_chunks = extract_pdf_chunks(
+        page_count, pdf_pages, pdf_chunks = extract_pdf_pages_and_chunks(
             pdf_bytes, max_pages=MAX_PDF_PAGES, max_chunks=MAX_CHUNKS_PER_DOCUMENT
         )
     except PdfProcessingError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
+    document_id = str(uuid.uuid4())
+    storage_adapter = _get_storage()
+    storage_path = storage_adapter.build_path(user_id, document_id)
+
+    # 1. Upload raw PDF binary to Storage
+    try:
+        storage_filename = storage_adapter.save_file(
+            storage_path, pdf_bytes, content_type="application/pdf", auth_token=auth_token
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Failed to save PDF to storage provider: {exc}"
+        ) from exc
+
+    # 2. Generate vector embeddings for chunked passages
     embedding_model = OLLAMA_EMBED_MODEL
     chunk_texts = [chunk.text for chunk in pdf_chunks]
     try:
         vectors: list[list[float]] = []
         async with inference_concurrency_guard():
-            # Batches keep request payloads bounded and use the batched Ollama API when available.
             for start in range(0, len(chunk_texts), 32):
-                vectors.extend(await embed_texts(chunk_texts[start:start + 32], purpose="document", model=embedding_model))
+                vectors.extend(
+                    await embed_texts(chunk_texts[start:start + 32], purpose="document", model=embedding_model)
+                )
     except OllamaServiceError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        # Clean up storage object on failure so dangling files are prevented
+        try:
+            storage_adapter.delete_file(storage_path, auth_token=auth_token)
+        except Exception:
+            pass
+        raise HTTPException(status_code=503, detail=f"Embedding model unavailable: {exc}") from exc
 
     if len(vectors) != len(pdf_chunks):
+        storage_adapter.delete_file(storage_path, auth_token=auth_token)
         raise HTTPException(status_code=502, detail="Embedding count did not match the PDF chunk count.")
+
     dimensions = {len(vector) for vector in vectors}
     if len(dimensions) != 1 or 0 in dimensions:
+        storage_adapter.delete_file(storage_path, auth_token=auth_token)
         raise HTTPException(status_code=502, detail="The embedding model returned inconsistent vector dimensions.")
 
-    document_id = str(uuid.uuid4())
-    storage_adapter = _get_storage()
-    storage_path = storage_adapter.build_path(user_id, document_id)
-    try:
-        storage_filename = storage_adapter.save_file(storage_path, pdf_bytes)
-        timestamp = _now_iso()
-        document = {
-            "id": document_id,
-            "filename": display_filename,
-            "title": (title or Path(display_filename).stem).strip()[:240] or Path(display_filename).stem,
-            "storage_filename": storage_filename,
-            "storage_path": storage_path,
-            "sha256": file_hash,
-            "size_bytes": len(pdf_bytes),
-            "page_count": page_count,
-            "created_at": timestamp,
-            "user_id": user_id,
+    # 3. Persist document, page text, and chunk embeddings atomically in database
+    timestamp = _now_iso()
+    doc_title = (title or Path(display_filename).stem).strip()[:240] or Path(display_filename).stem
+    document = {
+        "id": document_id,
+        "filename": display_filename,
+        "title": doc_title,
+        "storage_filename": storage_filename,
+        "storage_path": storage_path,
+        "sha256": file_hash,
+        "size_bytes": len(pdf_bytes),
+        "page_count": page_count,
+        "mime_type": "application/pdf",
+        "index_status": "completed",
+        "created_at": timestamp,
+        "user_id": user_id,
+    }
+    chunks = [
+        {
+            "id": str(uuid.uuid4()),
+            "page_number": chunk.page_number,
+            "chunk_index": chunk.chunk_index,
+            "text": chunk.text,
+            "embedding": vectors[index],
+            "embedding_model": embedding_model,
+            "metadata": {"char_count": len(chunk.text)},
         }
-        chunks = [
-            {
-                "id": str(uuid.uuid4()),
-                "page_number": chunk.page_number,
-                "chunk_index": chunk.chunk_index,
-                "text": chunk.text,
-                "embedding": vectors[index],
-                "embedding_model": embedding_model,
-            }
-            for index, chunk in enumerate(pdf_chunks)
-        ]
-        insert_document(document, chunks, user_id=user_id)
+        for index, chunk in enumerate(pdf_chunks)
+    ]
+
+    try:
+        insert_document(document, chunks, pages=pdf_pages, user_id=user_id)
         try:
             from app.services.figure_service import get_figure_service
             get_figure_service().extract_figures_from_pdf(user_id, document_id, pdf_bytes)
         except Exception:
             pass
     except Exception as exc:
-        storage_adapter.delete_file(storage_path)
-        raise HTTPException(status_code=500, detail=f"Could not store the indexed PDF: {exc}") from exc
+        try:
+            storage_adapter.delete_file(storage_path, auth_token=auth_token)
+        except Exception:
+            pass
+        raise HTTPException(status_code=500, detail=f"Could not persist indexed PDF in database: {exc}") from exc
 
-    # Warm the in-memory vector index now, as part of upload completion, not the first question.
     invalidate_index_cache()
     try:
         from app.rag.search import _get_index
         _get_index(embedding_model, user_id=user_id)
     except Exception:
-        # The SQLite index is committed. A later search can rebuild the cache if necessary.
         pass
 
     return {
         "id": document_id,
         "filename": display_filename,
-        "title": document["title"],
+        "title": doc_title,
         "page_count": page_count,
         "chunk_count": len(pdf_chunks),
         "size_bytes": len(pdf_bytes),
+        "storage_path": storage_path,
         "embedding_model": embedding_model,
         "status": "indexed",
-        "message": "PDF extracted and indexed. Searchable passages are ready.",
+        "index_status": "completed",
+        "message": "PDF uploaded, extracted, indexed, and persisted in Supabase.",
     }
 
 
@@ -400,28 +520,56 @@ async def upload_document(
 async def download_document(document_id: str, request: Request):
     """Securely stream or preview uploaded PDF document."""
     user_id = get_current_user_id(request)
+    auth_header = request.headers.get("authorization", "")
+    auth_token = auth_header.split(" ", 1)[1].strip() if " " in auth_header else (auth_header.strip() if auth_header else None)
+
     doc = get_document(document_id, user_id=user_id)
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found.")
+
     storage_adapter = _get_storage()
-    file_bytes = storage_adapter.get_file_bytes(doc["storage_filename"])
+    path_to_fetch = doc.get("storage_path") or doc.get("storage_filename")
+    file_bytes = storage_adapter.get_file(path_to_fetch, auth_token=auth_token)
     if not file_bytes:
         raise HTTPException(status_code=404, detail="File content not found in storage.")
+
     from fastapi.responses import Response
     return Response(
         content=file_bytes,
-        media_type="application/pdf",
+        media_type=doc.get("mime_type") or "application/pdf",
         headers={"Content-Disposition": f'inline; filename="{doc["filename"]}"'},
     )
+
+
+@app.get("/api/v1/documents/{document_id}/pages", tags=["documents"])
+async def get_doc_pages(document_id: str, request: Request) -> dict[str, Any]:
+    """Retrieve persisted extracted pages and metadata for a document."""
+    user_id = get_current_user_id(request)
+    doc = get_document(document_id, user_id=user_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found.")
+    pages = get_document_pages(document_id, user_id=user_id)
+    return {"document_id": document_id, "pages": pages, "count": len(pages)}
 
 
 @app.delete("/api/v1/documents/{document_id}", tags=["documents"])
 async def remove_document(document_id: str, request: Request) -> dict[str, str]:
     user_id = get_current_user_id(request)
+    auth_header = request.headers.get("authorization", "")
+    auth_token = auth_header.split(" ", 1)[1].strip() if " " in auth_header else (auth_header.strip() if auth_header else None)
+
     result = delete_document_record(document_id, user_id=user_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Document not found.")
-    _get_storage().delete_file(result["storage_filename"])
+
+    storage_adapter = _get_storage()
+    path_to_delete = result.get("storage_path") or result.get("storage_filename")
+    if path_to_delete:
+        try:
+            storage_adapter.delete_file(path_to_delete, auth_token=auth_token)
+        except Exception:
+            pass
+
     invalidate_index_cache()
     return {"status": "deleted", "document_id": document_id}
 

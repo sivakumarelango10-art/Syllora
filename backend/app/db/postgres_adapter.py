@@ -229,12 +229,16 @@ class PostgresAdapter(DatabaseAdapter):
         self,
         document: dict[str, Any],
         chunks: list[dict[str, Any]],
+        pages: list[dict[str, Any]] | None = None,
         user_id: str | None = None,
     ) -> None:
         uid = _to_valid_uuid(user_id or document.get("user_id"))
         doc_id = _to_valid_uuid(document["id"])
         storage_path = document.get("storage_path") or document.get("storage_filename") or f"{uid}/{doc_id}.pdf"
         created_at = document.get("created_at") or datetime.now(timezone.utc).isoformat()
+        mime_type = document.get("mime_type") or "application/pdf"
+        status = document.get("index_status") or document.get("status") or "completed"
+        error = document.get("index_error") or document.get("error")
 
         with self._connect() as conn:
             with conn.cursor() as cur:
@@ -243,14 +247,18 @@ class PostgresAdapter(DatabaseAdapter):
                     """
                     INSERT INTO public.study_documents
                         (id, user_id, filename, title, storage_path, sha256,
-                         size_bytes, page_count, chunk_count, index_status, created_at, updated_at)
+                         size_bytes, page_count, chunk_count, index_status, index_error, mime_type, created_at, updated_at)
                     VALUES
-                        (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'indexed', %s, %s)
+                        (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (id, user_id) DO UPDATE SET
                         filename = EXCLUDED.filename,
                         title = EXCLUDED.title,
                         storage_path = EXCLUDED.storage_path,
                         chunk_count = EXCLUDED.chunk_count,
+                        page_count = EXCLUDED.page_count,
+                        index_status = EXCLUDED.index_status,
+                        index_error = EXCLUDED.index_error,
+                        mime_type = EXCLUDED.mime_type,
                         updated_at = EXCLUDED.updated_at
                     """,
                     (
@@ -261,44 +269,121 @@ class PostgresAdapter(DatabaseAdapter):
                         storage_path,
                         document["sha256"],
                         document["size_bytes"],
-                        document["page_count"],
+                        document.get("page_count", 0),
                         len(chunks),
+                        status,
+                        error,
+                        mime_type,
                         created_at,
                         created_at,
                     ),
                 )
 
-                chunk_rows = []
-                for chunk in chunks:
-                    c_id = _to_valid_uuid(chunk["id"])
-                    vec_str = _format_vector(chunk["embedding"])
-                    text = chunk.get("text") or chunk.get("content", "")
-                    chunk_rows.append((
-                        c_id,
-                        uid,
-                        doc_id,
-                        chunk["page_number"],
-                        chunk["chunk_index"],
-                        text,
-                        vec_str,
-                        chunk.get("embedding_model", "nomic-embed-text"),
-                        created_at,
-                    ))
+                if pages:
+                    page_rows = []
+                    for p in pages:
+                        p_num = p["page_number"]
+                        p_text = p.get("extracted_text") or p.get("text", "")
+                        p_meta = json.dumps(p.get("page_metadata") or p.get("metadata") or {})
+                        page_rows.append((
+                            uid,
+                            doc_id,
+                            p_num,
+                            p_text,
+                            p_meta,
+                            created_at,
+                        ))
 
-                cur.executemany(
+                    cur.executemany(
+                        """
+                        INSERT INTO public.document_pages
+                            (user_id, document_id, page_number, extracted_text, page_metadata, created_at)
+                        VALUES
+                            (%s, %s, %s, %s, %s::jsonb, %s)
+                        ON CONFLICT (document_id, page_number) DO UPDATE SET
+                            extracted_text = EXCLUDED.extracted_text,
+                            page_metadata = EXCLUDED.page_metadata
+                        """,
+                        page_rows,
+                    )
+
+                if chunks:
+                    chunk_rows = []
+                    for chunk in chunks:
+                        c_id = _to_valid_uuid(chunk["id"])
+                        vec_str = _format_vector(chunk["embedding"]) if chunk.get("embedding") is not None else None
+                        text = chunk.get("text") or chunk.get("content", "")
+                        chunk_meta = json.dumps(chunk.get("metadata") or {})
+                        chunk_rows.append((
+                            c_id,
+                            uid,
+                            doc_id,
+                            chunk["page_number"],
+                            chunk["chunk_index"],
+                            text,
+                            vec_str,
+                            chunk.get("embedding_model", "nomic-embed-text"),
+                            chunk_meta,
+                            created_at,
+                        ))
+
+                    cur.executemany(
+                        """
+                        INSERT INTO public.document_chunks
+                            (id, user_id, document_id, page_number, chunk_index,
+                             content, embedding, embedding_model, metadata, created_at)
+                        VALUES
+                            (%s, %s, %s, %s, %s, %s, %s::extensions.vector, %s, %s::jsonb, %s)
+                        ON CONFLICT (document_id, page_number, chunk_index) DO UPDATE SET
+                            content = EXCLUDED.content,
+                            embedding = EXCLUDED.embedding,
+                            metadata = EXCLUDED.metadata
+                        """,
+                        chunk_rows,
+                    )
+            conn.commit()
+
+    def update_document_status(
+        self,
+        document_id: str,
+        status: str,
+        error: str | None = None,
+        user_id: str | None = None,
+    ) -> None:
+        uid = _to_valid_uuid(user_id)
+        doc_id = _to_valid_uuid(document_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                self._set_auth_context(cur, uid)
+                cur.execute(
                     """
-                    INSERT INTO public.document_chunks
-                        (id, user_id, document_id, page_number, chunk_index,
-                         content, embedding, embedding_model, created_at)
-                    VALUES
-                        (%s, %s, %s, %s, %s, %s, %s::extensions.vector, %s, %s)
-                    ON CONFLICT (document_id, page_number, chunk_index) DO UPDATE SET
-                        content = EXCLUDED.content,
-                        embedding = EXCLUDED.embedding
+                    UPDATE public.study_documents
+                    SET index_status = %s, index_error = %s, updated_at = now()
+                    WHERE id = %s AND user_id = %s;
                     """,
-                    chunk_rows,
+                    (status, error, doc_id, uid),
                 )
             conn.commit()
+
+    def get_document_pages(
+        self, document_id: str, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        uid = _to_valid_uuid(user_id)
+        doc_id = _to_valid_uuid(document_id)
+        with self._connect() as conn:
+            with conn.cursor() as cur:
+                self._set_auth_context(cur, uid)
+                cur.execute(
+                    """
+                    SELECT id::text, document_id::text, page_number, extracted_text,
+                           page_metadata, created_at::text
+                    FROM public.document_pages
+                    WHERE document_id = %s AND user_id = %s
+                    ORDER BY page_number ASC;
+                    """,
+                    (doc_id, uid),
+                )
+                return [dict(r) for r in cur.fetchall()]
 
     def list_documents(self, user_id: str | None = None) -> list[dict[str, Any]]:
         uid = _to_valid_uuid(user_id)
@@ -308,7 +393,8 @@ class PostgresAdapter(DatabaseAdapter):
                 cur.execute(
                     """
                     SELECT id::text, filename, title, storage_path, sha256, size_bytes,
-                           page_count, chunk_count, created_at::text
+                           page_count, chunk_count, index_status, index_error, mime_type,
+                           created_at::text, updated_at::text
                     FROM public.study_documents
                     WHERE user_id = %s
                     ORDER BY created_at DESC
@@ -319,8 +405,8 @@ class PostgresAdapter(DatabaseAdapter):
         result = []
         for r in rows:
             item = dict(r)
-            # Map storage_path to storage_filename for API compatibility
             item["storage_filename"] = item.get("storage_path", "")
+            item["status"] = item.get("index_status", "completed")
             result.append(item)
         return result
 
@@ -333,7 +419,8 @@ class PostgresAdapter(DatabaseAdapter):
                 cur.execute(
                     """
                     SELECT id::text, filename, title, storage_path, sha256, size_bytes,
-                           page_count, chunk_count, created_at::text
+                           page_count, chunk_count, index_status, index_error, mime_type,
+                           created_at::text, updated_at::text
                     FROM public.study_documents
                     WHERE id = %s AND user_id = %s
                     """,
@@ -344,6 +431,7 @@ class PostgresAdapter(DatabaseAdapter):
             return None
         res = dict(row)
         res["storage_filename"] = res.get("storage_path", "")
+        res["status"] = res.get("index_status", "completed")
         return res
 
 

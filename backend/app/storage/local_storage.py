@@ -21,28 +21,46 @@ class LocalStorageAdapter(StorageAdapter):
         return f"{document_id}.pdf"
 
     def _resolve(self, storage_path: str) -> Path:
-        # Prevent directory traversal
-        clean_name = Path(storage_path).name
-        return self.upload_dir / clean_name
+        # Prevent directory traversal while preserving owner subfolder
+        clean_parts = [p for p in Path(storage_path).parts if p not in ("..", "/", "\\", ".")]
+        resolved = self.upload_dir.joinpath(*clean_parts)
+        return resolved
 
-    def save_file(self, storage_path: str, data: bytes, content_type: str = "application/pdf") -> str:
-        self.upload_dir.mkdir(parents=True, exist_ok=True)
+    def save_file(
+        self,
+        storage_path: str,
+        data: bytes,
+        content_type: str = "application/pdf",
+        auth_token: str | None = None,
+    ) -> str:
         target = self._resolve(storage_path)
+        target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
-        return target.name
+        return storage_path
 
-    def get_file(self, storage_path: str) -> bytes | None:
+    def get_file(self, storage_path: str, auth_token: str | None = None) -> bytes | None:
         target = self._resolve(storage_path)
         if target.is_file():
             return target.read_bytes()
+        # Fallback to checking flat filename for legacy local files
+        flat_target = self.upload_dir / Path(storage_path).name
+        if flat_target.is_file():
+            return flat_target.read_bytes()
         return None
 
-    def delete_file(self, storage_path: str) -> bool:
+    def delete_file(self, storage_path: str, auth_token: str | None = None) -> bool:
         target = self._resolve(storage_path)
         if target.is_file():
             target.unlink(missing_ok=True)
             return True
+        flat_target = self.upload_dir / Path(storage_path).name
+        if flat_target.is_file():
+            flat_target.unlink(missing_ok=True)
+            return True
         return False
 
-    def file_exists(self, storage_path: str) -> bool:
-        return self._resolve(storage_path).is_file()
+    def file_exists(self, storage_path: str, auth_token: str | None = None) -> bool:
+        target = self._resolve(storage_path)
+        if target.is_file():
+            return True
+        return (self.upload_dir / Path(storage_path).name).is_file()

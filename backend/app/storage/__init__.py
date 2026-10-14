@@ -17,8 +17,10 @@ def get_storage_adapter(force_reload: bool = False) -> StorageAdapter:
         return _ACTIVE_STORAGE
 
     from app.config import (
+        APP_ENV,
         STORAGE_BUCKET,
         STORAGE_PROVIDER,
+        SUPABASE_PUBLISHABLE_KEY,
         SUPABASE_SECRET_KEY,
         SUPABASE_URL,
         UPLOAD_DIR,
@@ -26,18 +28,24 @@ def get_storage_adapter(force_reload: bool = False) -> StorageAdapter:
 
     provider = os.getenv("SYLLORA_STORAGE_PROVIDER")
     if not provider:
-        provider = STORAGE_PROVIDER or "local"
+        provider = STORAGE_PROVIDER or ("supabase" if (SUPABASE_URL and (SUPABASE_SECRET_KEY or SUPABASE_PUBLISHABLE_KEY)) else "local")
     provider = provider.strip().lower()
 
     if provider in ("local", "filesystem"):
+        if APP_ENV == "production":
+            raise ValueError(
+                "Local filesystem storage cannot be used in production. "
+                "Configure SYLLORA_STORAGE_PROVIDER=supabase and Supabase credentials."
+            )
         upload_dir_env = os.getenv("SYLLORA_UPLOAD_DIR") or os.getenv("LOCAL_UPLOAD_DIR")
         upload_dir = Path(upload_dir_env) if upload_dir_env else UPLOAD_DIR
         adapter = LocalStorageAdapter(upload_dir)
     elif provider in ("supabase", "cloud"):
-        supabase_url = os.getenv("SUPABASE_URL", SUPABASE_URL).strip()
-        service_key = os.getenv("SUPABASE_SECRET_KEY", SUPABASE_SECRET_KEY).strip()
+        supabase_url = os.getenv("SUPABASE_URL", "").strip()
+        service_key = (os.getenv("SUPABASE_SECRET_KEY") or os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip()
+        api_key = (os.getenv("SUPABASE_PUBLISHABLE_KEY") or service_key).strip()
         bucket = os.getenv("SUPABASE_STORAGE_BUCKET", STORAGE_BUCKET).strip()
-        if not supabase_url or not service_key:
+        if not supabase_url or (not service_key and not api_key):
             raise ValueError(
                 "SYLLORA_STORAGE_PROVIDER is set to 'supabase', but SUPABASE_URL and/or SUPABASE_SECRET_KEY is missing."
             )
@@ -47,6 +55,7 @@ def get_storage_adapter(force_reload: bool = False) -> StorageAdapter:
             supabase_url=supabase_url,
             service_key=service_key,
             bucket_name=bucket,
+            api_key=api_key or service_key,
         )
     else:
         raise ValueError(

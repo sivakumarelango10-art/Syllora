@@ -36,9 +36,31 @@ def document_hash_exists(sha256: str, user_id: str | None = None) -> bool:
     return _get_adapter().document_hash_exists(sha256, user_id=user_id)
 
 
-def insert_document(document: dict[str, Any], chunks: list[dict[str, Any]], user_id: str | None = None) -> None:
-    """Insert document metadata and precomputed embeddings atomically."""
-    _get_adapter().insert_document(document, chunks, user_id=user_id)
+def insert_document(
+    document: dict[str, Any],
+    chunks: list[dict[str, Any]],
+    pages: list[dict[str, Any]] | None = None,
+    user_id: str | None = None,
+) -> None:
+    """Insert document metadata, chunks, and page text atomically."""
+    _get_adapter().insert_document(document, chunks, pages=pages, user_id=user_id)
+
+
+def update_document_status(
+    document_id: str,
+    status: str,
+    error: str | None = None,
+    user_id: str | None = None,
+) -> None:
+    """Update document lifecycle status and optional error details."""
+    _get_adapter().update_document_status(document_id, status, error=error, user_id=user_id)
+
+
+def get_document_pages(
+    document_id: str, user_id: str | None = None
+) -> list[dict[str, Any]]:
+    """Retrieve all extracted page records for a document."""
+    return _get_adapter().get_document_pages(document_id, user_id=user_id)
 
 
 def list_documents(user_id: str | None = None) -> list[dict[str, Any]]:

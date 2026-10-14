@@ -9,7 +9,8 @@ export const APPROVED_API_ORIGINS = [
   "http://127.0.0.1:8000",
   "http://localhost:8000",
   "http://127.0.0.1:3000",
-  "http://localhost:3000"
+  "http://localhost:3000",
+  "https://syllora.onrender.com"
 ];
 
 /**
@@ -35,14 +36,17 @@ export function isApprovedOrigin(urlString) {
     // Allow configured runtime PUBLIC_API_BASE_URL if it is HTTPS, not a static host, and not localhost
     if (typeof window !== "undefined" && window.__SYLLORA_CONFIG__?.PUBLIC_API_BASE_URL) {
       try {
-        const configuredUrl = new URL(window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL);
-        const configuredOrigin = configuredUrl.origin.toLowerCase();
-        // Do not allow static frontend host (.vercel.app) to be treated as backend API
-        if (configuredUrl.hostname.endsWith(".vercel.app")) {
-          return false;
-        }
-        if (configuredOrigin === origin && configuredUrl.protocol === "https:") {
-          return true;
+        const raw = window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL;
+        const candidates = raw.split(",").map(c => c.trim().replace(/\/+$/, "")).filter(Boolean);
+        for (const candidate of candidates) {
+          const configuredUrl = new URL(candidate);
+          const configuredOrigin = configuredUrl.origin.toLowerCase();
+          if (configuredUrl.hostname.endsWith(".vercel.app")) {
+            continue;
+          }
+          if (configuredOrigin === origin && configuredUrl.protocol === "https:") {
+            return true;
+          }
         }
       } catch {}
     }
@@ -70,11 +74,14 @@ export function getApiBase() {
   if (typeof window !== "undefined") {
     // 0. Runtime public config injected at build/deployment
     if (window.__SYLLORA_CONFIG__?.PUBLIC_API_BASE_URL) {
-      const candidate = window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL.replace(/\/+$/, "");
-      if (isApprovedOrigin(candidate)) {
-        return candidate;
+      const raw = window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL;
+      const candidates = raw.split(",").map(c => c.trim().replace(/\/+$/, "")).filter(Boolean);
+      for (const candidate of candidates) {
+        if (isApprovedOrigin(candidate)) {
+          return candidate;
+        }
       }
-      console.warn("[Syllora Security] Rejected unapproved window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL:", candidate);
+      console.warn("[Syllora Security] Rejected unapproved window.__SYLLORA_CONFIG__.PUBLIC_API_BASE_URL:", raw);
     }
 
     // 1. Explicit window property, only if validated against approved list
@@ -200,6 +207,25 @@ export const sylloraApi = {
       method: "POST",
       body: form
     });
+  },
+
+  getDocument(documentId) {
+    return request(`/api/v1/documents/${encodeURIComponent(documentId)}`);
+  },
+
+  getDocumentPages(documentId) {
+    return request(`/api/v1/documents/${encodeURIComponent(documentId)}/pages`);
+  },
+
+  deleteDocument(documentId) {
+    return request(`/api/v1/documents/${encodeURIComponent(documentId)}`, {
+      method: "DELETE"
+    });
+  },
+
+  downloadDocumentUrl(documentId) {
+    const base = getApiBase();
+    return `${base}/api/v1/documents/${encodeURIComponent(documentId)}/download`;
   },
 
   ask(question, documentIds, topK = 5) {

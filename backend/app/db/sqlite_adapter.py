@@ -34,6 +34,7 @@ class SQLiteAdapter(DatabaseAdapter):
                 """
                 CREATE TABLE IF NOT EXISTS documents (
                     id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'local_user',
                     filename TEXT NOT NULL,
                     title TEXT NOT NULL,
                     storage_filename TEXT NOT NULL,
@@ -41,7 +42,19 @@ class SQLiteAdapter(DatabaseAdapter):
                     size_bytes INTEGER NOT NULL,
                     page_count INTEGER NOT NULL,
                     chunk_count INTEGER NOT NULL,
+                    index_status TEXT NOT NULL DEFAULT 'completed',
+                    index_error TEXT,
+                    mime_type TEXT NOT NULL DEFAULT 'application/pdf',
                     created_at TEXT NOT NULL
+                );
+                CREATE TABLE IF NOT EXISTS document_pages (
+                    id TEXT PRIMARY KEY,
+                    document_id TEXT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+                    page_number INTEGER NOT NULL,
+                    extracted_text TEXT NOT NULL,
+                    page_metadata TEXT NOT NULL DEFAULT '{}',
+                    created_at TEXT NOT NULL,
+                    UNIQUE (document_id, page_number)
                 );
                 CREATE TABLE IF NOT EXISTS chunks (
                     id TEXT PRIMARY KEY,
@@ -349,97 +362,221 @@ class SQLiteAdapter(DatabaseAdapter):
                 connection.execute("ALTER TABLE profiles ADD COLUMN phone_number TEXT;")
             except Exception:
                 pass
+            try:
+                connection.execute("ALTER TABLE documents ADD COLUMN user_id TEXT NOT NULL DEFAULT 'local_user';")
+            except Exception:
+                pass
 
     def document_hash_exists(self, sha256: str, user_id: str | None = None) -> bool:
         with self._connect() as connection:
-            row = connection.execute("SELECT 1 FROM documents WHERE sha256 = ?", (sha256,)).fetchone()
+            if user_id:
+                row = connection.execute(
+                    "SELECT 1 FROM documents WHERE sha256 = ? AND user_id = ?",
+                    (sha256, user_id),
+                ).fetchone()
+            else:
+                row = connection.execute("SELECT 1 FROM documents WHERE sha256 = ?", (sha256,)).fetchone()
             return row is not None
 
     def insert_document(
         self,
         document: dict[str, Any],
         chunks: list[dict[str, Any]],
+        pages: list[dict[str, Any]] | None = None,
         user_id: str | None = None,
     ) -> None:
+        status = document.get("index_status") or document.get("status") or "completed"
+        error = document.get("index_error") or document.get("error")
+        mime_type = document.get("mime_type") or "application/pdf"
+        uid = user_id or document.get("user_id") or "local_user"
         with self._connect() as connection:
             connection.execute(
                 """INSERT INTO documents
-                   (id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (id, user_id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count, index_status, index_error, mime_type, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(id) DO UPDATE SET
+                   user_id=excluded.user_id, filename=excluded.filename, title=excluded.title, storage_filename=excluded.storage_filename,
+                   chunk_count=excluded.chunk_count, page_count=excluded.page_count,
+                   index_status=excluded.index_status, index_error=excluded.index_error, mime_type=excluded.mime_type""",
                 (
                     document["id"],
+                    uid,
                     document["filename"],
                     document["title"],
                     document["storage_filename"],
                     document["sha256"],
                     document["size_bytes"],
-                    document["page_count"],
+                    document.get("page_count", 0),
                     len(chunks),
+                    status,
+                    error,
+                    mime_type,
                     document["created_at"],
                 ),
             )
-            connection.executemany(
-                """INSERT INTO chunks
-                   (id, document_id, page_number, chunk_index, text, embedding, embedding_dim, embedding_model, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                [
-                    (
-                        chunk["id"],
-                        document["id"],
-                        chunk["page_number"],
-                        chunk["chunk_index"],
-                        chunk.get("text") or chunk.get("content", ""),
-                        np.asarray(chunk["embedding"], dtype=np.float32).tobytes(),
-                        len(chunk["embedding"]),
-                        chunk["embedding_model"],
-                        document["created_at"],
-                    )
-                    for chunk in chunks
-                ],
-            )
+            if pages:
+                connection.executemany(
+                    """INSERT INTO document_pages
+                       (id, document_id, page_number, extracted_text, page_metadata, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(document_id, page_number) DO UPDATE SET
+                       extracted_text=excluded.extracted_text, page_metadata=excluded.page_metadata""",
+                    [
+                        (
+                            f"{document['id']}_p{p['page_number']}",
+                            document["id"],
+                            p["page_number"],
+                            p.get("extracted_text") or p.get("text", ""),
+                            str(p.get("page_metadata") or p.get("metadata") or {}),
+                            document["created_at"],
+                        )
+                        for p in pages
+                    ],
+                )
+            if chunks:
+                connection.executemany(
+                    """INSERT INTO chunks
+                       (id, document_id, page_number, chunk_index, text, embedding, embedding_dim, embedding_model, created_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                       ON CONFLICT(id) DO UPDATE SET text=excluded.text, embedding=excluded.embedding""",
+                    [
+                        (
+                            chunk["id"],
+                            document["id"],
+                            chunk["page_number"],
+                            chunk["chunk_index"],
+                            chunk.get("text") or chunk.get("content", ""),
+                            np.asarray(chunk["embedding"], dtype=np.float32).tobytes() if chunk.get("embedding") is not None else b"",
+                            len(chunk["embedding"]) if chunk.get("embedding") is not None else 0,
+                            chunk.get("embedding_model", "nomic-embed-text"),
+                            document["created_at"],
+                        )
+                        for chunk in chunks
+                    ],
+                )
 
-    def list_documents(self, user_id: str | None = None) -> list[dict[str, Any]]:
+    def update_document_status(
+        self,
+        document_id: str,
+        status: str,
+        error: str | None = None,
+        user_id: str | None = None,
+    ) -> None:
+        with self._connect() as connection:
+            if user_id:
+                connection.execute(
+                    "UPDATE documents SET index_status = ?, index_error = ? WHERE id = ? AND user_id = ?",
+                    (status, error, document_id, user_id),
+                )
+            else:
+                connection.execute(
+                    "UPDATE documents SET index_status = ?, index_error = ? WHERE id = ?",
+                    (status, error, document_id),
+                )
+
+    def get_document_pages(
+        self, document_id: str, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        if user_id and self.get_document(document_id, user_id=user_id) is None:
+            return []
         with self._connect() as connection:
             rows = connection.execute(
-                """SELECT id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count, created_at
-                   FROM documents ORDER BY created_at DESC"""
+                """SELECT id, document_id, page_number, extracted_text, page_metadata, created_at
+                   FROM document_pages WHERE document_id = ? ORDER BY page_number ASC""",
+                (document_id,),
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def list_documents(self, user_id: str | None = None) -> list[dict[str, Any]]:
+        with self._connect() as connection:
+            if user_id:
+                rows = connection.execute(
+                    """SELECT id, user_id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count,
+                              index_status, index_error, mime_type, created_at
+                       FROM documents WHERE user_id = ? ORDER BY created_at DESC""",
+                    (user_id,),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """SELECT id, user_id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count,
+                              index_status, index_error, mime_type, created_at
+                       FROM documents ORDER BY created_at DESC"""
+                ).fetchall()
+        res = []
+        for r in rows:
+            d = dict(r)
+            d["status"] = d.get("index_status", "completed")
+            res.append(d)
+        return res
+
     def get_document(self, document_id: str, user_id: str | None = None) -> dict[str, Any] | None:
         with self._connect() as connection:
-            row = connection.execute(
-                """SELECT id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count, created_at
-                   FROM documents WHERE id = ?""",
-                (document_id,),
-            ).fetchone()
-        return dict(row) if row else None
+            if user_id:
+                row = connection.execute(
+                    """SELECT id, user_id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count,
+                              index_status, index_error, mime_type, created_at
+                       FROM documents WHERE id = ? AND user_id = ?""",
+                    (document_id, user_id),
+                ).fetchone()
+            else:
+                row = connection.execute(
+                    """SELECT id, user_id, filename, title, storage_filename, sha256, size_bytes, page_count, chunk_count,
+                              index_status, index_error, mime_type, created_at
+                       FROM documents WHERE id = ?""",
+                    (document_id,),
+                ).fetchone()
+        if not row:
+            return None
+        res = dict(row)
+        res["status"] = res.get("index_status", "completed")
+        return res
 
 
     def delete_document(self, document_id: str, user_id: str | None = None) -> dict[str, Any] | None:
         with self._connect() as connection:
-            row = connection.execute(
-                "SELECT id, storage_filename FROM documents WHERE id = ?", (document_id,)
-            ).fetchone()
-            if row is None:
-                return None
-            storage_filename = row["storage_filename"]
-            connection.execute("DELETE FROM documents WHERE id = ?", (document_id,))
+            if user_id:
+                row = connection.execute(
+                    "SELECT id, storage_filename FROM documents WHERE id = ? AND user_id = ?",
+                    (document_id, user_id),
+                ).fetchone()
+                if row is None:
+                    return None
+                storage_filename = row["storage_filename"]
+                connection.execute("DELETE FROM documents WHERE id = ? AND user_id = ?", (document_id, user_id))
+            else:
+                row = connection.execute(
+                    "SELECT id, storage_filename FROM documents WHERE id = ?", (document_id,)
+                ).fetchone()
+                if row is None:
+                    return None
+                storage_filename = row["storage_filename"]
+                connection.execute("DELETE FROM documents WHERE id = ?", (document_id,))
         return {"id": document_id, "storage_filename": storage_filename}
 
     def load_search_chunks(
         self, embedding_model: str, user_id: str | None = None
     ) -> list[dict[str, Any]]:
         with self._connect() as connection:
-            rows = connection.execute(
-                """SELECT c.id, c.document_id, c.page_number, c.chunk_index, c.text,
-                          c.embedding, c.embedding_dim, c.embedding_model,
-                          d.filename, d.title
-                   FROM chunks c JOIN documents d ON d.id = c.document_id
-                   WHERE c.embedding_model = ?
-                   ORDER BY d.created_at, c.page_number, c.chunk_index""",
-                (embedding_model,),
-            ).fetchall()
+            if user_id:
+                rows = connection.execute(
+                    """SELECT c.id, c.document_id, c.page_number, c.chunk_index, c.text,
+                              c.embedding, c.embedding_dim, c.embedding_model,
+                              d.filename, d.title
+                       FROM chunks c JOIN documents d ON d.id = c.document_id
+                       WHERE c.embedding_model = ? AND d.user_id = ?
+                       ORDER BY d.created_at, c.page_number, c.chunk_index""",
+                    (embedding_model, user_id),
+                ).fetchall()
+            else:
+                rows = connection.execute(
+                    """SELECT c.id, c.document_id, c.page_number, c.chunk_index, c.text,
+                              c.embedding, c.embedding_dim, c.embedding_model,
+                              d.filename, d.title
+                       FROM chunks c JOIN documents d ON d.id = c.document_id
+                       WHERE c.embedding_model = ?
+                       ORDER BY d.created_at, c.page_number, c.chunk_index""",
+                    (embedding_model,),
+                ).fetchall()
         return [dict(row) for row in rows]
 
     def count_chunks(self, user_id: str | None = None) -> int:

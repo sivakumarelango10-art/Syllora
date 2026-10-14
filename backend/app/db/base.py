@@ -33,9 +33,28 @@ class DatabaseAdapter(abc.ABC):
         self,
         document: dict[str, Any],
         chunks: list[dict[str, Any]],
+        pages: list[dict[str, Any]] | None = None,
         user_id: str | None = None,
     ) -> None:
-        """Insert document metadata and all precomputed chunk embeddings atomically."""
+        """Insert document metadata, chunks, and page text atomically."""
+        ...
+
+    @abc.abstractmethod
+    def update_document_status(
+        self,
+        document_id: str,
+        status: str,
+        error: str | None = None,
+        user_id: str | None = None,
+    ) -> None:
+        """Update indexing/processing status and optional error details."""
+        ...
+
+    @abc.abstractmethod
+    def get_document_pages(
+        self, document_id: str, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Retrieve all extracted page records for a document."""
         ...
 
     @abc.abstractmethod
@@ -50,7 +69,7 @@ class DatabaseAdapter(abc.ABC):
 
     @abc.abstractmethod
     def delete_document(self, document_id: str, user_id: str | None = None) -> dict[str, Any] | None:
-        """Delete a document and all associated chunks, returning deletion info."""
+        """Delete a document and all associated chunks and pages, returning deletion info."""
         ...
 
     @abc.abstractmethod
